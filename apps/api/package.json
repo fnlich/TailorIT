@@ -1,0 +1,48 @@
+{
+  "name": "@tailorit/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TailorIT API: Express 4 + better-sqlite3",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src",
+    "script": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@puppeteer/browsers": "3.2.6",
+    "@tailorit/render": "*",
+    "@tailorit/shared": "*",
+    "@turbodocx/html-to-docx": "1.23.1",
+    "better-sqlite3": "12.11.1",
+    "cookie-parser": "1.4.7",
+    "croner": "10.0.1",
+    "express": "4.22.3",
+    "express-rate-limit": "8.7.1",
+    "google-auth-library": "11.3.1",
+    "handlebars": "4.7.10",
+    "helmet": "8.3.0",
+    "mammoth": "1.13.0",
+    "multer": "2.5.0",
+    "nodemailer": "10.2.1",
+    "pdf-parse": "2.4.5",
+    "puppeteer-core": "24.43.1",
+    "sanitize-html": "2.18.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/cookie-parser": "1.4.10",
+    "@types/express": "4.17.25",
+    "@types/express-serve-static-core": "4.19.9",
+    "@types/multer": "2.3.0",
+    "@types/nodemailer": "8.0.2",
+    "@types/sanitize-html": "2.16.2",
+    "@types/supertest": "7.2.1",
+    "supertest": "7.3.1",
+    "tsup": "9.0.0"
+  }
+}

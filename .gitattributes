@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
+*.docx binary
+*.woff2 binary
+*.db binary
+# render goldens are compared byte-for-byte; keep them exactly as generated
+packages/render/test/golden/** -text

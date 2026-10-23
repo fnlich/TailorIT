@@ -1,0 +1,39 @@
+# dependencies
+node_modules/
+
+# builds and caches
+.next/
+dist/
+out/
+.turbo/
+.cache/
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+e2e/artifacts/
+
+# environment (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# the user's Simplify screenshots contain personal data
+e2e/reference/
+
+# local data (DATA_DIR defaults outside the repo, but guard anyway)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# Next regenerates it on every dev/build run (it imports generated route types)
+apps/web/next-env.d.ts

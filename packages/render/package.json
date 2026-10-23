@@ -1,0 +1,18 @@
+{
+  "name": "@tailorit/render",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Resume template engine honouring free_tailor's template contract (written fresh)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@tailorit/shared": "*",
+    "handlebars": "4.7.10"
+  }
+}

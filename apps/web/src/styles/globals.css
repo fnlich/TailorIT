@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+/*
+ * TailorIT design tokens — Simplify's visual language (light only).
+ * Source of truth: docs/research/screenshots-spec.md (pixel-sampled) and
+ * docs/research/simplify-tracker-documents-design.md §3 (served CSS).
+ * Rule: `primary` is a BACKGROUND colour (#14a1c0). Text, borders, outlines, filled icons and the focus ring that
+ * Simplify calls "primary" are `primary-ink` (#08758c).
+ */
+@theme {
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+
+  --color-primary: #14a1c0;
+  --color-primary-ink: #08758c;
+  --color-primary-container: #ccf6ff;
+  --color-primary-50: #f2fcff;
+  --color-primary-100: #daf6ff;
+  --color-primary-200: #adebfe;
+  --color-primary-300: #44bfdf;
+  --color-primary-400: #14a1c0;
+  --color-primary-500: #0b8ba6;
+
+  --color-canvas: #fcfcfc;
+  --color-surface: #ffffff;
+  --color-surface-low: #f8f8f8;
+  --color-border: #e8e8e8;
+  --color-muted: #e8e8e8;
+  --color-divider-soft: #f2f2f2;
+  --color-control: #e6e6e6;
+  --color-control-outline: #dfdfdf;
+  --color-control-hover: #d7d7d7;
+  --color-control-focus: #969696;
+  --color-control-strong: #d7d7d7;
+  --color-chip: #ebebeb;
+
+  --color-foreground: #191919;
+  --color-muted-foreground: #7d7d7d;
+  --color-subtle-foreground: #a1a1a1;
+  --color-disabled-foreground: #b7b7b7;
+
+  --color-sky: #e9f6ff;
+  --color-sky-foreground: #016094;
+  --color-success: #02a558;
+  --color-success-container: #d6f9e9;
+  --color-destructive: #f53b3a;
+  --color-destructive-container: #fbe5e5;
+  --color-warning: #f58e3a;
+  --color-amber: #f8f4e5;
+  --color-amber-foreground: #913f0c;
+  --color-avatar: #3ec0de;
+  --color-improve: #def9ff;
+  --color-improve-border: #d4f7ff;
+  --color-focus: #08758c;
+
+  --radius-control: 10px;
+  --radius-surface: 16px;
+  --radius-popup: 14px;
+  --radius-menu: 10px;
+  --radius-menu-row: 6px;
+
+  --shadow-soft: 0 1px 10px rgb(0 0 0 / 0.008), 0 3px 10px -2px rgb(0 0 0 / 0.015), 0 6px 16px rgb(0 0 0 / 0.02);
+  --shadow-control: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-menu: 0 10px 15px -3px #0000000f;
+  --shadow-popover: 0 8px 24px -6px rgb(14 18 27 / 0.08), 0 2px 6px -2px rgb(14 18 27 / 0.04);
+  --shadow-dialog: 0 24px 48px -12px rgb(0 0 0 / 0.18), 0 8px 16px -8px rgb(0 0 0 / 0.08);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border);
+  }
+
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-canvas);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Keyboard-only focus ring, like Simplify. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
