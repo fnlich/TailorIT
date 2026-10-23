@@ -65,6 +65,24 @@
   --shadow-dialog: 0 24px 48px -12px rgb(0 0 0 / 0.18), 0 8px 16px -8px rgb(0 0 0 / 0.08);
 
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Sampled from the screenshots: checkbox border, segmented track (4% black), menu row hover (6% black). */
+  --color-checkbox: #d1d1d1;
+  --color-segment: rgb(0 0 0 / 0.04);
+  --color-hover: rgb(0 0 0 / 0.06);
+  --color-overlay: rgb(0 0 0 / 0.4);
+
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-spin-slow: spin 0.8s linear infinite;
+
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0 0;
+    }
+  }
 }
 
 @layer base {
@@ -93,4 +111,76 @@
     outline: 2px solid var(--color-focus);
     outline-offset: 2px;
   }
+
+  /* Tailwind's preflight gives buttons the default cursor; Simplify's controls use the hand. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']),
+  [role='menuitem']:not([aria-disabled='true']),
+  [role='menuitemcheckbox']:not([aria-disabled='true']),
+  [role='menuitemradio']:not([aria-disabled='true']),
+  [role='option']:not([aria-disabled='true']),
+  [role='checkbox']:not([aria-disabled='true']),
+  [role='radio']:not([aria-disabled='true']),
+  [role='switch']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+
+  ::placeholder {
+    color: var(--color-subtle-foreground);
+    opacity: 1;
+  }
+}
+
+/*
+ * react-day-picker, themed with the Simplify tokens (DatePickerPopover). Unlayered and one class more specific than
+ * the library's own (also unlayered) stylesheet, which loads later.
+ */
+.rdp-root.ti-day-picker {
+  --rdp-accent-color: var(--color-primary-ink);
+  --rdp-accent-background-color: var(--color-primary-container);
+  --rdp-day-height: 36px;
+  --rdp-day-width: 36px;
+  --rdp-day_button-height: 34px;
+  --rdp-day_button-width: 34px;
+  --rdp-day_button-border-radius: 8px;
+  --rdp-selected-border: 2px solid var(--color-primary);
+  --rdp-today-color: var(--color-primary-ink);
+  --rdp-nav-height: 2.25rem;
+  --rdp-nav_button-height: 2rem;
+  --rdp-nav_button-width: 2rem;
+  --rdp-weekday-opacity: 1;
+  font-size: 14px;
+}
+.ti-day-picker .rdp-weekday {
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.ti-day-picker .rdp-today:not(.rdp-outside) {
+  font-weight: 700;
+}
+.ti-day-picker .rdp-selected {
+  font-size: 14px;
+  font-weight: 600;
+}
+.ti-day-picker .rdp-selected .rdp-day_button {
+  background: var(--color-primary);
+  color: #fff;
+}
+.ti-day-picker .rdp-day_button:hover:not(:disabled) {
+  background: var(--color-hover);
+}
+.ti-day-picker .rdp-selected .rdp-day_button:hover:not(:disabled) {
+  background: var(--color-primary-500);
+}
+.ti-day-picker .rdp-caption_label,
+.ti-day-picker .rdp-dropdown {
+  font-size: 14px;
+  font-weight: 600;
+}
+.ti-day-picker .rdp-chevron {
+  fill: var(--color-foreground);
+  width: 14px;
+  height: 14px;
 }
