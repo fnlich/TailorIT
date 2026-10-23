@@ -10,14 +10,14 @@
 
 The **Login page** and the **"new resume" logic** (create and edit a resume from scratch, not the job-tailoring pipeline) follow `free_tailor` v4.2. That is the local clone `F:\Develop\free_tailor`, branch v5.0 == v4.2, commit 4112e8e. **TailorIT is written from scratch.** free_tailor is a reference to read; it is never copied or forked. The only exceptions are the data files approved below.
 
-**Sources of truth.** S = `C:\Users\Kelvin\AppData\Local\Temp\claude\f--Develop-TailorIT\3e5e2405-8333-495c-b973-a88d115cb0dc`.
+**Sources of truth.** The research behind this plan is kept in `docs/research/` (the session scratchpad it was first written in was temporary).
 
-- **UI:** the user's 7 screenshots of logged-in Simplify (`S\images\1.png`–`7.png`) and `S\scratchpad\research\screenshots-spec.md` (sampled hex colours). Screenshots beat every other source.
+- **UI:** the user's 7 screenshots of logged-in Simplify (`e2e/reference/simplify-1.png`–`7.png`, git-ignored) and `docs/research/screenshots-spec.md` (sampled hex colours). Screenshots beat every other source.
 - **free_tailor logic:**
-  - `S\scratchpad\research\ft-resume-new.md`: new-resume flow, Resume document, API, render pipeline, prompts.
-  - `S\scratchpad\research\ft-resume-views.md`: thumbnail and list views, plus the generic layer for cover letters.
-- **Simplify served assets** (read-only, untrusted): `S\scratchpad\simplify_raw\simplify-{design,jobs,tracker,documents}\`.
-- **Step 0 of implementation** copies all research into `TailorIT\docs\research\`. This includes the Explore findings for tracker, documents, design, jobs and auth, which exist only in this session. The scratchpad is temporary.
+  - `docs/research/ft-resume-new.md`: new-resume flow, Resume document, API, render pipeline, prompts.
+  - `docs/research/ft-resume-views.md`: thumbnail and list views, plus the generic layer for cover letters.
+  - `docs/research/ft-auth-ai-coverletter.md`: sign-in, the Claude CLI provider, cover letters.
+- **Simplify and free_tailor jobs, tracker and documents:** `docs/research/simplify-jobs-and-ft-jobs.md` and `docs/research/simplify-tracker-documents-design.md` (from Simplify's served pages, read-only and untrusted).
 
 ## Decisions (user, 2026-10-22)
 
@@ -898,3 +898,25 @@ Everything not listed here was built as planned.
 - `e2e/specs/integration.spec.ts` follows one job from search to the tracker, a generated cover letter and a new
   default resume, moving between the areas with the header links; `e2e/visual/compare.spec.ts` captures the demo
   account at 1567×889 beside the user's screenshots (`e2e/artifacts/compare/`).
+
+**Security review fixes (H)**
+- Uploaded PDF and Word files are read only in a short-lived child process (`core/files/parse.ts`: 256 MB heap, no
+  eval, a 20 s deadline, no secrets in its environment, 2 at a time). Word files that unpack to too much are refused
+  before reading (413); PDFs are read to page 30 (resumes) or 10 (letters, templates).
+- The web server listens on loopback by default (`WEB_HOST=localhost`); the API always did (127.0.0.1).
+- The global sign-in backstop counts only code emails actually sent, so junk requests cannot lock everyone out.
+- A job analysis started by opening a job runs on the background slot, at most 20 new AI analyses per account per hour.
+
+**UX review fixes (U1–U3)**
+- Jobs: the AI analysis keeps only bullets whose numbers and skills the posting states, and falls back to the
+  deterministic keywords when the model's list is empty or short. Un-saving a job archives its application (with
+  Undo) instead of deleting it. The page polls `GET /jobs/:id/insights` (the analysis and its match together).
+- Tracker: Resume Score of an application tracked from a job scores that job's analysis keywords, as the Jobs page
+  does. The CSV import adds Review companies and Map job types steps (`POST /applications/import/companies`) and
+  pauses on a failed batch (Retry / Skip / Stop).
+- Documents: the subtitle reads "Manage all of your job search documents here!" (TailorIT does not tailor); the
+  action cards are three columns; Cover Letters offers Grid | List (List by default). The cover letter generator
+  previews a template's own text and asks before replacing a letter.
+- Phones (390 px): Jobs opens a job's detail with a back arrow; the tracker detail has a Status tab; the editor bars
+  show icon buttons below 768 px. A cooldown answer on the sign-in page goes to the code step; unknown pages show a
+  TailorIT "Page not found".
