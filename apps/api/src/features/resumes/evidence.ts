@@ -1,0 +1,106 @@
+import {
+  normalizeResumeDocument,
+  resumeEvidenceText,
+  resumeLabel,
+  type ResumeDocument,
+} from '@tailorit/shared';
+import type { AppDeps } from '../../core/context';
+
+// What other features need to know about a person's resume: the text keyword matching reads (the Jobs page's
+// "Improve your resume" card, the tracker's Resume Score) and the profile cover letters fill variables from.
+// Owned by work package R1; other packages import it read-only. Keep the signature stable.
+
+export interface ResumeProfile {
+  name: string;
+  title: string;
+  email: string;
+  phone: string;
+  location: string;
+  linkedin: string;
+  github: string;
+  portfolio: string;
+}
+
+export interface ResumeEvidence {
+  resumeId: string;
+  kind: 'built' | 'uploaded';
+  /** Display label (custom title, else the document's headline/name rule). */
+  label: string;
+  /** Plain text for keyword matching: the document's evidence fields, or an upload's extracted text. */
+  text: string;
+  /** Contact/profile details, falling back to the account and its saved preferences where the resume has none. */
+  profile: ResumeProfile;
+  /** The structured document (built resumes only). */
+  document: ResumeDocument | null;
+}
+
+interface ResumeRow {
+  id: string;
+  kind: 'built' | 'uploaded';
+  title: string | null;
+  data: string | null;
+  extracted_text: string | null;
+}
+
+/**
+ * The evidence of one of the account's resumes: `resumeId` when given (null when it is not theirs), else the default
+ * resume, else the most recently updated one. Null when the account has no resume at all.
+ */
+export function getResumeEvidence(
+  deps: Pick<AppDeps, 'db'>,
+  userId: string,
+  resumeId?: string | null,
+): ResumeEvidence | null {
+  const user = deps.db
+    .prepare('SELECT name, email, default_resume_id FROM users WHERE id = ?')
+    .get(userId) as { name: string; email: string; default_resume_id: string | null } | undefined;
+  if (!user) return null;
+
+  const select = 'SELECT id, kind, title, data, extracted_text FROM resumes WHERE user_id = ?';
+  let row: ResumeRow | undefined;
+  if (resumeId) {
+    row = deps.db.prepare(`${select} AND id = ?`).get(userId, resumeId) as ResumeRow | undefined;
+    if (!row) return null;
+  } else {
+    if (user.default_resume_id) {
+      row = deps.db.prepare(`${select} AND id = ?`).get(userId, user.default_resume_id) as ResumeRow | undefined;
+    }
+    row ??= deps.db.prepare(`${select} ORDER BY updated_at DESC, id ASC LIMIT 1`).get(userId) as ResumeRow | undefined;
+    if (!row) return null;
+  }
+
+  const prefs = deps.db
+    .prepare('SELECT phone, linkedin_url, location, portfolio_url FROM user_preferences WHERE user_id = ?')
+    .get(userId) as { phone: string; linkedin_url: string; location: string; portfolio_url: string } | undefined;
+
+  let document: ResumeDocument | null = null;
+  if (row.kind === 'built' && row.data) {
+    try {
+      document = normalizeResumeDocument(JSON.parse(row.data));
+    } catch {
+      document = null;
+    }
+  }
+
+  const contact = document?.contact;
+  const pick = (...values: Array<string | null | undefined>) => values.find((v) => v && v.trim())?.trim() ?? '';
+  const profile: ResumeProfile = {
+    name: pick(document?.name, user.name),
+    title: pick(document?.title),
+    email: pick(contact?.email, user.email),
+    phone: pick(contact?.phone, prefs?.phone),
+    location: pick(contact?.location, prefs?.location),
+    linkedin: pick(contact?.linkedin, prefs?.linkedin_url),
+    github: pick(contact?.github),
+    portfolio: pick(contact?.portfolio, prefs?.portfolio_url),
+  };
+
+  return {
+    resumeId: row.id,
+    kind: row.kind,
+    label: document ? resumeLabel(document, row.title) : pick(row.title, 'Uploaded resume'),
+    text: document ? resumeEvidenceText(document) : (row.extracted_text ?? ''),
+    profile,
+    document,
+  };
+}
