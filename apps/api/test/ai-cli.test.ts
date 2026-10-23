@@ -16,7 +16,7 @@ import { createTestContext, TEST_NOW, type TestContext } from './helpers';
 const scenarios = mkdtempSync(join(tmpdir(), 'tailorit-fake-scenarios-'));
 writeFileSync(join(scenarios, 'entry_bullets.json'), JSON.stringify({ answer: 'pong' }));
 writeFileSync(join(scenarios, 'cover_letter.json'), JSON.stringify({ answer: 'letter' }));
-afterAll(() => rmSync(scenarios, { recursive: true, force: true }));
+afterAll(() => rmSync(scenarios, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
 
 const wordModule: PromptModule<{ word: string }, { answer: string }> = {
   kind: 'entry_bullets',
@@ -50,8 +50,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
   ctx?.cleanup();
   ctx = null;
-  rmSync(recordFile, { force: true });
-  for (const file of stateFiles.splice(0)) rmSync(file, { force: true });
+  rmSync(recordFile, { force: true, maxRetries: 10, retryDelay: 100 });
+  for (const file of stateFiles.splice(0)) rmSync(file, { force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 const records = (): CallRecord[] =>

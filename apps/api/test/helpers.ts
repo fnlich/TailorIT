@@ -66,7 +66,13 @@ export function createTestContext(
     },
     cleanup() {
       db.close();
-      rmSync(dataDir, { recursive: true, force: true });
+      // On Windows a just-killed child (the fake CLI, Chrome) can hold the directory for a moment: EPERM/EBUSY.
+      // Retry briefly, and never fail a test over leftover temp files.
+      try {
+        rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      } catch {
+        /* the OS temp cleaner will get it */
+      }
     },
   };
 }
