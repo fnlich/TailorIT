@@ -70,12 +70,14 @@ export function TemplateDetailsDialog({
             initialFocus={useButton}
             onKeyDown={onKeyDown}
             className={clsx(
-              'relative grid max-h-full w-full max-w-[1040px] grid-cols-1 overflow-hidden rounded-surface bg-surface text-foreground shadow-dialog outline-none',
-              'md:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)]',
+              // Phones stack the preview over the details and scroll the whole card; from md the two panes sit side
+              // by side and each scrolls on its own.
+              'relative grid max-h-full w-full max-w-[1040px] grid-cols-1 overflow-y-auto rounded-surface bg-surface text-foreground shadow-dialog outline-none',
+              'md:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] md:overflow-hidden',
               'transition-[opacity,scale] duration-200 ease-out-soft data-starting-style:scale-[0.97] data-starting-style:opacity-0 data-ending-style:scale-[0.97] data-ending-style:opacity-0',
             )}
           >
-            <div className="flex items-start justify-center overflow-y-auto bg-surface-low p-5 sm:p-8">
+            <div className="flex items-start justify-center bg-surface-low p-5 sm:p-8 md:overflow-y-auto">
               <div className="w-full max-w-[440px] overflow-hidden rounded-[6px] bg-white shadow-popover ring-1 ring-black/[0.06]">
                 <PageThumb
                   key={`${template.id}:${layout}`}
@@ -87,7 +89,7 @@ export function TemplateDetailsDialog({
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-col overflow-y-auto p-6 sm:p-8">
+            <div className="flex min-h-0 flex-col p-6 sm:p-8 md:overflow-y-auto">
               <div className="flex flex-col gap-2 pr-10">
                 <BaseDialog.Title className="text-2xl leading-8 font-bold tracking-[-0.01em] text-foreground">{template.name}</BaseDialog.Title>
                 {template.category && (
