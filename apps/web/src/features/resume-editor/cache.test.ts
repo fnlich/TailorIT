@@ -12,7 +12,7 @@ describe('invalidateResumes', () => {
     const keys = {
       list: ['resumes', 'list'],
       detail: ['resumes', 'detail', 'r1'],
-      jobMatch: ['jobs', 'match', 42, 'ai:3'],
+      jobMatch: ['jobs', 'insights', 42],
       score: ['tracker', 'score', 'app-1'],
       jobDetail: ['jobs', 'detail', 42],
       board: ['tracker', 'board', 'all', '{}'],

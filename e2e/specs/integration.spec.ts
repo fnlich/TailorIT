@@ -258,15 +258,17 @@ test.describe('integration', () => {
     await expect(resumeRow.locator('[data-default-resume]')).toBeVisible();
 
     // ------------------------------------------- Jobs: "Improve Your Resume" scores the new default resume
+    // The page reads the analysis and its match together (GET /api/jobs/:id/insights); the resume change marked the
+    // cached answer stale, so opening the job reads it again.
     const matched = page.waitForResponse(
-      (res) => new URL(res.url()).pathname === `/api/jobs/${jobId}/match` && res.request().method() === 'GET',
+      (res) => new URL(res.url()).pathname === `/api/jobs/${jobId}/insights` && res.request().method() === 'GET',
       { timeout: 30_000 },
     );
     await nav(page, 'Jobs').click();
     await page.getByRole('searchbox', { name: 'Find your dream role' }).fill(title);
     await expect(ours).toBeVisible();
     await ours.locator('a').click();
-    const match = (await (await matched).json()) as { resumeId: string; matchedCount: number; total: number };
+    const { match } = (await (await matched).json()) as { match: { resumeId: string; matchedCount: number; total: number } };
     expect(match.resumeId).toBe(newResumeId);
     expect(match.matchedCount).toBeGreaterThan(0);
     await expect(score).toHaveText(`${match.matchedCount} out of ${match.total} required keywords found`);
