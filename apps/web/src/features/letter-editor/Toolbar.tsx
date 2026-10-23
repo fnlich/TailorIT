@@ -38,7 +38,8 @@ const isMacPlatform = () =>
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test((navigator as { platform?: string }).platform ?? navigator.userAgent);
 const subscribeNothing = () => () => undefined;
 
-function useIsMac(): boolean {
+/** Whether shortcuts read ⌘ (Mac, iPhone, iPad) or Ctrl; false while prerendering. */
+export function useIsMac(): boolean {
   return useSyncExternalStore(subscribeNothing, isMacPlatform, () => false);
 }
 

@@ -6,13 +6,14 @@ import type { ReactNode } from 'react';
 import { Field } from '@/components/ui/Field';
 import { CaretRightIcon } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
-import type { DraftEntry } from '../draft';
+import { missingEndDateHint, type DraftEntry } from '../draft';
 import { AddRowButton, NotPrintedNote } from './parts';
 import { SectionCard, type CardFrame } from './SectionCard';
 
 /**
  * The card of every kind that is a list of entries (Experience, Education, …, and each custom section): one row per
- * entry, its title over its dates and place, opened in the Edit Entry panel; the dashed "+ Add {entry}" under them.
+ * entry, its title over its dates and place (and, for a start date with no end, the amber "Add an end date…" hint),
+ * opened in the Edit Entry panel; the dashed "+ Add {entry}" under them.
  * A custom section edits its title here. `header` is what a card puts above its rows (Strengths: its switch), and
  * `showRows` is false while that switch is off.
  */
@@ -66,12 +67,15 @@ export function EntrySection({
             <ul className="flex flex-col gap-2">
               {entries.map((row, index) => {
                 const summary = entrySummary(kind, row, index);
+                const endDateHint = missingEndDateHint(kind, row);
+                const hintId = `${sectionRef}-${row.key}-end-date`;
                 return (
                   <li key={row.key}>
                     <button
                       type="button"
                       onClick={() => onOpen(row.key)}
                       aria-label={`Edit ${summary.title}`}
+                      aria-describedby={endDateHint ? hintId : undefined}
                       className={clsx(
                         'group/row flex w-full items-center gap-3 rounded-control border border-border bg-surface px-3.5 py-2.5 text-left',
                         'transition-colors duration-150 hover:border-control-hover hover:bg-surface-low',
@@ -87,6 +91,11 @@ export function EntrySection({
                           {summary.title}
                         </span>
                         {summary.meta && <span className="truncate text-[13px] leading-5 text-muted-foreground">{summary.meta}</span>}
+                        {endDateHint && (
+                          <span id={hintId} className="mt-0.5 text-[13px] leading-5 text-amber-foreground" data-end-date-hint="">
+                            {endDateHint}
+                          </span>
+                        )}
                       </span>
                       <CaretRightIcon size={16} className="shrink-0 text-subtle-foreground transition-colors group-hover/row:text-foreground" />
                     </button>

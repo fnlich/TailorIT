@@ -46,7 +46,8 @@ export function DocumentsPage() {
   return (
     <div className={clsx('mx-auto w-full max-w-[1600px] pt-9 pb-16', PAGE_GUTTER)}>
       <h1 className="text-2xl leading-10 font-bold tracking-[-0.01em] text-foreground sm:text-3xl">My Documents</h1>
-      <p className="mt-2 text-base text-muted-foreground">Manage and tailor all of your job search documents here!</p>
+      {/* Simplify says "Manage and tailor…"; TailorIT does not tailor resumes, so the promise is only to manage. */}
+      <p className="mt-2 text-base text-muted-foreground">Manage all of your job search documents here!</p>
 
       <DocumentActionCards className="mt-8" />
 

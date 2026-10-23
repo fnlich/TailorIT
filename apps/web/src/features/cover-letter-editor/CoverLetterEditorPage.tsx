@@ -16,7 +16,7 @@ import {
   type LetterFontName,
   type PatchCoverLetterBody,
 } from '@tailorit/shared/letters';
-import { EditorBar } from '@/components/shell/EditorBar';
+import { EditorBar, EditorBarButton } from '@/components/shell/EditorBar';
 import { Button, buttonClasses } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -209,14 +209,14 @@ function LetterWorkspace({ initial }: { initial: CoverLetterDetail }) {
         status={saveStatusText(autosave.state, autosave.savedAt, letter.updatedAt, now)}
         actions={
           <>
-            <Button
+            <EditorBarButton
+              label="Export Cover Letter"
+              shortLabel="Export"
               icon={<DownloadSimpleIcon size={16} />}
               loading={exporting === 'pdf'}
               onClick={() => void exportAs('pdf')}
               data-export-letter=""
-            >
-              Export Cover Letter
-            </Button>
+            />
             <EditorMenu
               items={[
                 { key: 'pdf', label: 'Export to PDF', icon: <FilePdfIcon size={16} />, onSelect: () => void exportAs('pdf') },
@@ -273,6 +273,7 @@ function LetterWorkspace({ initial }: { initial: CoverLetterDetail }) {
         open={generateOpen}
         onOpenChange={setGenerateOpen}
         letter={letter}
+        replacesContent={!isEmptyLetterHtml(html)}
         onStart={startGenerating}
         onDone={finishGenerating}
       />

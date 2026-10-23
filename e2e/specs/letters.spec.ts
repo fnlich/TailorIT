@@ -171,6 +171,70 @@ test.describe('cover letters', () => {
     const table = page.getByRole('table', { name: 'Cover letters' });
     await expect(table.getByRole('row').nth(1)).toContainText('Generated');
     await expect(table.getByRole('row').nth(1)).toContainText('-');
+
+    // On the card the badge sits under the title, leaving the page's first lines uncovered.
+    await page.getByRole('button', { name: 'Grid', exact: true }).click();
+    const card = page.locator('[data-cover-letter-card]').first();
+    const badge = card.getByText('Generated', { exact: true });
+    await expect(badge).toBeVisible();
+    const pageBox = await card.locator('[data-cover]').boundingBox();
+    const badgeBox = await badge.boundingBox();
+    expect(badgeBox!.y).toBeGreaterThanOrEqual(pageBox!.y + pageBox!.height);
+  });
+
+  test('generate over a written letter: the job picked stays, the template reads as text, and it asks first', async ({ page }) => {
+    await signInWithResume(page);
+    const api = page.request;
+    await call(
+      () => api.post('/api/applications', { headers: ORIGIN, data: { title: 'Design Intern', companyName: 'Contoso', employmentType: 'internship' } }),
+      'track a job',
+    );
+    const letter = await call<{ id: string }>(() => api.post('/api/cover-letters', { headers: ORIGIN, data: {} }), 'create a letter');
+    await call(
+      () => api.patch(`/api/cover-letters/${letter.id}`, { headers: ORIGIN, data: { contentHtml: '<p>My own opening line.</p>' } }),
+      'write the letter',
+    );
+    await visit(page, `/cover-letter/${letter.id}`, '[data-letter-editor]');
+    await expect(editor(page)).toContainText('My own opening line.');
+    // A letter with text does not open the dialog by itself.
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Generate a Tailored Cover Letter' });
+    const picker = dialog.getByLabel('Select a job from tracker');
+    await picker.click();
+    await page.getByRole('option', { name: /Design Intern/ }).click();
+    await expect(picker).toHaveValue('Design Intern · Contoso');
+    await expect(dialog.getByLabel('Company Name')).toHaveValue('Contoso');
+    await expect(dialog.getByLabel('Job Title')).toHaveValue('Design Intern');
+
+    // The template preview is the template's own words, with its tags as chips.
+    await dialog.getByRole('tab', { name: 'Template' }).click();
+    await dialog.getByText('Classic Professional (Default)').click();
+    const preview = dialog.getByRole('region', { name: 'Classic Professional preview' });
+    await expect(preview).toContainText('I am applying for the');
+    await expect(preview).toContainText('{{JOB_TITLE}}');
+
+    // Generate asks before replacing what is written; Cancel leaves both as they were.
+    await dialog.getByRole('button', { name: 'Generate' }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Replace the current letter?' });
+    await expect(confirm).toContainText('You can undo with');
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(confirm).toBeHidden();
+    await expect(dialog).toBeVisible();
+    await expect(editor(page)).toContainText('My own opening line.');
+
+    await dialog.getByRole('button', { name: 'Generate' }).click();
+    await confirm.getByRole('button', { name: 'Replace' }).click();
+    await expect(dialog).toBeHidden({ timeout: 45_000 });
+    await expect(editor(page)).toContainText('Design Intern');
+    await expect(editor(page)).not.toContainText('My own opening line.');
+
+    // Undo brings the letter back, and it is saved again.
+    await editor(page).click();
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(editor(page)).toContainText('My own opening line.');
+    await saved(page);
   });
 
   test('Cover Letters tab: table and thumbnail grid, remembered', async ({ page }) => {
@@ -187,6 +251,10 @@ test.describe('cover letters', () => {
     const table = page.getByRole('table', { name: 'Cover letters' });
     await expect(table.getByRole('columnheader')).toHaveText(['', 'Name', 'Created', 'Last Edited', 'Actions']);
     await expect(table.getByRole('row')).toHaveCount(3);
+    // List is this tab's default, but the toggle reads Grid | List, as on Resumes.
+    const toggle = page.getByRole('group', { name: 'View' }).getByRole('button');
+    await expect(toggle).toHaveCount(2);
+    expect(await toggle.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label')))).toEqual(['Grid', 'List']);
 
     await page.getByRole('button', { name: 'Grid', exact: true }).click();
     await expect(page.locator('[data-cover-letter-card]')).toHaveCount(2);

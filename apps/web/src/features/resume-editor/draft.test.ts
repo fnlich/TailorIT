@@ -28,6 +28,8 @@ import {
   isBlankEntry,
   keptCount,
   librarySpelling,
+  missingEndDateCount,
+  missingEndDateHint,
   parseYears,
   readSkillCategoryMap,
   removeEntry,
@@ -326,5 +328,37 @@ describe('templates', () => {
     expect(drawnTemplate(list, '')).toEqual({ stored: { id: 'default' }, drawn: { id: 'default' } });
     expect(drawnTemplate(list, 'gone')).toEqual({ stored: null, drawn: { id: 'default' } });
     expect(drawnTemplate([{ id: 'x' }], 'gone')).toEqual({ stored: null, drawn: { id: 'x' } });
+  });
+});
+
+describe('end dates', () => {
+  it('hints when a dated row has no end date, in words that fit the kind', () => {
+    expect(missingEndDateHint('experience', { startDate: '2021-02', endDate: '' })).toBe('Add an end date, or Present for a current role.');
+    expect(missingEndDateHint('volunteering', { startDate: '2021', endDate: '  ' })).toBe('Add an end date, or Present for a current role.');
+    expect(missingEndDateHint('projects', { startDate: '2021', endDate: '' })).toBe('Add an end date, or Present for an ongoing project.');
+    expect(missingEndDateHint('education', { startDate: '2014', endDate: '' })).toBe('Add an end date, or Present if you are still studying.');
+    expect(missingEndDateHint('custom', { startDate: '2014', endDate: '' })).toBe('Add an end date, or Present if it is ongoing.');
+  });
+
+  it('says nothing for an end date, Present, no start date, or a kind without a range', () => {
+    expect(missingEndDateHint('experience', { startDate: '2021-02', endDate: 'Present' })).toBeNull();
+    expect(missingEndDateHint('experience', { startDate: '2021-02', endDate: '2023-01' })).toBeNull();
+    expect(missingEndDateHint('experience', { startDate: '', endDate: '' })).toBeNull();
+    expect(missingEndDateHint('certifications', { date: '2021' })).toBeNull();
+    expect(missingEndDateHint('awards', { startDate: '2021', endDate: '' })).toBeNull();
+  });
+
+  it('counts the open rows of a section, custom sections included', () => {
+    let draft = draftForNewResume({ templateId: 'navy-rule', layout: 'categorized' });
+    const open = { ...(emptyEntry('experience') as DraftExperience), title: 'Engineer', startDate: '2021-02' };
+    const closed = { ...(emptyEntry('experience') as DraftExperience), title: 'Intern', startDate: '2019', endDate: '2020' };
+    draft = appendEntry(appendEntry(draft, { kind: 'experience' }, open), { kind: 'experience' }, closed);
+    expect(missingEndDateCount(draft, 'experience')).toBe(1);
+    expect(missingEndDateCount(draft, 'education')).toBe(0);
+    expect(missingEndDateCount(draft, 'summary')).toBe(0);
+
+    draft = addCustomSection(draft, 'cs-1', 'Patents', []);
+    draft = appendEntry(draft, { kind: 'custom', sectionKey: 'cs-1' }, { ...emptyEntry('custom'), startDate: '2020' });
+    expect(missingEndDateCount(draft, 'custom:cs-1')).toBe(1);
   });
 });

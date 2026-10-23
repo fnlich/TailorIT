@@ -14,6 +14,7 @@ import {
 } from '@tailorit/shared/letters';
 import { ApplicationDetailSchema, type ApplicationDetail, type ApplicationSummary } from '@tailorit/shared/tracker';
 import { Button, buttonClasses } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/Dialog';
 import { Field } from '@/components/ui/Field';
 import { Input, Textarea } from '@/components/ui/Input';
@@ -22,15 +23,18 @@ import { SegmentedControl, TabPanel } from '@/components/ui/SegmentedControl';
 import { Spinner } from '@/components/ui/Spinner';
 import { api, isApiError, userMessage } from '@/lib/api';
 import { useAiTask } from '@/lib/useAiTask';
-import { DocumentThumb, PAGE_LETTER, thumbKey } from '../documents/core';
-import { fetchTemplatePreview, fetchTemplates, generateLetter, patchLetter, templateKeys } from '../letter-editor/data';
+import { fetchTemplates, generateLetter, patchLetter, templateKeys } from '../letter-editor/data';
+import { shortcutLabel } from '../letter-editor/html';
 import { SparkleIcon } from '../letter-editor/icons';
+import { useIsMac } from '../letter-editor/Toolbar';
 import { JobPicker } from './JobPicker';
+import { TemplatePreview } from './TemplatePreview';
 
 /*
  * Simplify's "Generate a Tailored Cover Letter": Job Details (pick a tracked job or type company, title and
- * description), Template ("None (generate without template)" or one of the templates, with a preview) and Custom
- * Prompt, then ✨ Generate with the staged progress lines while the AI task runs.
+ * description), Template ("None (generate without template)" or one of the templates, with a readable preview) and
+ * Custom Prompt, then ✨ Generate with the staged progress lines while the AI task runs. Over a letter that already
+ * has text, Generate first asks whether to replace it.
  */
 
 type Tab = 'job' | 'template' | 'prompt';
@@ -41,6 +45,8 @@ export interface GenerateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   letter: CoverLetterDetail;
+  /** The editor holds text: Generate asks "Replace the current letter?" before it starts. */
+  replacesContent?: boolean;
   /** Called before the request: save what is typed, lock the editor. */
   onStart: () => Promise<void> | void;
   onDone: (result: CoverLetterGenerateResult | null) => void;
@@ -100,6 +106,7 @@ export function GenerateDialog(props: GenerateDialogProps) {
 
 function GenerateForm({
   letter,
+  replacesContent = false,
   onOpenChange,
   onStart,
   onDone,
@@ -125,14 +132,30 @@ function GenerateForm({
   const [fieldErrors, setFieldErrors] = useState<{ companyName?: string; jobTitle?: string }>({});
   const [requestError, setRequestError] = useState<{ message: string; needsResume: boolean } | null>(null);
   const [sending, setSending] = useState(false);
+  const [confirmingReplace, setConfirmingReplace] = useState(false);
+  const [pickedJob, setPickedJob] = useState<ApplicationSummary | null>(null);
   const companyInput = useRef<HTMLInputElement>(null);
+  const isMac = useIsMac();
 
   const templates = useQuery({ queryKey: templateKeys.all, queryFn: fetchTemplates });
   const templateItems = templates.data?.items ?? [];
   const chosen = templateItems.find((template) => template.id === templateId) ?? null;
   const error = requestError ?? (failure ? { message: failure, needsResume: false } : null);
 
+  // The tracked application the letter belongs to (made from the tracker, or picked before) shows in the picker.
+  const linkedId = letter.applicationId;
+  const linkedJob = useQuery({
+    queryKey: ['cover-letter', 'linked-application', linkedId],
+    queryFn: ({ signal }) =>
+      api.get<ApplicationDetail>(`/api/applications/${encodeURIComponent(linkedId ?? '')}`, { schema: ApplicationDetailSchema, signal }),
+    enabled: Boolean(linkedId),
+    retry: false,
+    staleTime: 60_000,
+  });
+  const job = pickedJob ?? (linkedId ? (linkedJob.data ?? null) : null);
+
   const pickJob = async (application: ApplicationSummary) => {
+    setPickedJob(application);
     setCompanyName(application.companyName);
     setJobTitle(application.title);
     setFieldErrors({});
@@ -147,7 +170,8 @@ function GenerateForm({
     }
   };
 
-  const generate = async () => {
+  /** Checks the required fields, then asks before replacing a letter that has text. */
+  const generate = () => {
     const problems = {
       companyName: companyName.trim() ? undefined : 'Required',
       jobTitle: jobTitle.trim() ? undefined : 'Required',
@@ -157,6 +181,14 @@ function GenerateForm({
       setTab('job');
       return;
     }
+    if (replacesContent) {
+      setConfirmingReplace(true);
+      return;
+    }
+    void start();
+  };
+
+  const start = async () => {
     setRequestError(null);
     setSending(true);
     try {
@@ -205,106 +237,118 @@ function GenerateForm({
         </div>
       ) : (
         <>
-          <SegmentedControl<Tab>
-            aria-label="Generate options"
-            items={[
-              { value: 'job', label: 'Job Details' },
-              { value: 'template', label: 'Template' },
-              { value: 'prompt', label: 'Custom Prompt' },
-            ]}
-            value={tab}
-            onValueChange={setTab}
-            className="mt-5"
-          >
-            <TabPanel value="job" className="mt-5 min-h-[370px]">
-              <p className="text-sm text-muted-foreground">Add or edit the job information for this cover letter.</p>
-              <div className="mt-4 flex flex-col gap-4">
-                <Field label="Select a job from tracker" id={ids.picker}>
-                  <JobPicker id={ids.picker} onPick={(application) => void pickJob(application)} />
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Company Name" required error={fieldErrors.companyName} id={ids.company}>
-                    <Input
-                      ref={companyInput}
-                      value={companyName}
-                      placeholder="ex. Google"
-                      maxLength={200}
-                      onChange={(event) => setCompanyName(event.target.value)}
-                    />
+          {/* On a short screen the fields scroll between the title and the buttons, which stay in view. */}
+          <div className="-mx-6 mt-4 min-h-0 flex-1 overflow-y-auto px-6 py-1">
+            <SegmentedControl<Tab>
+              aria-label="Generate options"
+              items={[
+                { value: 'job', label: 'Job Details' },
+                { value: 'template', label: 'Template' },
+                { value: 'prompt', label: 'Custom Prompt' },
+              ]}
+              value={tab}
+              onValueChange={setTab}
+            >
+              <TabPanel value="job" className="mt-5 min-h-[370px]">
+                <p className="text-sm text-muted-foreground">Add or edit the job information for this cover letter.</p>
+                <div className="mt-4 flex flex-col gap-4">
+                  <Field label="Select a job from tracker" id={ids.picker}>
+                    <JobPicker id={ids.picker} selected={job} onPick={(application) => void pickJob(application)} />
                   </Field>
-                  <Field label="Job Title" required error={fieldErrors.jobTitle} id={ids.title}>
-                    <Input
-                      value={jobTitle}
-                      placeholder="ex. Software Engineer"
-                      maxLength={200}
-                      onChange={(event) => setJobTitle(event.target.value)}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Company Name" required error={fieldErrors.companyName} id={ids.company}>
+                      <Input
+                        ref={companyInput}
+                        value={companyName}
+                        placeholder="ex. Google"
+                        maxLength={200}
+                        onChange={(event) => setCompanyName(event.target.value)}
+                      />
+                    </Field>
+                    <Field label="Job Title" required error={fieldErrors.jobTitle} id={ids.title}>
+                      <Input
+                        value={jobTitle}
+                        placeholder="ex. Software Engineer"
+                        maxLength={200}
+                        onChange={(event) => setJobTitle(event.target.value)}
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Job Description" id={ids.description}>
+                    <Textarea
+                      value={jobDescription}
+                      rows={7}
+                      placeholder="Paste the job description here"
+                      onChange={(event) => setJobDescription(event.target.value)}
+                      className="max-h-72"
                     />
                   </Field>
                 </div>
-                <Field label="Job Description" id={ids.description}>
-                  <Textarea
-                    value={jobDescription}
-                    rows={7}
-                    placeholder="Paste the job description here"
-                    onChange={(event) => setJobDescription(event.target.value)}
-                    className="max-h-72"
-                  />
-                </Field>
-              </div>
-            </TabPanel>
-            <TabPanel value="template" className="mt-5 min-h-[370px]">
-              <p className="text-sm text-muted-foreground">Optionally select a template to generate your cover letter from.</p>
-              <TemplateChoice
-                templates={templateItems}
-                loading={templates.isPending}
-                value={chosen ? chosen.id : NO_TEMPLATE}
-                onChange={setTemplateId}
-              />
-            </TabPanel>
-            <TabPanel value="prompt" className="mt-5 min-h-[370px]">
-              <p className="text-sm text-muted-foreground">Add additional context or instructions</p>
-              <div className="mt-4 flex flex-col gap-2">
-                <Textarea
-                  id={ids.prompt}
-                  aria-label="Custom prompt"
-                  value={customPrompt}
-                  rows={8}
-                  maxLength={CUSTOM_PROMPT_MAX}
-                  placeholder="Paste in an existing cover letter OR provide some context for AI to expand upon..."
-                  onChange={(event) => setCustomPrompt(event.target.value)}
+              </TabPanel>
+              <TabPanel value="template" className="mt-5 min-h-[370px]">
+                <p className="text-sm text-muted-foreground">Optionally select a template to generate your cover letter from.</p>
+                <TemplateChoice
+                  templates={templateItems}
+                  loading={templates.isPending}
+                  value={chosen ? chosen.id : NO_TEMPLATE}
+                  onChange={setTemplateId}
                 />
-                <div>
-                  <Button variant="link" onClick={() => setCustomPrompt(CUSTOM_PROMPT_EXAMPLE)}>
-                    Load an example
-                  </Button>
+              </TabPanel>
+              <TabPanel value="prompt" className="mt-5 min-h-[370px]">
+                <p className="text-sm text-muted-foreground">Add additional context or instructions</p>
+                <div className="mt-4 flex flex-col gap-2">
+                  <Textarea
+                    id={ids.prompt}
+                    aria-label="Custom prompt"
+                    value={customPrompt}
+                    rows={8}
+                    maxLength={CUSTOM_PROMPT_MAX}
+                    placeholder="Paste in an existing cover letter OR provide some context for AI to expand upon..."
+                    onChange={(event) => setCustomPrompt(event.target.value)}
+                  />
+                  <div>
+                    <Button variant="link" onClick={() => setCustomPrompt(CUSTOM_PROMPT_EXAMPLE)}>
+                      Load an example
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </TabPanel>
-          </SegmentedControl>
+              </TabPanel>
+            </SegmentedControl>
 
-          {error && (
-            <Notice tone="error" className="mt-5">
-              {error.message}
-              {error.needsResume && (
-                <span className="mt-2 block">
-                  <Link href="/documents?tab=resumes" className={buttonClasses({ variant: 'outline', size: 'sm' })}>
-                    Go to Documents
-                  </Link>
-                </span>
-              )}
-            </Notice>
-          )}
+            {error && (
+              <Notice tone="error" className="mt-5">
+                {error.message}
+                {error.needsResume && (
+                  <span className="mt-2 block">
+                    <Link href="/documents?tab=resumes" className={buttonClasses({ variant: 'outline', size: 'sm' })}>
+                      Go to Documents
+                    </Link>
+                  </span>
+                )}
+              </Notice>
+            )}
+          </div>
 
-          <DialogFooter>
+          <DialogFooter flush className="mt-5">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button icon={<SparkleIcon size={16} weight="fill" />} onClick={() => void generate()} data-generate-submit="">
+            <Button icon={<SparkleIcon size={16} weight="fill" />} onClick={generate} data-generate-submit="">
               Generate
             </Button>
           </DialogFooter>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmingReplace}
+        onOpenChange={setConfirmingReplace}
+        title="Replace the current letter?"
+        description={`You can undo with ${shortcutLabel('Mod+Z', isMac)} or the toolbar's Undo button.`}
+        confirmLabel="Replace"
+        tone="primary"
+        onConfirm={() => void start()}
+      />
     </DialogContent>
   );
 }
@@ -315,7 +359,7 @@ function TemplateChoice({
   value,
   onChange,
 }: {
-  templates: ReadonlyArray<{ id: string; name: string; isSystem: boolean; preview: string; updatedAt: string }>;
+  templates: ReadonlyArray<{ id: string; name: string; isSystem: boolean }>;
   loading: boolean;
   value: string;
   onChange: (id: string) => void;
@@ -326,8 +370,8 @@ function TemplateChoice({
     templates.map((template) => ({ id: template.id, label: template.isSystem ? `${template.name} (Default)` : template.name })),
   );
   return (
-    <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">
-      <div role="radiogroup" aria-label="Template" className="flex max-h-72 flex-col gap-1 overflow-y-auto pr-1">
+    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div role="radiogroup" aria-label="Template" className="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1 sm:max-h-72">
         {loading ? (
           <Spinner size={16} label="Loading templates..." className="py-3" />
         ) : (
@@ -358,21 +402,7 @@ function TemplateChoice({
           <p className="px-1 py-2 text-sm text-muted-foreground">No templates available. Create one from the Documents page.</p>
         )}
       </div>
-      <div className="rounded-control border border-border bg-surface-low p-2" aria-label="Template preview">
-        {chosen ? (
-          <DocumentThumb
-            cacheKey={thumbKey('template', chosen.id, chosen.updatedAt)}
-            load={() => fetchTemplatePreview(chosen.id)}
-            title={`${chosen.name} preview`}
-            page={PAGE_LETTER}
-            className="overflow-hidden rounded-[6px] shadow-soft"
-          />
-        ) : (
-          <div className="flex aspect-[816/1056] items-center justify-center rounded-[6px] bg-white p-4 text-center text-xs text-muted-foreground shadow-soft">
-            The letter is written from your resume and the job, with your name and contact details at the top.
-          </div>
-        )}
-      </div>
+      <TemplatePreview template={chosen} className="h-64 sm:h-72" />
     </div>
   );
 }

@@ -76,12 +76,16 @@ export function TemplateChooser() {
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
           {filters.length > 1 ? (
-            <SegmentedControl
-              aria-label="Show templates"
-              items={filters.map((value) => ({ value, label: TEMPLATE_FILTER_LABEL[value] }))}
-              value={shownFilter}
-              onValueChange={setFilter}
-            />
+            // On a phone the pills are wider than the page: they scroll sideways, edge to edge, instead of widening it.
+            <div className="max-sm:-mx-4 max-sm:-my-0.5 max-sm:w-[calc(100%+2rem)] max-sm:overflow-x-auto max-sm:px-4 max-sm:py-0.5 max-sm:[scrollbar-width:none]">
+              <SegmentedControl
+                aria-label="Show templates"
+                items={filters.map((value) => ({ value, label: TEMPLATE_FILTER_LABEL[value] }))}
+                value={shownFilter}
+                onValueChange={setFilter}
+                className="w-max"
+              />
+            </div>
           ) : (
             <span />
           )}

@@ -14,6 +14,7 @@ import { ApiError, userMessage } from '@/lib/api';
 import { ME_QUERY_KEY } from '@/lib/auth';
 import { safeNextPath } from '@/lib/navigation';
 import { fetchAuthOptions, requestEmailCode, signInWithGoogle, verifyEmailCode } from './api';
+import { codeAlreadySentNotice, cooldownSeconds } from './cooldown';
 
 /*
  * The sign-in page (free_tailor's flow in Simplify's styling): Google's own button and/or a six-digit code sent by
@@ -121,7 +122,14 @@ export function SignInPage() {
       setNotice(result.message);
       setStage('code');
     } catch (caught) {
-      setError(userMessage(caught, 'Could not send the code.'));
+      // Asked again within the minute (e.g. after "Use a different address"): the code already sent still works.
+      const wait = cooldownSeconds(caught);
+      if (wait !== null) {
+        setNotice(codeAlreadySentNotice(email.trim().toLowerCase(), wait));
+        setStage('code');
+      } else {
+        setError(userMessage(caught, 'Could not send the code.'));
+      }
     } finally {
       setBusy(false);
     }

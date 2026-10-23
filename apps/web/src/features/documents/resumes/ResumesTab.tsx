@@ -46,9 +46,9 @@ const NOUN = { one: 'resume', many: 'resumes' };
 
 /**
  * Documents › Resumes: free_tailor's two views of a person's resumes in Simplify's look. Grid: a dashed "New resume"
- * tile, then each resume's first page with its label, "Edited … · {template}", the ★ Default / Uploaded / PDF badges and
- * ⋮. List: rows of Resume | Name on resume | Template | Edited | ⋮ with checkboxes for bulk delete. Search with the
- * "1 of 3 resumes match." line, the All / Created / Uploaded filter and Upload; the view is remembered.
+ * tile, then each resume's first page with its label, the ★ Default / Uploaded / PDF badges under it, "Edited … ·
+ * {template}" and ⋮. List: rows of Resume | Name on resume | Template | Edited | ⋮ with checkboxes for bulk delete.
+ * Search with the "1 of 3 resumes match." line, the All / Created / Uploaded filter and Upload; the view is remembered.
  */
 export function ResumesTab() {
   const toast = useToast();
@@ -147,7 +147,7 @@ export function ResumesTab() {
               href={resume.kind === 'built' ? resumeEditorHref(resume.id) : undefined}
               onOpen={resume.kind === 'uploaded' ? () => openResumeFile(resume.id) : undefined}
               thumb={<ResumeThumb resume={resume} title={`${resume.label} preview`} />}
-              overlayBadges={
+              badges={
                 resume.isDefault || resume.kind === 'uploaded' ? (
                   <>
                     {resume.isDefault && (
@@ -155,12 +155,8 @@ export function ResumesTab() {
                         Default
                       </Badge>
                     )}
-                    {resume.kind === 'uploaded' && (
-                      <span className="flex flex-wrap gap-1.5">
-                        <Badge tone="dark">Uploaded</Badge>
-                        {badge && <Badge tone="dark">{badge}</Badge>}
-                      </span>
-                    )}
+                    {resume.kind === 'uploaded' && <Badge>Uploaded</Badge>}
+                    {resume.kind === 'uploaded' && badge && <Badge>{badge}</Badge>}
                   </>
                 ) : undefined
               }
@@ -200,7 +196,7 @@ export function ResumesTab() {
               tone="error"
               title="Could not load your resumes"
               action={
-                <Button variant="outline" size="sm" onClick={() => void listQuery.refetch()}>
+                <Button variant="outline" size="sm" loading={listQuery.isFetching} onClick={() => void listQuery.refetch()}>
                   Try again
                 </Button>
               }

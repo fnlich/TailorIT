@@ -6,7 +6,7 @@ import type { SectionIcon } from '@tailorit/shared/resume';
 import { clsx } from 'clsx';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
-import { CaretDownIcon, TrashIcon } from '@/components/ui/icons';
+import { CaretDownIcon, TrashIcon, WarningCircleIcon } from '@/components/ui/icons';
 import { SectionGlyph } from '../sectionIcons';
 
 /** The hover tools' visibility: on hover or focus inside the card, always on touch screens. */
@@ -20,6 +20,8 @@ export interface CardFrame {
   move?: { up: () => void; down: () => void; canUp: boolean; canDown: boolean };
   /** "3 entries", "12 skills": after the label in the head. */
   meta?: string;
+  /** Something inside wants a look ("1 entry needs an end date"): an amber mark after the count, named for readers. */
+  attention?: string;
   /** Remove section (offered for the kinds that are not always shown, and custom sections). */
   onRemove?: () => void;
   /** Open and focus the card when it mounts (the card Add content just made). */
@@ -55,6 +57,7 @@ export function SectionCard({
   const id = useId();
   const titleId = `${id}-title`;
   const bodyId = `${id}-body`;
+  const attentionId = `${id}-attention`;
   const toggle = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -79,14 +82,34 @@ export function SectionCard({
             type="button"
             aria-expanded={open}
             aria-controls={bodyId}
+            aria-describedby={frame?.attention ? attentionId : undefined}
             onClick={() => setOpen((current) => !current)}
             className="flex min-w-0 flex-1 items-center gap-3 rounded-control py-3 pr-2 pl-1 text-left focus-visible:outline-offset-0"
           >
-            <SectionGlyph icon={icon} />
+            <span className="relative flex shrink-0">
+              <SectionGlyph icon={icon} />
+              {frame?.attention && (
+                // A mark on the tile's corner (no room taken from the label); the sentence describes the toggle and
+                // stays out of the section's name.
+                <span
+                  aria-hidden="true"
+                  title={frame.attention}
+                  data-card-attention=""
+                  className="absolute -top-1.5 -right-1.5 flex rounded-full bg-surface text-amber-foreground ring-2 ring-surface"
+                >
+                  <WarningCircleIcon size={16} weight="fill" />
+                </span>
+              )}
+            </span>
             <span className="min-w-0 truncate text-[15px] leading-6 font-semibold text-foreground">{label}</span>
             {frame?.meta && <span className="shrink-0 text-[13px] whitespace-nowrap text-muted-foreground">{frame.meta}</span>}
           </button>
         </h3>
+        {frame?.attention && (
+          <span id={attentionId} hidden>
+            {frame.attention}
+          </span>
+        )}
         {(frame?.move || frame?.onRemove) && (
           <div className={clsx('flex shrink-0 items-center', tools)}>
             {frame.move && (

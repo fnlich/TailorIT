@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { LETTER_ORIGIN_BADGE, validateLetterTitle, type CoverLetterSummary } from '@tailorit/shared/letters';
 import { Badge } from '@/components/ui/Badge';
-import { buttonClasses } from '@/components/ui/Button';
+import { Button, buttonClasses } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DownloadSimpleIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from '@/components/ui/icons';
+import { Notice } from '@/components/ui/Notice';
 import { useToast } from '@/components/ui/Toast';
 import { userMessage } from '@/lib/api';
 import { editedLine, relativeTime } from '@/lib/format';
@@ -46,14 +47,16 @@ import {
 /*
  * Documents › Cover Letters: Simplify's table (screenshot 4: Name + Generated / Uploaded badge, Created, Last Edited,
  * ✎ Edit + More ⌄; "{n} selected" with bulk Delete, Upload, Search) plus a thumbnail grid of each letter's first page
- * (US Letter), with a Grid | List toggle remembered in this browser.
+ * (US Letter), with a Grid | List toggle (in the Resumes tab's order) remembered in this browser. List is the default,
+ * as in Simplify.
  */
 
 const NOUN = { one: 'cover letter', many: 'cover letters' };
 
-function originBadge(letter: CoverLetterSummary, tone: 'outline' | 'dark' = 'outline') {
+/** "Generated" / "Uploaded", in Simplify's light badge: under the name in the table, under the title on a card. */
+function originBadge(letter: CoverLetterSummary) {
   const label = LETTER_ORIGIN_BADGE[letter.origin];
-  return label ? <Badge tone={tone}>{label}</Badge> : null;
+  return label ? <Badge>{label}</Badge> : null;
 }
 
 export function CoverLettersTab() {
@@ -121,7 +124,7 @@ export function CoverLettersTab() {
         getId={(letter) => letter.id}
         getLabel={(letter) => letter.title}
         searchFields={(letter) => [letter.title, letter.companyName, letter.jobTitle]}
-        views={['list', 'grid']}
+        views={['grid', 'list']}
         defaultView="list"
         viewStorageKey="tailorit.documents.coverLetters.view"
         columns={columns}
@@ -142,7 +145,7 @@ export function CoverLettersTab() {
                 page={PAGE_LETTER}
               />
             }
-            overlayBadges={originBadge(letter, 'dark')}
+            badges={originBadge(letter)}
             meta={[
               jobLine(letter),
               letter.lastEditedAt ? editedLine(letter.lastEditedAt, now) : `Created ${relativeTime(letter.createdAt, now)}`,
@@ -173,7 +176,21 @@ export function CoverLettersTab() {
           />
         }
         loading={query.isPending}
-        error={query.isError ? userMessage(query.error, 'Your cover letters could not be loaded. Please reload the page.') : undefined}
+        error={
+          query.isError ? (
+            <Notice
+              tone="error"
+              title="Could not load your cover letters"
+              action={
+                <Button variant="outline" size="sm" loading={query.isFetching} onClick={() => void query.refetch()}>
+                  Try again
+                </Button>
+              }
+            >
+              {userMessage(query.error, 'Please try again in a moment.')}
+            </Notice>
+          ) : undefined
+        }
         empty={{
           title: 'Create your first cover letter!',
           description: 'Get started with a personalized cover letter that highlights your qualifications.',

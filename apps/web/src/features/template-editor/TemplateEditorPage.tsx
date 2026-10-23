@@ -14,7 +14,7 @@ import {
   type LetterTemplateSummary,
   type PatchLetterTemplateBody,
 } from '@tailorit/shared/letters';
-import { EditorBar } from '@/components/shell/EditorBar';
+import { EditorBar, EditorBarButton } from '@/components/shell/EditorBar';
 import { Button, buttonClasses } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -250,18 +250,22 @@ function TemplateWorkspace({ initial }: { initial: LetterTemplateDetail }) {
         actions={
           <>
             {readOnly ? (
-              <Button icon={<CopyIcon size={16} />} loading={duplicating} onClick={() => void duplicateToEdit()} data-duplicate-template="">
-                Duplicate to edit
-              </Button>
+              <EditorBarButton
+                label="Duplicate to edit"
+                shortLabel="Duplicate"
+                icon={<CopyIcon size={16} />}
+                loading={duplicating}
+                onClick={() => void duplicateToEdit()}
+                data-duplicate-template=""
+              />
             ) : null}
-            <Button
+            <EditorBarButton
+              label="AI Prompt"
               variant="outline"
               icon={<SparkleIcon size={16} weight="fill" className="text-primary-ink" />}
               onClick={() => setPromptOpen(true)}
               data-ai-prompt=""
-            >
-              AI Prompt
-            </Button>
+            />
             <EditorMenu items={menuItems} />
           </>
         }

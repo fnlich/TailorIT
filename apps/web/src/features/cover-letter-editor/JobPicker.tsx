@@ -5,26 +5,47 @@ import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import { useEffect, useState } from 'react';
 import { ApplicationListResponseSchema, type ApplicationListResponse, type ApplicationSummary } from '@tailorit/shared/tracker';
-import { MagnifyingGlassIcon } from '@/components/ui/icons';
+import { CheckIcon, MagnifyingGlassIcon } from '@/components/ui/icons';
 import { CONTROL_SURFACE } from '@/components/ui/Input';
 import { MENU_ROW, MENU_SURFACE, Z_FLOATING } from '@/components/ui/styles';
 import { api, isApiError } from '@/lib/api';
 
 /*
  * "Select a job from tracker": a search over the person's tracked applications (GET /api/applications?q=). Picking
- * one fills Company Name, Job Title and Job Description. When the tracker's API is not there (yet), the field says
- * so instead of failing.
+ * one fills Company Name, Job Title and Job Description, and the field keeps showing the job picked (or the one the
+ * letter is already linked to), so it is clear where the details came from. When the tracker's API is not there
+ * (yet), the field says so instead of failing.
  */
 
-export function JobPicker({ id, onPick }: { id?: string; onPick: (application: ApplicationSummary) => void }) {
-  const [input, setInput] = useState('');
+const labelOf = (application: ApplicationSummary) => `${application.title} · ${application.companyName}`;
+
+export function JobPicker({
+  id,
+  selected,
+  onPick,
+}: {
+  id?: string;
+  /** The job the details came from: picked here, or the tracked application the letter belongs to. */
+  selected: ApplicationSummary | null;
+  onPick: (application: ApplicationSummary) => void;
+}) {
+  const [input, setInput] = useState(selected ? labelOf(selected) : '');
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
 
+  // A selection that arrives or changes from outside (the linked job loading) shows in the field.
+  const [shownId, setShownId] = useState(selected?.id ?? null);
+  if (selected && selected.id !== shownId) {
+    setShownId(selected.id);
+    setInput(labelOf(selected));
+  }
+
+  // The field showing the selection is not a search: the list then offers every tracked job.
+  const typed = selected && input === labelOf(selected) ? '' : input.trim();
   useEffect(() => {
-    const timer = window.setTimeout(() => setSearch(input.trim()), 250);
+    const timer = window.setTimeout(() => setSearch(typed), 250);
     return () => window.clearTimeout(timer);
-  }, [input]);
+  }, [typed]);
 
   const query = useQuery({
     queryKey: ['cover-letter', 'job-picker', search],
@@ -57,17 +78,18 @@ export function JobPicker({ id, onPick }: { id?: string; onPick: (application: A
       items={items}
       filteredItems={items}
       filter={null}
-      value={null}
+      value={selected}
       open={open}
       onOpenChange={setOpen}
       inputValue={input}
       onInputValueChange={setInput}
-      itemToStringLabel={(application) => `${application.title} · ${application.companyName}`}
+      itemToStringLabel={labelOf}
       isItemEqualToValue={(a, b) => a.id === b.id}
       onValueChange={(application) => {
         if (!application) return;
         onPick(application);
-        setInput('');
+        setShownId(application.id);
+        setInput(labelOf(application));
         setOpen(false);
       }}
     >
@@ -98,11 +120,14 @@ export function JobPicker({ id, onPick }: { id?: string; onPick: (application: A
             </p>
             <BaseCombobox.List className="outline-none">
               {(application: ApplicationSummary) => (
-                <BaseCombobox.Item key={application.id} value={application} className={MENU_ROW}>
+                <BaseCombobox.Item key={application.id} value={application} className={clsx(MENU_ROW, 'relative pr-8')}>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate font-medium">{application.title}</span>
                     <span className="truncate text-xs leading-4 text-muted-foreground">{application.companyName}</span>
                   </span>
+                  <BaseCombobox.ItemIndicator className="absolute right-2.5 flex text-primary-ink">
+                    <CheckIcon size={14} weight="bold" />
+                  </BaseCombobox.ItemIndicator>
                 </BaseCombobox.Item>
               )}
             </BaseCombobox.List>

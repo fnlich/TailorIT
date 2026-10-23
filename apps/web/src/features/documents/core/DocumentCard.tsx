@@ -18,8 +18,11 @@ export interface DocumentCardProps {
   onOpen?: () => void;
   /** The first page, usually <DocumentThumb …/>. */
   thumb: ReactNode;
-  /** Badges over the page's top-left corner (★ Default, Uploaded…). */
-  overlayBadges?: ReactNode;
+  /**
+   * Badges under the title (★ Default, Uploaded, PDF, Generated), in Simplify's light style (`<Badge>`): the page
+   * itself stays uncovered.
+   */
+  badges?: ReactNode;
   /** Lines under the title ("Edited 6 hours ago · Modern"). */
   meta?: ReactNode[];
   /** A cautionary line under the meta. */
@@ -36,7 +39,7 @@ export interface DocumentCardProps {
 
 /**
  * A document in the grid view (free_tailor's card, Simplify's colours): the first page under a link the size of it
- * (a frame may not sit inside a link), the title, meta lines and a ⋮ menu.
+ * (a frame may not sit inside a link), the title, its badges, meta lines and a ⋮ menu.
  */
 export function DocumentCard({
   kind,
@@ -45,7 +48,7 @@ export function DocumentCard({
   href,
   onOpen,
   thumb,
-  overlayBadges,
+  badges,
   meta,
   warning,
   dimmed,
@@ -74,11 +77,6 @@ export function DocumentCard({
         ) : onOpen ? (
           <button type="button" data-cover aria-label={`Open ${label}`} onClick={onOpen} className={coverClasses} />
         ) : null}
-        {overlayBadges && (
-          <span className="pointer-events-none absolute top-2.5 left-2.5 z-[2] flex max-w-[calc(100%-3.5rem)] flex-col items-start gap-1.5">
-            {overlayBadges}
-          </span>
-        )}
         {selectable && onSelectedChange && (
           <span
             className={clsx(
@@ -109,6 +107,7 @@ export function DocumentCard({
               label
             )}
           </h3>
+          {badges && <div className="mt-1 mb-1.5 flex flex-wrap items-center gap-1.5">{badges}</div>}
           {meta?.map((line, index) => (
             <p key={index} className="mt-0.5 truncate text-[13px] leading-5 text-muted-foreground">
               {line}

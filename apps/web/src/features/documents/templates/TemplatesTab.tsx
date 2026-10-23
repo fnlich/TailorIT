@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { LetterTemplateSummary } from '@tailorit/shared/letters';
 import { Badge } from '@/components/ui/Badge';
-import { buttonClasses } from '@/components/ui/Button';
+import { Button, buttonClasses } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PlusIcon, TrashIcon } from '@/components/ui/icons';
+import { Notice } from '@/components/ui/Notice';
 import { useToast } from '@/components/ui/Toast';
 import { userMessage } from '@/lib/api';
 import { relativeTime } from '@/lib/format';
@@ -137,7 +138,21 @@ export function TemplatesTab() {
           />
         }
         loading={query.isPending}
-        error={query.isError ? userMessage(query.error, 'Your templates could not be loaded. Please reload the page.') : undefined}
+        error={
+          query.isError ? (
+            <Notice
+              tone="error"
+              title="Could not load your templates"
+              action={
+                <Button variant="outline" size="sm" loading={query.isFetching} onClick={() => void query.refetch()}>
+                  Try again
+                </Button>
+              }
+            >
+              {userMessage(query.error, 'Please try again in a moment.')}
+            </Notice>
+          ) : undefined
+        }
         empty={{
           title: 'Create your first template!',
           description: 'Get started by creating a reusable cover letter template with dynamic placeholders.',

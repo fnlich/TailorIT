@@ -1,5 +1,6 @@
 'use client';
 
+import { FloppyDiskIcon } from '@phosphor-icons/react/FloppyDisk';
 import { PaletteIcon } from '@phosphor-icons/react/Palette';
 import {
   CUSTOM_SECTION_SPEC,
@@ -23,9 +24,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import { useRouter } from 'next/navigation';
 import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
-import { EditorBar } from '@/components/shell/EditorBar';
+import { EditorBar, EditorBarButton } from '@/components/shell/EditorBar';
 import { PAGE_GUTTER } from '@/components/shell/layout';
-import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FileTextIcon, PlusIcon } from '@/components/ui/icons';
 import { Notice } from '@/components/ui/Notice';
@@ -62,6 +62,7 @@ import {
   isBlankEntry,
   keptCount,
   librarySpelling,
+  missingEndDateCount,
   removeEntry,
   removeSection,
   removeSectionQuestion,
@@ -347,7 +348,11 @@ export function ResumeEditor({
 
   const frameFor = (ref: string, grip: ReactNode, dragging: boolean, removable: boolean): CardFrame => {
     const index = displayed.indexOf(ref);
+    // Rows that print "2021-02 - ": the closed card says so too, so the hint inside is not missed. Never blocks saving.
+    const openEnded = missingEndDateCount(draft, ref);
     return {
+      attention:
+        openEnded === 0 ? undefined : openEnded === 1 ? '1 entry needs an end date' : `${openEnded} entries need an end date`,
       grip,
       dragging,
       move: {
@@ -575,9 +580,12 @@ export function ResumeEditor({
           </span>
         }
         actions={
-          <Button onClick={() => void save()} loading={saving}>
-            {saving ? 'Saving...' : resume ? 'Save Resume' : 'Create Resume'}
-          </Button>
+          <EditorBarButton
+            label={saving ? 'Saving...' : resume ? 'Save Resume' : 'Create Resume'}
+            icon={<FloppyDiskIcon size={16} />}
+            onClick={() => void save()}
+            loading={saving}
+          />
         }
       />
 

@@ -27,6 +27,7 @@ import {
   bulletsRequestFor,
   cleanChip,
   hasChip,
+  missingEndDateHint,
   removeRoleSkill,
   replaceEntry,
   technicalSkillRefusal,
@@ -73,6 +74,8 @@ export function EntryEditor({
     (change: object, immediate = false) => update((current) => replaceEntry(current, entryRef, change), { immediate }),
     [update, entryRef],
   );
+  // A start date with no end prints "2021-02 - ": say so under End date (a hint; saving goes ahead regardless).
+  const endDateHint = missingEndDateHint(entryRef.kind, row);
 
   return (
     <EditorPanel
@@ -91,6 +94,7 @@ export function EntryEditor({
             value={fieldValue(row, field.name)}
             onChange={(value) => patch({ [field.name]: value })}
             autoFocus={index === 0}
+            hint={field.name === 'endDate' ? endDateHint : null}
           />
         ))}
       </div>
@@ -114,17 +118,25 @@ function EntryField({
   value,
   onChange,
   autoFocus,
+  hint,
 }: {
   field: FieldSpec;
   id: string;
   value: string;
   onChange: (value: string) => void;
   autoFocus: boolean;
+  /** A line under the box, in amber (End date: "Add an end date, or Present for a current role."). */
+  hint?: string | null;
 }) {
   const wide = field.wide ? '@lg:col-span-2' : undefined;
+  const hintLine = hint ? (
+    <span className="text-amber-foreground" data-end-date-hint="">
+      {hint}
+    </span>
+  ) : undefined;
   if (field.input === 'textarea') {
     return (
-      <Field label={field.label} id={id} className={wide}>
+      <Field label={field.label} id={id} className={wide} hint={hintLine}>
         <Textarea value={value} rows={3} placeholder={field.placeholder} autoFocus={autoFocus} onChange={(event) => onChange(event.target.value)} />
       </Field>
     );
@@ -132,7 +144,7 @@ function EntryField({
   // Text for links on purpose: the browser's url check refuses "github.com/you"; inputMode still picks the keyboard.
   const type = field.input === 'email' || field.input === 'tel' ? field.input : 'text';
   return (
-    <Field label={field.label} id={id} className={wide}>
+    <Field label={field.label} id={id} className={wide} hint={hintLine}>
       <Input
         type={type}
         inputMode={field.input === 'url' ? 'url' : undefined}

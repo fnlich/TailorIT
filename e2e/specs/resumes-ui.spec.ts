@@ -446,6 +446,29 @@ test.describe('resume editor', () => {
     expect(created.document.experience).toEqual([]);
   });
 
+  test('a start date without an end date is pointed out, and saving still goes ahead', async ({ page }) => {
+    const api = await setup(page);
+    await openNewEditor(page);
+    await page.getByRole('button', { name: /^Experience/ }).click();
+    await page.getByRole('button', { name: 'Add experience' }).click();
+    await page.getByLabel('Job title').fill('Platform Engineer');
+    const endDate = page.getByLabel('End date', { exact: true });
+    await expect(endDate).toHaveAttribute('placeholder', 'MM/YYYY or Present');
+    await page.getByLabel('Start date', { exact: true }).fill('2021-02');
+    const hint = 'Add an end date, or Present for a current role.';
+    await expect(endDate).toHaveAccessibleDescription(hint);
+    await page.getByRole('button', { name: 'Done' }).click();
+
+    // The row says so too, and the card head carries a mark described for screen readers.
+    await expect(page.getByRole('button', { name: 'Edit Platform Engineer' })).toHaveAccessibleDescription(hint);
+    await expect(page.getByRole('button', { name: /^Experience/ })).toHaveAccessibleDescription('1 entry needs an end date');
+
+    await page.getByRole('button', { name: 'Create Resume' }).click();
+    await expect(page).toHaveURL(/\/documents\?tab=resumes$/);
+    const created = api.calledWith('POST', /^\/api\/resumes$/)[0]?.body as { document: Json };
+    expect(created.document.experience).toMatchObject([{ title: 'Platform Engineer', startDate: '2021-02', endDate: '' }]);
+  });
+
   test('a stored resume opens with its content and saves with PUT', async ({ page }) => {
     const api = await setup(page);
     await page.goto('/resumes/r-default');
@@ -460,7 +483,60 @@ test.describe('resume editor', () => {
   });
 });
 
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  const pageOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+
+  test('the editor bar keeps the name readable and its buttons apart', async ({ page }) => {
+    await setup(page);
+    await page.goto('/resumes/r-default');
+    const bar = page.locator('[data-editor-bar]');
+    const name = bar.locator('[aria-current="page"] > span').first();
+    await expect(name).toHaveText('Senior Platform Engineer');
+    // "Documents" is its icon alone and Save its icon alone, both still named; the ⓘ waits for a wider screen.
+    await expect(bar.getByRole('link', { name: 'Documents' })).toBeVisible();
+    const save = bar.getByRole('button', { name: 'Save Resume' });
+    await expect(save).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'About this name' })).toBeHidden();
+
+    const nameBox = await name.boundingBox();
+    const renameBox = await bar.getByRole('button', { name: 'Rename' }).boundingBox();
+    const saveBox = await save.boundingBox();
+    expect(nameBox!.width).toBeGreaterThan(80);
+    expect(renameBox!.x + renameBox!.width).toBeLessThanOrEqual(saveBox!.x);
+    expect(saveBox!.width).toBeLessThanOrEqual(40);
+    expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  test('the template filters scroll sideways instead of widening the page', async ({ page }) => {
+    await setup(page);
+    await page.goto('/resumes/new');
+    const pills = page.getByRole('tablist', { name: 'Show templates' });
+    await expect(pills.getByRole('tab')).toHaveText(['All Templates', 'Simple', 'Modern', 'ATS']);
+    expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
+    await pills.getByRole('tab', { name: 'ATS' }).click();
+    await expect(page.locator('[data-template-card]')).toHaveCount(1);
+  });
+});
+
 test.describe('Documents › Resumes', () => {
+  test('grid badges sit under the title, clear of the page; the toggle reads Grid | List', async ({ page }) => {
+    await setup(page);
+    await page.goto('/documents?tab=resumes');
+    const toggle = page.getByRole('group', { name: 'View' }).getByRole('button');
+    await expect(toggle).toHaveCount(2);
+    expect(await toggle.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label')))).toEqual(['Grid', 'List']);
+    await page.getByRole('button', { name: 'Grid' }).click();
+
+    for (const [id, text] of [['r-upload', 'Uploaded'], ['r-upload', 'PDF'], ['r-default', 'Default']] as const) {
+      const card = page.locator(`[data-resume-card="${id}"]`);
+      const pageBox = await card.locator('[data-cover]').boundingBox();
+      const badgeBox = await card.getByText(text, { exact: true }).boundingBox();
+      expect(badgeBox!.y, `${text} badge`).toBeGreaterThanOrEqual(pageBox!.y + pageBox!.height);
+    }
+  });
+
   test('grid and list views, the view remembered, badges and menus', async ({ page }) => {
     await setup(page);
     await page.goto('/documents?tab=resumes');

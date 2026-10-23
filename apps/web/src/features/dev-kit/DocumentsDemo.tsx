@@ -108,7 +108,7 @@ export function DocumentsReplica() {
   return (
     <>
       <h1 className="text-2xl leading-10 font-bold tracking-[-0.01em] text-foreground sm:text-3xl">My Documents</h1>
-      <p className="mt-2 text-base text-muted-foreground">Manage and tailor all of your job search documents here!</p>
+      <p className="mt-2 text-base text-muted-foreground">Manage all of your job search documents here!</p>
       <DocumentActionCards className="mt-8" />
       <UnderlineTabs
         aria-label="Document types"
@@ -276,7 +276,7 @@ export function CoverLettersDemo() {
               page={PAGE_LETTER}
             />
           }
-          overlayBadges={<Badge tone="dark">{l.origin === 'generated' ? 'Generated' : 'Uploaded'}</Badge>}
+          badges={<Badge>{l.origin === 'generated' ? 'Generated' : 'Uploaded'}</Badge>}
           meta={[`${l.company} · ${l.jobTitle}`, editedLine(l.updatedAt, KIT_NOW)]}
           menuItems={menu(l)}
           selectable={selection.selectable}
@@ -372,9 +372,9 @@ export function ResumeCardsDemo() {
               page={PAGE_A4}
             />
           }
-          overlayBadges={
+          badges={
             r.isDefault ? (
-              <Badge tone="primary" icon={<StarIcon size={12} weight="fill" />}>
+              <Badge tone="tint" icon={<StarIcon size={12} weight="fill" />}>
                 Default
               </Badge>
             ) : undefined

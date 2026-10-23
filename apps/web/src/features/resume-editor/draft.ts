@@ -341,6 +341,33 @@ export function isBlankEntry(row: object): boolean {
   return true;
 }
 
+const END_DATE_HINT: Partial<Record<EntryKind | 'custom', string>> = {
+  experience: 'Add an end date, or Present for a current role.',
+  volunteering: 'Add an end date, or Present for a current role.',
+  projects: 'Add an end date, or Present for an ongoing project.',
+  education: 'Add an end date, or Present if you are still studying.',
+  custom: 'Add an end date, or Present if it is ongoing.',
+};
+
+/**
+ * The hint for a row with a start date and no end date, or null. Every template prints "{start} - {end}", so such a
+ * row prints "2021-02 - " with nothing after the dash. A hint only: saving is never held up by it.
+ */
+export function missingEndDateHint(kind: EntryKind | 'custom' | (string & {}), row: object): string | null {
+  const hint = (END_DATE_HINT as Record<string, string | undefined>)[kind];
+  if (!hint) return null;
+  const { startDate, endDate } = row as { startDate?: unknown; endDate?: unknown };
+  const filled = (value: unknown) => typeof value === 'string' && value.trim() !== '';
+  return filled(startDate) && !filled(endDate) ? hint : null;
+}
+
+/** How many of a section's rows (by its ref: "experience", "custom:cs-…") have a start date but no end date. */
+export function missingEndDateCount(draft: ResumeDraft, ref: string): number {
+  const list = entryListOf(ref);
+  if (!list) return 0;
+  return entriesOf(draft, list).filter((row) => missingEndDateHint(list.kind, row) !== null).length;
+}
+
 /** One section's rows: a kind's list, or a custom section's by its key. */
 export type EntryListRef = { kind: EntryKind } | { kind: 'custom'; sectionKey: string };
 /** One row: its list and its own key. */
