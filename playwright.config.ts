@@ -6,7 +6,9 @@ const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3100';
 
 export default defineConfig({
   testDir: './e2e',
-  outputDir: './e2e/artifacts',
+  // Playwright empties outputDir at the start of every run. Keep it to its own subfolder so the screenshots that
+  // specs save under e2e/artifacts/<package>/ survive other packages' runs.
+  outputDir: './e2e/artifacts/.playwright',
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,
