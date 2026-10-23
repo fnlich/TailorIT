@@ -1,0 +1,36 @@
+{
+  "name": "Sam Okoye",
+  "title": "",
+  "preferredTemplate": "",
+  "resumeSettings": {
+    "technicalSkillsLayout": "categorized",
+    "includeSoftSkills": false,
+    "includeStrengths": false
+  },
+  "contact": {
+    "phone": "",
+    "email": "sam.okoye@example.com",
+    "location": "",
+    "linkedin": "",
+    "github": "",
+    "portfolio": ""
+  },
+  "summary": "",
+  "experience": [],
+  "strengths": [],
+  "skills": [
+    "Python"
+  ],
+  "softSkills": [],
+  "education": [],
+  "certifications": [],
+  "projects": [],
+  "languages": [],
+  "awards": [],
+  "publications": [],
+  "volunteering": [],
+  "courses": [],
+  "interests": [],
+  "references": [],
+  "customSections": []
+}

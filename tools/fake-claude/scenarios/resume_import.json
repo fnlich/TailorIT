@@ -1,0 +1,65 @@
+{
+  "name": "Nadia Ferreira-Lund",
+  "title": "Backend Engineer",
+  "contact": {
+    "email": "nadia.fl@example.com",
+    "phone": "+1 (555) 013-4420",
+    "location": "Raleigh, NC",
+    "linkedin": "linkedin.com/in/nadia-fl-example",
+    "github": "",
+    "portfolio": ""
+  },
+  "summary": "Backend engineer with six years on logistics and billing systems.",
+  "experience": [
+    {
+      "title": "Backend Engineer",
+      "company": "Pinecrest Freight Software",
+      "startDate": "03/2021",
+      "endDate": "Present",
+      "location": "Raleigh, NC",
+      "description": "Rates and billing services.",
+      "achievements": [
+        "Moved rate quotes onto a cached service, cutting quote time from 900ms to 150ms",
+        "Wrote the billing reconciliation job that closes the books each night"
+      ],
+      "skills": ["Go", "PostgreSQL"]
+    },
+    {
+      "title": "Software Developer",
+      "company": "Harbor Lane Tech",
+      "startDate": "06/2018",
+      "endDate": "02/2021",
+      "location": "Durham, NC",
+      "description": "",
+      "achievements": ["Built the customer portal in React and Node.js"],
+      "skills": []
+    }
+  ],
+  "skills": ["Go", "Python", "PostgreSQL", "Redis", "React", "Node.js", "Docker", "AWS"],
+  "skillCategories": [],
+  "softSkills": ["Mentoring"],
+  "strengths": [],
+  "education": [
+    {
+      "degree": "B.S. Computer Science",
+      "institution": "Piedmont State University",
+      "startDate": "2014",
+      "endDate": "2018",
+      "location": "Greensboro, NC",
+      "gpa": "",
+      "achievements": []
+    }
+  ],
+  "certifications": [{ "name": "AWS Certified Developer - Associate", "issuer": "Amazon Web Services", "date": "2022", "expiryDate": "", "credentialId": "" }],
+  "projects": [],
+  "languages": [{ "language": "Portuguese", "proficiency": "Native" }],
+  "awards": [],
+  "publications": [],
+  "volunteering": [],
+  "courses": [],
+  "interests": [],
+  "references": [],
+  "otherSections": [
+    { "title": "Talks", "entries": [{ "heading": "Billing at the speed of trucks", "subheading": "RaleighDev", "startDate": "2023", "endDate": "", "location": "", "description": "", "achievements": [] }] }
+  ]
+}

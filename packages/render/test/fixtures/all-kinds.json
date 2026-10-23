@@ -1,0 +1,242 @@
+{
+  "name": "Imogen Achterberg",
+  "title": "Staff Software Engineer, Platform",
+  "totalYearsExperience": 12,
+  "preferredTemplate": "",
+  "resumeSettings": {
+    "technicalSkillsLayout": "categorized",
+    "includeSoftSkills": true,
+    "includeStrengths": true
+  },
+  "contact": {
+    "phone": "+44 20 7946 0958",
+    "email": "imogen.a@example.org",
+    "location": "Leeds, United Kingdom",
+    "linkedin": "linkedin.com/in/imogen-example",
+    "github": "github.com/imogen-example",
+    "portfolio": "imogen.example.dev"
+  },
+  "summary": "Platform engineer who builds the paved road: build systems, deploy pipelines and the observability under them.",
+  "experience": [
+    {
+      "title": "Staff Software Engineer",
+      "company": "Harrowgate Mutual",
+      "startDate": "01/2020",
+      "endDate": "Present",
+      "location": "Leeds",
+      "description": "Platform group lead for 300 engineers.",
+      "achievements": [
+        "Shipped the internal developer portal used by every team",
+        "Cut median deploy time from 42 to 9 minutes"
+      ],
+      "skills": []
+    },
+    {
+      "title": "Senior Engineer",
+      "company": "Fenwick Signal",
+      "startDate": "03/2015",
+      "endDate": "12/2019",
+      "location": "Manchester",
+      "description": "",
+      "achievements": [
+        "Built the metrics pipeline (2M samples/s)"
+      ],
+      "skills": []
+    }
+  ],
+  "strengths": [
+    {
+      "title": "Systems thinking",
+      "description": "Finds the constraint before adding capacity."
+    },
+    {
+      "title": "Teaching",
+      "description": "Runs the internal Kubernetes course; 140 engineers through it."
+    }
+  ],
+  "skills": [
+    "TypeScript",
+    "Go",
+    "Rust",
+    "Kubernetes",
+    "Helm",
+    "ArgoCD",
+    "Prometheus",
+    "OpenTelemetry",
+    "GitHub Actions",
+    "PostgreSQL",
+    "GCP",
+    "Linux"
+  ],
+  "softSkills": [
+    "Facilitation",
+    "Coaching",
+    "Stakeholder management"
+  ],
+  "education": [
+    {
+      "degree": "MEng Software Engineering",
+      "institution": "University of Westmarch",
+      "startDate": "2009",
+      "endDate": "2013",
+      "location": "York"
+    }
+  ],
+  "certifications": [
+    {
+      "name": "Certified Kubernetes Administrator",
+      "issuer": "CNCF",
+      "date": "05/2022",
+      "expiryDate": "05/2025",
+      "credentialId": "CKA-0000-EXAMPLE"
+    },
+    {
+      "name": "Professional Cloud Architect",
+      "issuer": "Google Cloud",
+      "date": "2021"
+    }
+  ],
+  "projects": [
+    {
+      "name": "kubelint",
+      "role": "Author and maintainer",
+      "startDate": "2019",
+      "endDate": "Present",
+      "link": "https://github.com/imogen-example/kubelint",
+      "description": "A linter for Kubernetes manifests.",
+      "achievements": [
+        "1,800 GitHub stars",
+        "Adopted by three CNCF projects"
+      ]
+    },
+    {
+      "name": "Allotment planner",
+      "role": "",
+      "startDate": "",
+      "endDate": "",
+      "link": "",
+      "description": "A weekend project for the community garden.",
+      "achievements": []
+    }
+  ],
+  "languages": [
+    {
+      "language": "English",
+      "proficiency": "Native"
+    },
+    {
+      "language": "Dutch",
+      "proficiency": "Fluent"
+    },
+    {
+      "language": "Welsh",
+      "proficiency": ""
+    }
+  ],
+  "awards": [
+    {
+      "title": "Engineer of the Year",
+      "issuer": "Harrowgate Mutual",
+      "date": "2022",
+      "description": "For the deploy pipeline rebuild."
+    }
+  ],
+  "publications": [
+    {
+      "title": "Paved Roads, Not Golden Cages",
+      "publisher": "PlatformCon",
+      "date": "06/2023",
+      "link": "https://example.org/talks/paved-roads",
+      "description": "On platform teams that teams want to use."
+    }
+  ],
+  "volunteering": [
+    {
+      "role": "Mentor",
+      "organization": "Code First Leeds",
+      "startDate": "2018",
+      "endDate": "Present",
+      "location": "Leeds",
+      "description": "Evening classes for career changers.",
+      "achievements": [
+        "Mentored 25 learners into their first developer role"
+      ]
+    }
+  ],
+  "courses": [
+    {
+      "name": "Distributed Systems",
+      "institution": "Open Learning Collective",
+      "date": "2017"
+    },
+    {
+      "name": "Site Reliability Engineering",
+      "institution": "",
+      "date": ""
+    }
+  ],
+  "interests": [
+    "Fell running",
+    "Allotment gardening",
+    "Letterpress printing"
+  ],
+  "references": [
+    {
+      "name": "Priyanka Valdés",
+      "title": "VP Engineering",
+      "company": "Harrowgate Mutual",
+      "email": "p.valdes@example.org",
+      "phone": "+44 20 7946 0000"
+    },
+    {
+      "name": "Tomasz Wren",
+      "title": "",
+      "company": "",
+      "email": "",
+      "phone": ""
+    }
+  ],
+  "customSections": [
+    {
+      "key": "cs-1a2b3c4d",
+      "title": "Patents",
+      "entries": [
+        {
+          "heading": "Rolling deploy coordinator",
+          "subheading": "GB 0000000 (pending)",
+          "startDate": "2023",
+          "endDate": "",
+          "location": "",
+          "description": "",
+          "achievements": []
+        },
+        {
+          "heading": "Adaptive scrape intervals",
+          "subheading": "Co-inventor",
+          "startDate": "2021",
+          "endDate": "",
+          "location": "",
+          "description": "Lowers metric cardinality cost.",
+          "achievements": []
+        }
+      ]
+    },
+    {
+      "key": "cs-9f8e7d6c",
+      "title": "Speaking",
+      "entries": [
+        {
+          "heading": "KubeDay Europe",
+          "subheading": "Keynote",
+          "startDate": "10/2023",
+          "endDate": "",
+          "location": "Amsterdam",
+          "description": "",
+          "achievements": [
+            "Audience of 1,200"
+          ]
+        }
+      ]
+    }
+  ]
+}

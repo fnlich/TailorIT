@@ -1,0 +1,10 @@
+{
+  "id": "x-stageb-sidebar",
+  "name": "Stage B sidebar",
+  "description": "Synthetic test template: Stage B sidebar.",
+  "source": "uploaded",
+  "htmlContent": "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<style>\n@page { margin: 12mm 14mm; }\nbody { font-family: Arial, sans-serif; font-size: 10pt; }\n.cols { display: grid; grid-template-columns: 30% 1fr; gap: 12px; }\n.side { background: #eef2f7; padding: 8px; }\n.photo { width: 60px; height: 60px; }\n.chip { display: inline-block; margin: 0 4px 4px 0; }\n</style>\n</head>\n<body>\n<div class=\"cols\">\n  <div class=\"side\">\n    <img class=\"photo\" src=\"data:image/gif;base64,R0lGODlhAQABAAAAACw=\" alt=\"\">\n    <p>{{contact.email}}</p>\n    <h3>Strengths</h3>\n    <ul>\n      {{#each strengths}}<li><b>{{title}}</b> {{description}}</li>{{/each}}\n    </ul>\n    <div><h3>Soft Skills</h3><hr><p>{{join softSkills \", \"}}</p></div>\n    <b>Technical Skills</b><br>\n    <div class=\"skill-line\">{{#each hardSkills}}<span>{{this}}</span>{{#unless @last}} • {{/unless}}{{/each}}</div>\n  </div>\n  <div class=\"main\">\n    <h1>{{name}}</h1>\n    <p class=\"headline\">{{title}}</p>\n    <section><h2>Profile</h2><p>{{summary}}</p></section>\n    <section>\n      <h2>Work History</h2>\n      {{#each experience}}\n      <div class=\"job\"><h4>{{title}} - {{company}}</h4><p>{{startDate}} to {{endDate}}</p>\n        <p>{{description}}</p>\n        <ul>{{#each achievements}}<li>{{this}}</li>{{/each}}</ul></div>\n      {{/each}}\n    </section>\n    <section><h2>Education</h2>{{#each education}}<p>{{degree}}, {{institution}}</p>{{/each}}</section>\n    <section><h2>Certifications</h2>{{#each certifications}}<p>{{name}} ({{issuer}})</p>{{/each}}</section>\n  </div>\n</div>\n</body>\n</html>",
+  "cssContent": "",
+  "createdAt": "2026-10-23T00:00:00.000Z",
+  "updatedAt": "2026-10-23T00:00:00.000Z"
+}

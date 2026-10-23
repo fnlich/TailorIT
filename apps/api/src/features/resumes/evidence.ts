@@ -40,6 +40,7 @@ interface ResumeRow {
   title: string | null;
   data: string | null;
   extracted_text: string | null;
+  file_name: string | null;
 }
 
 /**
@@ -56,16 +57,20 @@ export function getResumeEvidence(
     .get(userId) as { name: string; email: string; default_resume_id: string | null } | undefined;
   if (!user) return null;
 
-  const select = 'SELECT id, kind, title, data, extracted_text FROM resumes WHERE user_id = ?';
+  const select =
+    'SELECT r.id, r.kind, r.title, r.data, r.extracted_text, f.original_name AS file_name FROM resumes r ' +
+    'LEFT JOIN stored_files f ON f.id = r.file_id AND f.user_id = r.user_id WHERE r.user_id = ?';
   let row: ResumeRow | undefined;
   if (resumeId) {
-    row = deps.db.prepare(`${select} AND id = ?`).get(userId, resumeId) as ResumeRow | undefined;
+    row = deps.db.prepare(`${select} AND r.id = ?`).get(userId, resumeId) as ResumeRow | undefined;
     if (!row) return null;
   } else {
     if (user.default_resume_id) {
-      row = deps.db.prepare(`${select} AND id = ?`).get(userId, user.default_resume_id) as ResumeRow | undefined;
+      row = deps.db.prepare(`${select} AND r.id = ?`).get(userId, user.default_resume_id) as ResumeRow | undefined;
     }
-    row ??= deps.db.prepare(`${select} ORDER BY updated_at DESC, id ASC LIMIT 1`).get(userId) as ResumeRow | undefined;
+    row ??= deps.db
+      .prepare(`${select} ORDER BY r.updated_at DESC, r.created_at DESC, r.id ASC LIMIT 1`)
+      .get(userId) as ResumeRow | undefined;
     if (!row) return null;
   }
 
@@ -98,7 +103,10 @@ export function getResumeEvidence(
   return {
     resumeId: row.id,
     kind: row.kind,
-    label: document ? resumeLabel(document, row.title) : pick(row.title, 'Uploaded resume'),
+    // The Resumes tab's rule: a custom title, else the resume's own label (built) or the file's name (uploads).
+    label: document
+      ? resumeLabel(document, row.title)
+      : pick(row.title, (row.file_name ?? '').replace(/\.(pdf|docx?)$/i, ''), 'Uploaded resume'),
     text: document ? resumeEvidenceText(document) : (row.extracted_text ?? ''),
     profile,
     document,

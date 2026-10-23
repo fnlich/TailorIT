@@ -1,0 +1,10 @@
+{
+  "id": "x-reorder-crossed",
+  "name": "A block crossing two sections",
+  "description": "Synthetic test template: A block crossing two sections.",
+  "source": "uploaded",
+  "htmlContent": "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<style>\n@page { margin: 0.5in; }\n</style>\n</head>\n<body>\n<div class=\"page\">\n  <div class=\"section section-summary\"><h2>Summary</h2>{{#if summary}}<p>{{summary}}</p></div>\n  <div class=\"divider\"></div>\n  <div class=\"section section-experience\"><h2>Experience</h2>{{/if}}{{#each experience}}<p>{{title}} at {{company}}</p>{{/each}}</div>\n  <div class=\"section section-education\"><h2>Education</h2>{{#each education}}<p>{{degree}}</p>{{/each}}</div>\n  <div class=\"section section-skills\"><h2>Skills</h2><ul>{{#each hardSkills}}<li>{{this}}</li>{{/each}}</ul></div>\n  {{> extra-sections sectionClass=\"section\" headingClass=\"title\"}}\n</div>\n</body>\n</html>",
+  "cssContent": "",
+  "createdAt": "2026-10-23T00:00:00.000Z",
+  "updatedAt": "2026-10-23T00:00:00.000Z"
+}

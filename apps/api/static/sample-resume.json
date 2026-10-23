@@ -1,0 +1,116 @@
+{
+  "name": "Maren Kowalczyk-Hart",
+  "title": "Senior Software Engineer",
+  "totalYearsExperience": 10,
+  "preferredTemplate": "",
+  "resumeSettings": {
+    "technicalSkillsLayout": "categorized",
+    "includeSoftSkills": false,
+    "includeStrengths": false
+  },
+  "contact": {
+    "phone": "+1 (555) 014-7731",
+    "email": "maren.kh@example.com",
+    "location": "Minneapolis, MN",
+    "linkedin": "linkedin.com/in/maren-kh-example",
+    "github": "",
+    "portfolio": ""
+  },
+  "summary": "Senior software engineer with ten years building marketplaces and the payment and search systems behind them. Owns services from the first design review to the on-call rotation, prefers small, well-tested changes to big rewrites, and has helped six engineers grow into senior roles.",
+  "experience": [
+    {
+      "title": "Senior Software Engineer",
+      "company": "Larkspur Supply Exchange",
+      "startDate": "02/2021",
+      "endDate": "Present",
+      "location": "Minneapolis, MN",
+      "description": "Leads the checkout and payouts team for a wholesale marketplace moving $900M a year between 14,000 sellers and buyers.",
+      "achievements": [
+        "Rebuilt seller payouts on an idempotent job queue, ending duplicate transfers and cutting support tickets about payouts by 70%",
+        "Brought checkout p95 latency from 1.9s to 420ms by moving tax and shipping quotes behind a Redis cache",
+        "Introduced feature flags and staged rollouts, so the team ships to production twice a day instead of twice a month",
+        "Coached three engineers to senior; one now leads the search team"
+      ],
+      "skills": ["TypeScript", "Node.js", "PostgreSQL", "Redis"]
+    },
+    {
+      "title": "Software Engineer II",
+      "company": "Driftwood Analytics",
+      "startDate": "05/2018",
+      "endDate": "01/2021",
+      "location": "Chicago, IL",
+      "description": "Built the event pipeline and query service for a retail analytics product used by 400 brands.",
+      "achievements": [
+        "Designed an event ingestion path on Kafka handling 3 billion events a month with replay after outages",
+        "Shipped a pre-aggregation layer that took dashboard loads from 12 seconds to under 2",
+        "Moved the reporting database from one large server to a partitioned PostgreSQL cluster with no customer downtime"
+      ],
+      "skills": ["Python", "Kafka", "PostgreSQL"]
+    },
+    {
+      "title": "Software Engineer",
+      "company": "Cobblestone Learning",
+      "startDate": "07/2016",
+      "endDate": "04/2018",
+      "location": "Madison, WI",
+      "description": "Full-stack work on an online course platform, from the React course player to the grading service.",
+      "achievements": [
+        "Rewrote the course player in React, lifting lesson completion rates by 18%",
+        "Built the CI pipeline the engineering group still uses, taking a release from an afternoon to 15 minutes"
+      ],
+      "skills": ["React", "JavaScript"]
+    },
+    {
+      "title": "Junior Developer",
+      "company": "Thistle & Pine Web Studio",
+      "startDate": "06/2015",
+      "endDate": "06/2016",
+      "location": "Madison, WI",
+      "description": "Built and maintained client websites and internal tools for a small agency.",
+      "achievements": [
+        "Automated deployments for 25 client sites, ending a recurring source of broken releases"
+      ],
+      "skills": []
+    }
+  ],
+  "strengths": [
+    { "title": "Pragmatic design", "description": "Picks the simplest design that will survive the next two years of growth." },
+    { "title": "Mentorship", "description": "Six engineers coached into senior roles over five years." },
+    { "title": "Incident ownership", "description": "Runs the review through to the fix that stops the incident coming back." },
+    { "title": "Clear writing", "description": "Design documents that people read before the meeting." }
+  ],
+  "skills": [
+    "TypeScript", "JavaScript", "Python", "Go", "SQL",
+    "React", "Next.js", "Node.js", "Express", "GraphQL",
+    "PostgreSQL", "Redis", "Elasticsearch", "Kafka", "DynamoDB",
+    "AWS", "Docker", "Kubernetes", "Terraform", "GitHub Actions",
+    "Prometheus", "Grafana", "Jest", "Playwright", "Git"
+  ],
+  "softSkills": [
+    "Mentoring",
+    "Cross-team communication",
+    "Stakeholder management",
+    "Ownership",
+    "Technical writing",
+    "Calm under pressure"
+  ],
+  "education": [
+    {
+      "degree": "B.S. Computer Science",
+      "institution": "University of Lakeland",
+      "startDate": "2011",
+      "endDate": "2015",
+      "location": "Madison, WI"
+    }
+  ],
+  "certifications": [],
+  "projects": [],
+  "languages": [],
+  "awards": [],
+  "publications": [],
+  "volunteering": [],
+  "courses": [],
+  "interests": [],
+  "references": [],
+  "customSections": []
+}

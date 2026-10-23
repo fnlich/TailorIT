@@ -1,0 +1,137 @@
+{
+  "name": "José Ñúñez-Ångström 王小明",
+  "title": "Sénior Engineer: Platform & Data — R&D (C#/C++) @ Scale ✨ <b>bold</b> 100%",
+  "preferredTemplate": "",
+  "resumeSettings": {
+    "technicalSkillsLayout": "categorized",
+    "includeSoftSkills": false,
+    "includeStrengths": true
+  },
+  "contact": {
+    "phone": "+34 600 000 000",
+    "email": "jose\"quote'@example.es",
+    "location": "Sevilla, España · مرحبا",
+    "linkedin": "javascript:alert(1)",
+    "github": "java\tscript:alert(2)",
+    "portfolio": "data:text/html,<script>alert(3)</script>"
+  },
+  "summary": "Ingeniero de datos «sin miedo» — builds <script>alert(\"x\")</script> & ships ✓. Ünïcödé, עברית, 日本語, emoji 🚀.",
+  "experience": [
+    {
+      "title": "Ingeniero Sénior",
+      "company": "Compañía Ñandú & Hijos",
+      "startDate": "01/2020",
+      "endDate": "Present",
+      "location": "Sevilla",
+      "description": "Plataforma de datos <em>en tiempo real</em>.",
+      "achievements": [
+        "Reduced costs by 40% — and latency by 3×",
+        "Built \"the\" pipeline <b>fast</b> & safe",
+        "Ελληνικά and русский text"
+      ],
+      "skills": []
+    }
+  ],
+  "strengths": [
+    {
+      "title": "Ética & <i>rigour</i>",
+      "description": "Languages: English and Spanish (this line must keep its own markup)"
+    },
+    {
+      "title": "Tools: Jira",
+      "description": "“Curly quotes” and ‘single’ ones, plus a backtick ` and an equals sign =."
+    }
+  ],
+  "skills": [
+    "C#",
+    "C++",
+    "Node.js",
+    "PostgreSQL",
+    "Apache Kafka",
+    "Next.js"
+  ],
+  "softSkills": [
+    "Comunicación",
+    "Mentoring"
+  ],
+  "education": [
+    {
+      "degree": "Grado en Ingeniería Informática",
+      "institution": "Universidad de Ejemplo",
+      "startDate": "2012",
+      "endDate": "2016",
+      "location": "Málaga"
+    }
+  ],
+  "certifications": [],
+  "projects": [
+    {
+      "name": "Proyecto «Ñ»",
+      "role": "Autor",
+      "startDate": "",
+      "endDate": "",
+      "link": "javascript:alert(4)",
+      "description": "A link that must not print.",
+      "achievements": []
+    },
+    {
+      "name": "Ported tool",
+      "role": "",
+      "startDate": "",
+      "endDate": "",
+      "link": "www.example.com:8080/path?q=1&r=2#frag",
+      "description": "",
+      "achievements": [
+        "Kept"
+      ]
+    },
+    {
+      "name": "Data URL",
+      "role": "",
+      "startDate": "",
+      "endDate": "",
+      "link": "data:text/html;base64,PHNjcmlwdD4=",
+      "description": "Dropped link.",
+      "achievements": []
+    }
+  ],
+  "languages": [],
+  "awards": [],
+  "publications": [
+    {
+      "title": "Sneaky scheme",
+      "publisher": "Nowhere",
+      "date": "2021",
+      "link": "https://javascript:alert(5)",
+      "description": ""
+    },
+    {
+      "title": "Plain host",
+      "publisher": "Revista",
+      "date": "2022",
+      "link": "HTTPS://WWW.Example.COM/Ruta/?x=1",
+      "description": ""
+    }
+  ],
+  "volunteering": [],
+  "courses": [],
+  "interests": [],
+  "references": [],
+  "customSections": [
+    {
+      "key": "cs-00ff00aa",
+      "title": "Distinciones <script>",
+      "entries": [
+        {
+          "heading": "Premio «Ñ»",
+          "subheading": "“Primero”",
+          "startDate": "",
+          "endDate": "",
+          "location": "",
+          "description": "",
+          "achievements": []
+        }
+      ]
+    }
+  ]
+}

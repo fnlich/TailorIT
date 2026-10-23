@@ -1,0 +1,127 @@
+{
+  "name": "Rowan Delacroix-Imai",
+  "title": "Senior Backend Engineer",
+  "totalYearsExperience": 8,
+  "preferredTemplate": "",
+  "resumeSettings": {
+    "technicalSkillsLayout": "categorized",
+    "includeSoftSkills": true,
+    "includeStrengths": true
+  },
+  "contact": {
+    "phone": "+1 (555) 014-2207",
+    "email": "rowan.di@example.com",
+    "location": "Portland, OR",
+    "linkedin": "https://www.linkedin.com/in/rowan-di-example/",
+    "github": "",
+    "portfolio": ""
+  },
+  "summary": "Backend engineer with eight years on order, billing and inventory systems. Owns services from design review to on-call, and prefers boring technology that pages nobody at night.",
+  "experience": [
+    {
+      "title": "Senior Backend Engineer",
+      "company": "Tallowmere Outfitters",
+      "startDate": "04/2021",
+      "endDate": "Present",
+      "location": "Portland, OR",
+      "description": "Billing and order platform for a 900-store retailer.",
+      "achievements": [
+        "Moved invoice generation off the nightly batch onto a Kafka stream, so invoices land within 2 minutes of an order",
+        "Cut the p95 checkout latency from 1.4s to 380ms by caching tax tables in Redis",
+        "Wrote the runbook the whole team uses for failovers, and ran 6 game days with it"
+      ],
+      "skills": [
+        "Go",
+        "Kafka"
+      ]
+    },
+    {
+      "title": "Software Engineer",
+      "company": "Brindle & Pike Logistics",
+      "startDate": "06/2018",
+      "endDate": "03/2021",
+      "location": "Remote",
+      "description": "",
+      "achievements": [
+        "Built the carrier-rate service in Python that quotes 40,000 shipments a day",
+        "Replaced a cron fleet with Kubernetes jobs and cut infrastructure cost by 31%"
+      ],
+      "skills": []
+    },
+    {
+      "title": "Junior Developer",
+      "company": "Quillfeather Studio",
+      "startDate": "2016",
+      "endDate": "2018",
+      "location": "Seattle, WA",
+      "description": "Agency work on client web apps.",
+      "achievements": [],
+      "skills": []
+    }
+  ],
+  "strengths": [
+    {
+      "title": "Operational ownership",
+      "description": "Ran the on-call rotation for 11 services and halved the page volume in a year."
+    },
+    {
+      "title": "Clear writing",
+      "description": "Design documents that get read before the meeting, not during it."
+    },
+    {
+      "title": "Mentoring",
+      "description": ""
+    }
+  ],
+  "skills": [
+    "Go",
+    "Python",
+    "SQL",
+    "PostgreSQL",
+    "Redis",
+    "Kafka",
+    "Docker",
+    "Kubernetes",
+    "Terraform",
+    "AWS",
+    "Grafana",
+    "Git",
+    "Kibana"
+  ],
+  "softSkills": [
+    "Mentoring",
+    "Incident command",
+    "Written communication",
+    "Prioritisation"
+  ],
+  "education": [
+    {
+      "degree": "B.S. Computer Science",
+      "institution": "Cascadia State University",
+      "startDate": "2012",
+      "endDate": "2016",
+      "location": "Seattle, WA",
+      "gpa": "3.7",
+      "achievements": [
+        "Teaching assistant, Operating Systems"
+      ]
+    },
+    {
+      "degree": "Certificate in Data Engineering",
+      "institution": "Northbank Extension",
+      "startDate": "",
+      "endDate": "2019",
+      "location": ""
+    }
+  ],
+  "certifications": [],
+  "projects": [],
+  "languages": [],
+  "awards": [],
+  "publications": [],
+  "volunteering": [],
+  "courses": [],
+  "interests": [],
+  "references": [],
+  "customSections": []
+}

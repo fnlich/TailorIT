@@ -1,0 +1,98 @@
+{
+  "name": "Mireille Castellanos",
+  "title": "Full-Stack Engineer",
+  "preferredTemplate": "",
+  "resumeSettings": {
+    "technicalSkillsLayout": "categorized",
+    "includeSoftSkills": true,
+    "includeStrengths": false
+  },
+  "contact": {
+    "phone": "+1 (555) 016-3390",
+    "email": "mireille.c@example.com",
+    "location": "Denver, CO",
+    "linkedin": "",
+    "github": "",
+    "portfolio": ""
+  },
+  "summary": "Full-stack engineer on small product teams.",
+  "experience": [
+    {
+      "title": "Full-Stack Engineer",
+      "company": "Juniper Ridge Software",
+      "startDate": "2019",
+      "endDate": "Present",
+      "location": "Denver, CO",
+      "description": "Customer portal and billing.",
+      "achievements": [
+        "Rebuilt the customer portal in React",
+        "Wrote the Node.js billing service"
+      ],
+      "skills": []
+    }
+  ],
+  "strengths": [],
+  "skills": [
+    "TypeScript",
+    "React",
+    "Node.js",
+    "PostgreSQL",
+    "Kafka",
+    "Grafana",
+    "Quantum Widgets",
+    "nodejs",
+    "Postgres replication",
+    "Golang tooling",
+    "Kibana dashboards",
+    "AWS",
+    "Terraform",
+    "Go"
+  ],
+  "skillCategories": [
+    {
+      "category": "Core Stack",
+      "skills": [
+        "TypeScript",
+        "Node.js",
+        "PostgreSQL",
+        "React"
+      ]
+    },
+    {
+      "category": "Cloud",
+      "skills": [
+        "AWS",
+        "Terraform"
+      ]
+    },
+    {
+      "category": "Languages",
+      "skills": [
+        "Go"
+      ]
+    }
+  ],
+  "softSkills": [
+    "Pairing",
+    "Product sense"
+  ],
+  "education": [
+    {
+      "degree": "B.A. Linguistics",
+      "institution": "Front Range University",
+      "startDate": "2011",
+      "endDate": "2015",
+      "location": "Boulder, CO"
+    }
+  ],
+  "certifications": [],
+  "projects": [],
+  "languages": [],
+  "awards": [],
+  "publications": [],
+  "volunteering": [],
+  "courses": [],
+  "interests": [],
+  "references": [],
+  "customSections": []
+}

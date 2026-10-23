@@ -1,0 +1,10 @@
+{
+  "id": "x-css-separate",
+  "name": "Stylesheet kept apart, no doctype first",
+  "description": "Synthetic test template: Stylesheet kept apart, no doctype first.",
+  "source": "uploaded",
+  "htmlContent": "<html><head><title>{{name}}</title></head><body>\n<div class=\"wrap\">\n  <div class=\"left\">\n    <div class=\"section-summary\"><h2>Summary</h2>{{summary}}</div>\n    <div class=\"section-skills\"><h2>Skills</h2><div class=\"boxes\">{{#if hardSkills.length}}{{#each hardSkills}}<div class=\"skill-box\">{{this}}</div>{{/each}}{{else}}{{#each skills}}<div class=\"skill-box\">{{this}}</div>{{/each}}{{/if}}</div></div>\n    <div class=\"section-soft-skills\"><h2>Soft</h2>{{#each softSkills}}<span>{{this}}</span>{{/each}}</div>\n  </div>\n  <div class=\"right\">\n    <div class=\"section-experience\"><h2>Experience</h2>{{#each experience}}<div><b>{{title}}</b><div class=\"description\">{{description}}</div></div>{{/each}}</div>\n    <div class=\"section-education\"><h2>Education</h2>{{#each education}}<div>{{degree}}</div>{{/each}}</div>\n    <div class=\"section-strengths\"><h2>Strengths</h2>{{#each strengths}}<div>{{title}}</div>{{/each}}</div>\n    {{> extra-sections sectionClass=\"sec\" headingClass=\"sec-h\" subClass=\"sec-sub\"}}\n  </div>\n</div>\n</body></html>",
+  "cssContent": "@page { margin-top: 1cm; margin-left: 15mm; size: A5; } .wrap { display: flex; } .boxes { display: grid; grid-template-columns: 1fr 1fr; }",
+  "createdAt": "2026-10-23T00:00:00.000Z",
+  "updatedAt": "2026-10-23T00:00:00.000Z"
+}

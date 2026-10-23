@@ -1,0 +1,10 @@
+{
+  "id": "x-data-sections-letter",
+  "name": "data-section markers on Letter landscape",
+  "description": "Synthetic test template: data-section markers on Letter landscape.",
+  "source": "uploaded",
+  "htmlContent": "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<style>\n@page { size: letter landscape; margin: 10mm 12mm; }\nhtml, body { min-height: 100vh; }\n.grid { display: grid; grid-template-columns: repeat(3, 1fr); }\n.cat h4 { margin: 0; }\n</style>\n</head>\n<body>\n<header><h1>{{name}}</h1><p>{{title}}</p>{{#if contact.linkedin}}<a href=\"{{contact.linkedin}}\">{{contact.linkedin}}</a>{{/if}}</header>\n<div data-section=\"summary\"><h2>About</h2><p>{{summary}}</p></div>\n<div data-section='technicalSkills'>\n  <h2>Hard Skills</h2>\n  <div class=\"grid\">{{#each skillCategories}}<div class=\"cat\"><h4>{{category}}</h4>{{join skills \", \"}}</div>{{/each}}</div>\n  <table><tr><td><strong>All:</strong> {{join hardSkills \" | \"}}</td></tr></table>\n  <ul>{{#each hardSkills}}<li class=\"chip\">{{this}}</li>{{/each}}</ul>\n</div>\n<div data-section=\"soft-skills\"><h2>Soft Skills</h2><p>{{join softSkills \", \"}}</p></div>\n<div data-section=\"strengths\">{{#if strengths.length}}<h2>Strengths</h2>{{#each strengths}}<p>{{title}}: {{description}}</p>{{/each}}{{/if}}</div>\n<div data-section=\"experience\"><h2>Experience</h2>{{#each experience}}<div><b>{{title}}</b>, {{company}}<div>{{description}}</div><ul>{{#each achievements}}<li>{{this}}</li>{{/each}}</ul></div>{{/each}}</div>\n<div data-section=\"education\"><h2>Education</h2>{{#each education}}<p>{{degree}}</p>{{/each}}</div>\n<div data-section=\"certifications\"><h2>Licences</h2>{{#each certifications}}<p>{{name}}</p>{{/each}}</div>\n{{> extra-sections sectionClass=\"block\" headingClass=\"block-title\" headingTextClass=\"block-title-text\" contentClass=\"block-body\" entryClass=\"item\" titleClass=\"item-title\" subClass=\"item-sub\" datesClass=\"item-dates\" bulletsClass=\"item-bullets\"}}\n</body>\n</html>",
+  "cssContent": "",
+  "createdAt": "2026-10-23T00:00:00.000Z",
+  "updatedAt": "2026-10-23T00:00:00.000Z"
+}

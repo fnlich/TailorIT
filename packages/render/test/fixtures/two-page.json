@@ -1,0 +1,199 @@
+{
+  "name": "Ezekiel Marchetti-Owusu",
+  "title": "Principal Engineer",
+  "preferredTemplate": "",
+  "resumeSettings": {
+    "technicalSkillsLayout": "categorized",
+    "includeSoftSkills": true,
+    "includeStrengths": false
+  },
+  "contact": {
+    "phone": "+1 (555) 019-8841",
+    "email": "zeke.mo@example.com",
+    "location": "Chicago, IL",
+    "linkedin": "linkedin.com/in/zeke-example",
+    "github": "",
+    "portfolio": ""
+  },
+  "summary": "Principal engineer with sixteen years across payments, logistics and healthcare data. Leads architecture for systems that move money and medicine, writes the code that matters most, and builds the teams that keep it running. Known for turning incident reviews into roadmaps and for leaving every codebase easier to change than it was found.",
+  "experience": [
+    {
+      "title": "Principal Engineer",
+      "company": "Larchmont Health Data",
+      "startDate": "2021",
+      "endDate": "Present",
+      "location": "Chicago, IL",
+      "description": "Sentence 1 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 2 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 3 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 4 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 5 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 6 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 7 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 8 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 9 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 10 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 11 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 12 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 13 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one. Sentence 14 of a deliberately long role description, which the renderer clamps near twelve hundred characters, cutting at a sentence end, a comma or a word, never in the middle of one.",
+      "achievements": [
+        "Achievement 1 for role 1: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 2 for role 1: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 3 for role 1: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 4 for role 1: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 5 for role 1: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 6 for role 1: shipped a change that moved a real number, described in plain words, with the figure kept"
+      ],
+      "skills": []
+    },
+    {
+      "title": "Senior Staff Engineer",
+      "company": "Ostrander Freight",
+      "startDate": "2018",
+      "endDate": "2021",
+      "location": "Remote",
+      "description": "",
+      "achievements": [
+        "Achievement 1 for role 2: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 2 for role 2: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 3 for role 2: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 4 for role 2: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 5 for role 2: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 6 for role 2: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 7 for role 2: shipped a change that moved a real number, described in plain words, with the figure kept"
+      ],
+      "skills": []
+    },
+    {
+      "title": "Staff Engineer",
+      "company": "Bellwether Pay",
+      "startDate": "2015",
+      "endDate": "2018",
+      "location": "Chicago, IL",
+      "description": "Owned the platform architecture and the teams around it.",
+      "achievements": [
+        "Achievement 1 for role 3: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 2 for role 3: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 3 for role 3: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 4 for role 3: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 5 for role 3: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 6 for role 3: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 7 for role 3: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 8 for role 3: shipped a change that moved a real number, described in plain words, with the figure kept"
+      ],
+      "skills": []
+    },
+    {
+      "title": "Senior Engineer",
+      "company": "Bellwether Pay",
+      "startDate": "2013",
+      "endDate": "2015",
+      "location": "Chicago, IL",
+      "description": "",
+      "achievements": [
+        "Achievement 1 for role 4: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 2 for role 4: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 3 for role 4: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 4 for role 4: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 5 for role 4: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 6 for role 4: shipped a change that moved a real number, described in plain words, with the figure kept"
+      ],
+      "skills": []
+    },
+    {
+      "title": "Software Engineer II",
+      "company": "Kittering Systems",
+      "startDate": "2011",
+      "endDate": "2013",
+      "location": "Milwaukee, WI",
+      "description": "Owned the platform architecture and the teams around it.",
+      "achievements": [
+        "Achievement 1 for role 5: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 2 for role 5: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 3 for role 5: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 4 for role 5: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 5 for role 5: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 6 for role 5: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 7 for role 5: shipped a change that moved a real number, described in plain words, with the figure kept"
+      ],
+      "skills": []
+    },
+    {
+      "title": "Software Engineer",
+      "company": "Kittering Systems",
+      "startDate": "2009",
+      "endDate": "2011",
+      "location": "Milwaukee, WI",
+      "description": "",
+      "achievements": [
+        "Achievement 1 for role 6: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 2 for role 6: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 3 for role 6: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 4 for role 6: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 5 for role 6: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 6 for role 6: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 7 for role 6: shipped a change that moved a real number, described in plain words, with the figure kept",
+        "Achievement 8 for role 6: shipped a change that moved a real number, described in plain words, with the figure kept"
+      ],
+      "skills": []
+    }
+  ],
+  "strengths": [],
+  "skills": [
+    "Java",
+    "Kotlin",
+    "Go",
+    "Python",
+    "TypeScript",
+    "SQL",
+    "Spring Boot",
+    "Node.js",
+    "React",
+    "GraphQL",
+    "gRPC",
+    "PostgreSQL",
+    "MySQL",
+    "Redis",
+    "Cassandra",
+    "Elasticsearch",
+    "Kafka",
+    "RabbitMQ",
+    "AWS",
+    "Azure",
+    "Docker",
+    "Kubernetes",
+    "Terraform",
+    "Jenkins",
+    "GitHub Actions",
+    "Prometheus",
+    "Grafana",
+    "Datadog",
+    "JUnit",
+    "Jest"
+  ],
+  "softSkills": [
+    "Architecture reviews",
+    "Hiring",
+    "Coaching"
+  ],
+  "education": [
+    {
+      "degree": "M.S. Computer Science",
+      "institution": "Lakeshore Institute of Technology",
+      "startDate": "2007",
+      "endDate": "2009",
+      "location": "Chicago, IL"
+    },
+    {
+      "degree": "B.S. Mathematics",
+      "institution": "Prairie College",
+      "startDate": "2003",
+      "endDate": "2007",
+      "location": "Peoria, IL"
+    }
+  ],
+  "certifications": [
+    {
+      "name": "AWS Certified Solutions Architect - Professional",
+      "issuer": "Amazon Web Services",
+      "date": "2022"
+    }
+  ],
+  "projects": [],
+  "languages": [],
+  "awards": [],
+  "publications": [],
+  "volunteering": [],
+  "courses": [],
+  "interests": [],
+  "references": [],
+  "customSections": []
+}

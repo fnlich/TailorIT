@@ -1,0 +1,10 @@
+{
+  "id": "x-fallback-misnested",
+  "name": "A marked section whose guard closes outside it",
+  "description": "Synthetic test template: A marked section whose guard closes outside it.",
+  "source": "uploaded",
+  "htmlContent": "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<style>\n@page { margin: 0.4in 0.6in; }\n</style>\n</head>\n<body>\n<h1>{{name}}</h1>\n<div class=\"section section-summary\"><h2>Summary</h2><p>{{summary}}</p></div>\n<div class=\"section section-strengths\">{{#if strengths.length}}<h2>Strengths</h2>{{#each strengths}}<p>{{title}}</p>{{/each}}</div>{{/if}}\n<div class=\"section section-soft-skills\"><h2>Soft Skills</h2><p>{{join softSkills \", \"}}</p></div>\n<div class=\"section section-experience\"><h2>Experience</h2>{{#each experience}}<p>{{title}}</p><p>{{description}}</p>{{/each}}</div>\n<div class=\"section section-skills\"><h2>Skills</h2>{{#each skillCategories}}<p><strong>{{category}}</strong><br>{{join skills \", \"}}</p>{{/each}}</div>\n<div class=\"section section-education\"><h2>Education</h2>{{#each education}}<p>{{degree}}</p>{{/each}}</div>\n{{> extra-sections sectionClass=\"section\" headingClass=\"title\" entryClass=\"entry\"}}\n</body>\n</html>",
+  "cssContent": "",
+  "createdAt": "2026-10-23T00:00:00.000Z",
+  "updatedAt": "2026-10-23T00:00:00.000Z"
+}

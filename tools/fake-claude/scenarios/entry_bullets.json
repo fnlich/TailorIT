@@ -1,0 +1,8 @@
+{
+  "bullets": [
+    "- Rebuilt the invoice pipeline on a Kafka stream, so invoices land within 2 minutes of an order",
+    "• Cut p95 checkout latency from 1.4s to 380ms — by caching tax tables in Redis.",
+    "Wrote the failover runbook the team uses, and ran 6 game days with it",
+    "**Moved** 12 cron jobs onto Kubernetes, cutting infrastructure cost by 31%"
+  ]
+}
