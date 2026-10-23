@@ -39,7 +39,9 @@ function usePreferredJobType(): EmploymentType {
   return types.includes('internship') && !types.includes('full_time') ? 'internship' : 'full_time';
 }
 
-type FieldErrors = Partial<Record<'title' | 'companyName' | 'employmentType', string>>;
+const FIELD_NAMES = ['title', 'companyName', 'location', 'employmentType', 'status', 'resumeId'] as const;
+type FieldName = (typeof FIELD_NAMES)[number];
+type FieldErrors = Partial<Record<FieldName, string>>;
 
 function AddApplicationForm({
   onSavingChange,
@@ -67,6 +69,15 @@ function AddApplicationForm({
   const resumeId =
     chosenResume ?? (defaultResume && resumeItems.some((resume) => resume.id === defaultResume) ? defaultResume : NO_RESUME);
 
+  /** A field's error goes as soon as the field changes (submitting checks it again). */
+  const clearError = (field: FieldName) =>
+    setErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const next: FieldErrors = {};
@@ -89,7 +100,8 @@ function AddApplicationForm({
       onAdded(created);
     } catch (error) {
       if (isApiError(error) && error.fields) {
-        setErrors({ title: error.fields.title, companyName: error.fields.companyName, employmentType: error.fields.employmentType });
+        const fields = error.fields;
+        setErrors(Object.fromEntries(FIELD_NAMES.filter((name) => fields[name]).map((name) => [name, fields[name]])));
       }
       setFailure(userMessage(error, "We couldn't add the application. Please try again."));
     } finally {
@@ -100,26 +112,61 @@ function AddApplicationForm({
   return (
     <form id={FORM_ID} onSubmit={submit} noValidate className="flex flex-col gap-5">
       <Field label="Position Title" required error={errors.title}>
-        <Input value={title} placeholder="Title" autoComplete="off" maxLength={200} onChange={(event) => setTitle(event.target.value)} />
+        <Input
+          value={title}
+          placeholder="Title"
+          autoComplete="off"
+          maxLength={200}
+          onChange={(event) => {
+            setTitle(event.target.value);
+            clearError('title');
+          }}
+        />
       </Field>
       <Field label="Company" required error={errors.companyName}>
-        <CompanyInput value={companyName} onValueChange={setCompanyName} />
+        <CompanyInput
+          value={companyName}
+          onValueChange={(value) => {
+            setCompanyName(value);
+            clearError('companyName');
+          }}
+        />
       </Field>
-      <Field label="Location">
-        <Input value={location} placeholder="Location" autoComplete="off" maxLength={200} onChange={(event) => setLocation(event.target.value)} />
+      <Field label="Location" error={errors.location}>
+        <Input
+          value={location}
+          placeholder="Location"
+          autoComplete="off"
+          maxLength={200}
+          onChange={(event) => {
+            setLocation(event.target.value);
+            clearError('location');
+          }}
+        />
       </Field>
       <Field label="Job Type" required error={errors.employmentType}>
-        <Select options={JOB_TYPE_OPTIONS} value={employmentType} onValueChange={setChosenType} />
+        <Select
+          options={JOB_TYPE_OPTIONS}
+          value={employmentType}
+          onValueChange={(value) => {
+            setChosenType(value);
+            clearError('employmentType');
+          }}
+        />
       </Field>
-      <Field label="Job Status">
+      <Field label="Job Status" error={errors.status}>
         <Select
           options={statusOptions()}
           value={String(status)}
-          onValueChange={(value) => setStatus(Number(value) as ApplicationStatus)}
+          onValueChange={(value) => {
+            setStatus(Number(value) as ApplicationStatus);
+            clearError('status');
+          }}
         />
       </Field>
       <Field
         label="Resume used"
+        error={errors.resumeId}
         hint={resumes.isError ? "Your resumes can't be listed right now. You can link one later from the application." : undefined}
       >
         <Select
@@ -134,7 +181,10 @@ function AddApplicationForm({
           value={resumeId}
           placeholder="Resume used for this application"
           disabled={resumeItems.length === 0}
-          onValueChange={setChosenResume}
+          onValueChange={(value) => {
+            setChosenResume(value);
+            clearError('resumeId');
+          }}
         />
       </Field>
       {failure && <Notice tone="error">{failure}</Notice>}

@@ -7,6 +7,9 @@ import {
   TrackerImportResponseSchema,
   guessImportMapping,
   type ApplicationDetail,
+  type JobAnalysisView,
+  type JobKeywords,
+  type MatchResult,
   type TrackerImportField,
 } from '@tailorit/shared';
 import { signIn, type TestAgent } from './auth-helpers';
@@ -183,6 +186,27 @@ describe('CSV import', () => {
     expect(empty.status).toBe(400);
   });
 
+  it("tells the wizard which of a file's companies TailorIT knows (Review companies)", async () => {
+    const c = use();
+    const { agent } = await signIn(c, 'import-companies@example.com');
+    const now = TEST_NOW.toISOString();
+    c.deps.db.prepare("INSERT INTO companies(name, name_key, created_at, updated_at) VALUES ('Stripe', 'stripe', ?, ?)").run(now, now);
+    await create(agent, { title: 'Role', companyName: 'Globex Corporation' });
+    const ask = (who: TestAgent, names: unknown) => who.post('/api/applications/import/companies').set('Origin', ORIGIN).send({ names });
+
+    // Compared as the logo link compares names: case, punctuation and legal suffixes aside; the account's own first.
+    const res = await ask(agent, ['Stripe, Inc.', 'stripe', 'globex corporation', 'Initech', '  ']);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ known: { 'Stripe, Inc.': 'Stripe', stripe: 'Stripe', 'globex corporation': 'Globex Corporation' } });
+
+    // Another account's applications are not known to this one.
+    const other = await signIn(c, 'other-companies@example.com');
+    expect((await ask(other.agent, ['Globex Corporation'])).body).toEqual({ known: {} });
+
+    expect((await ask(agent, [])).status).toBe(400);
+    expect((await ask(agent, 'Stripe')).status).toBe(400);
+  });
+
   it('round-trips: what the export writes, the import reads back the same', async () => {
     const c = use();
     const source = await signIn(c, 'source@example.com');
@@ -346,6 +370,100 @@ describe('suggestions and score', () => {
     // No description: nothing to score yet.
     const blank = await create(agent, { title: 'Role', companyName: 'Acme' });
     expect((await agent.get(`/api/applications/${blank.id}/resume-score`)).body).toMatchObject({ state: 'ok', total: 0, percentage: 0 });
+  });
+
+  it("scores an application tracked from a job with the job's analysis, as the Jobs page's match does", async () => {
+    const c = use();
+    const { agent, account } = await signIn(c, 'job-score@example.com');
+    const now = TEST_NOW.toISOString();
+    const db = c.deps.db;
+    const company = db.prepare("INSERT INTO companies(name, name_key, created_at, updated_at) VALUES ('Acme', 'acme', ?, ?)").run(now, now);
+    const html = '<h3>Requirements</h3><ul><li>Kubernetes and Docker in production.</li><li>Python or Go.</li></ul><p>We use Terraform.</p>';
+    const hash = 'a'.repeat(64);
+    const jobId = Number(
+      db
+        .prepare(
+          `INSERT INTO jobs(company_id, title, description_html, description_text, apply_url, content_hash, employment_type,
+             first_seen_at, last_seen_at, created_at, updated_at)
+           VALUES (?, 'Platform Engineer', ?, 'Requirements Kubernetes and Docker in production. Python or Go. We use Terraform.',
+             'https://acme.example/jobs/1', ?, 'full_time', ?, ?, ?, ?)`,
+        )
+        .run(company.lastInsertRowid, html, hash, now, now, now, now).lastInsertRowid,
+    );
+    db.prepare(
+      "INSERT INTO resumes(id, user_id, kind, title, extracted_text, created_at, updated_at) VALUES ('r1', ?, 'uploaded', 'Main', 'Kubernetes, Python and Terraform.', ?, ?)",
+    ).run(account.id, now, now);
+    db.prepare('UPDATE users SET default_resume_id = ? WHERE id = ?').run('r1', account.id);
+    const app = await create(agent, { jobId });
+
+    const score = async () => MatchResultSchema.parse((await agent.get(`/api/applications/${app.id}/resume-score`)).body);
+    const jobMatch = async () => MatchResultSchema.parse((await agent.get(`/api/jobs/${jobId}/match`)).body);
+    const terms = (keywords: MatchResult['matched']) => keywords.map((keyword) => keyword.term).sort();
+
+    // The job analysis service's analysis: the same answer on both pages.
+    const first = await score();
+    expect(first.total).toBeGreaterThan(0);
+    expect(first).toEqual(await jobMatch());
+
+    // A description rewritten in the tracker does not change the job's keywords (AWS is only in the new text).
+    await agent.patch(`/api/applications/${app.id}`).set('Origin', ORIGIN).send({ descriptionHtml: '<p>We only use AWS.</p>' });
+    const edited = await score();
+    expect(edited).toEqual(await jobMatch());
+    expect(terms([...edited.matched, ...edited.missing])).not.toContain('AWS');
+
+    // Whatever the service answers is what both score: keywords the posting never names prove the source.
+    const keywords: JobKeywords = { high: [{ term: 'Rust', synonyms: [] }], low: [{ term: 'Kubernetes', synonyms: ['k8s'] }] };
+    const view: JobAnalysisView = {
+      source: 'ai',
+      refining: false,
+      requirements: [],
+      responsibilities: [],
+      desired: [],
+      keywords,
+      experienceLevels: [],
+      categoryId: null,
+      subcategoryIds: [],
+    };
+    c.deps.services.jobAnalysis = {
+      ensure: () => ({ analysis: view, refining: false }),
+      get: (id) => (id === jobId ? { analysis: view, refining: false } : null),
+    };
+    const stubbed = await score();
+    expect(stubbed).toEqual(await jobMatch());
+    expect(stubbed).toMatchObject({
+      matched: [{ term: 'Kubernetes', priority: 'low' }],
+      missing: [{ term: 'Rust', priority: 'high' }],
+      matchedCount: 1,
+      total: 2,
+      percentage: 50,
+    });
+
+    // The service failing (or missing): the analysis stored on the job.
+    const analysisId = Number(
+      db
+        .prepare("INSERT INTO job_analyses(content_hash, source, version, keywords, created_at) VALUES (?, 'ft_lake', 1, ?, ?)")
+        .run(hash, JSON.stringify({ high: [{ term: 'Python', synonyms: [] }], low: [{ term: 'Haskell', synonyms: [] }] }), now)
+        .lastInsertRowid,
+    );
+    db.prepare('UPDATE jobs SET analysis_id = ? WHERE id = ?').run(analysisId, jobId);
+    c.deps.services.jobAnalysis = {
+      ensure: () => {
+        throw new Error('boom');
+      },
+      get: () => {
+        throw new Error('boom');
+      },
+    };
+    const stored = await score();
+    expect(stored).toEqual(await jobMatch());
+    expect([terms(stored.matched), terms(stored.missing)]).toEqual([['Python'], ['Haskell']]);
+    delete c.deps.services.jobAnalysis;
+    expect(await score()).toEqual(stored);
+
+    // Once the job is gone, the application's own description is scored.
+    db.prepare('DELETE FROM jobs WHERE id = ?').run(jobId);
+    const own = await score();
+    expect([terms(own.matched), terms(own.missing)]).toEqual([[], ['AWS']]);
   });
 });
 

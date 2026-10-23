@@ -332,6 +332,7 @@ function Tracker() {
             onArchiveDrop={(application) => void setArchived(application, true)}
             onRestoreDrop={(application, status) => void restoreInto(application, status)}
             refreshing={board.isFetching}
+            filtered={filtered}
           />
         </div>
       )}

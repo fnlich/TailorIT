@@ -2,6 +2,7 @@
 
 import { Autocomplete } from '@base-ui/react/autocomplete';
 import { clsx } from 'clsx';
+import { useState } from 'react';
 import { useFieldControl } from '@/components/ui/Field';
 import { CONTROL_SURFACE } from '@/components/ui/Input';
 import { CaretDownIcon } from '@/components/ui/icons';
@@ -19,19 +20,33 @@ export function CompanyInput({
   onValueChange,
   placeholder = 'Company',
   id,
+  lazy = false,
 }: {
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
   id?: string;
+  /** Ask for suggestions only once the field is focused or opened (for a long list of these fields). */
+  lazy?: boolean;
 }) {
   const field = useFieldControl({ id });
-  const suggestions = useCompanyNames(useDebouncedValue(value, 250));
+  const [used, setUsed] = useState(!lazy);
+  const suggestions = useCompanyNames(useDebouncedValue(value, 250), used);
   const options = suggestions.data?.items ?? [];
   return (
-    <Autocomplete.Root items={options} value={value} onValueChange={(next) => onValueChange(next)} openOnInputClick limit={50}>
+    <Autocomplete.Root
+      items={options}
+      value={value}
+      onValueChange={(next) => onValueChange(next)}
+      onOpenChange={(open) => {
+        if (open) setUsed(true);
+      }}
+      openOnInputClick
+      limit={50}
+    >
       <div className="relative flex w-full items-center">
         <Autocomplete.Input
+          onFocus={() => setUsed(true)}
           id={field.id}
           placeholder={placeholder}
           autoComplete="off"

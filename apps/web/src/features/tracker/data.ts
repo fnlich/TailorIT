@@ -207,7 +207,7 @@ export function useResumeScore(id: string, enabled: boolean) {
 }
 
 /** Company suggestions: the account's companies and the job board's, searched on the server by `q`. */
-export function useCompanyNames(q: string) {
+export function useCompanyNames(q: string, enabled = true) {
   const query = q.trim().toLowerCase();
   return useQuery({
     queryKey: [...trackerKeys.companies, query] as const,
@@ -220,6 +220,7 @@ export function useCompanyNames(q: string) {
     // The previous suggestions stay while the next ones load.
     placeholderData: keepPreviousData,
     staleTime: 60_000,
+    enabled,
   });
 }
 
@@ -327,6 +328,13 @@ export const trackerApi = {
   archiveAll: () => api.post<{ archived: number }>('/api/applications/archive-all', undefined, { schema: ArchiveAllResponseSchema }),
   import: (body: TrackerImportBody) =>
     api.post<TrackerImportResponse>('/api/applications/import', body, { schema: TrackerImportResponseSchema }),
+  /** Which of an import file's company names TailorIT knows (up to 1,000 at a time), each with its known name. */
+  knownCompanies: (names: string[]) =>
+    api.post<{ known: Record<string, string> }>(
+      '/api/applications/import/companies',
+      { names },
+      { schema: z.object({ known: z.record(z.string(), z.string()) }) },
+    ),
   addQuestion: (id: string, question: string, answer = '') =>
     api.post<ApplicationQuestion>(`${path(id)}/questions`, { question, answer }, { schema: ApplicationQuestionSchema }),
   patchQuestion: (id: string, questionId: string, body: { question?: string; answer?: string; position?: number }) =>

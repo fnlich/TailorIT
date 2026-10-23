@@ -40,17 +40,54 @@ async function signInFresh(page: Page, email: string): Promise<APIRequestContext
 const column = (page: Page, status: number) => page.locator(`[data-column="${status}"]`);
 const card = (scope: Page | Locator, title: string) => scope.locator('[data-application-card]').filter({ hasText: title });
 
+/** The board's horizontal scroll box (the parent of its columns; Saved is always shown). */
+const boardScroller = (page: Page) => column(page, 1).locator('xpath=..');
+
+/**
+ * Drags a card onto a board column with the mouse. The card is grabbed on its side nearer the target (below its
+ * heart and ⋯ buttons) and dropped just inside the target's near edge, so the two points are as close as they get.
+ * A point off screen, or in the strips along the board's edges where dnd-kit scrolls by itself, lands the drop
+ * somewhere else (the Archived column sits past the right edge of a 1440 px window): the board is scrolled first so
+ * both points are well inside it.
+ */
 async function dragTo(page: Page, source: Locator, target: Locator) {
-  const from = await source.boundingBox();
-  const to = await target.boundingBox();
-  if (!from || !to) throw new Error('drag source or target is not visible');
-  await page.mouse.move(from.x + from.width / 2, from.y + 24);
+  const points = async () => {
+    const from = await source.boundingBox();
+    const to = await target.boundingBox();
+    if (!from || !to) throw new Error('drag source or target is not on the page');
+    const rightward = to.x > from.x;
+    return {
+      grab: { x: rightward ? from.x + from.width - 40 : from.x + 40, y: from.y + 64 },
+      drop: { x: rightward ? to.x + 60 : to.x + to.width - 60, y: to.y + 100 },
+    };
+  };
+  let { grab, drop } = await points();
+  const width = page.viewportSize()?.width ?? 1440;
+  // BoardView auto-scrolls within 8% of the board's width from either edge.
+  const margin = Math.ceil(width * 0.08) + 40;
+  if (Math.min(grab.x, drop.x) < margin || Math.max(grab.x, drop.x) > width - margin) {
+    const shift = Math.round((grab.x + drop.x) / 2 - width / 2);
+    await boardScroller(page).evaluate((element, by) => {
+      element.scrollLeft += by;
+    }, shift);
+    ({ grab, drop } = await points());
+  }
+  await page.mouse.move(grab.x, grab.y);
   await page.mouse.down();
   // dnd-kit's mouse sensor starts after 8 px; move in steps so it sees the motion.
-  await page.mouse.move(from.x + from.width / 2 + 12, from.y + 30, { steps: 4 });
-  await page.mouse.move(to.x + to.width / 2, to.y + 60, { steps: 12 });
-  await page.mouse.move(to.x + to.width / 2, to.y + 64, { steps: 2 });
+  await page.mouse.move(grab.x + (drop.x > grab.x ? 12 : -12), grab.y + 6, { steps: 4 });
+  await page.mouse.move(drop.x, drop.y - 4, { steps: 12 });
+  await page.mouse.move(drop.x, drop.y, { steps: 2 });
   await page.mouse.up();
+}
+
+/** The account's application counts, as the server has them (a drop is only checked once it is saved). */
+async function serverCounts(request: APIRequestContext) {
+  return (await (await request.get('/api/applications/counts')).json()) as {
+    active: number;
+    archived: number;
+    byStatus: Record<string, number>;
+  };
 }
 
 test.describe('job tracker', () => {
@@ -69,9 +106,12 @@ test.describe('job tracker', () => {
     const sheet = page.getByRole('dialog', { name: 'Add Application' });
     await sheet.getByRole('button', { name: 'Add', exact: true }).click();
     await expect(sheet.getByText('Required')).toHaveCount(2);
+    // Each "Required" goes as soon as its field is filled.
     await sheet.getByLabel('Position Title').fill('Platform Engineer');
+    await expect(sheet.getByText('Required')).toHaveCount(1);
     // A company typed and left (no pick from the suggestions) is kept.
     await sheet.getByRole('combobox', { name: 'Company' }).fill('Globex');
+    await expect(sheet.getByText('Required')).toHaveCount(0);
     await page.keyboard.press('Tab');
     await sheet.getByLabel('Location').fill('Remote in USA');
     await sheet.getByRole('button', { name: 'Add', exact: true }).click();
@@ -190,6 +230,8 @@ test.describe('job tracker', () => {
     await detail.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(detail.getByText('Max salary must be greater than min salary')).toBeVisible();
     await detail.getByLabel('Max. Salary').fill('150000');
+    // The message goes as soon as the pay is edited.
+    await expect(detail.getByText('Max salary must be greater than min salary')).toBeHidden();
     await detail.getByLabel('URL').fill('jobs.initech.example/42');
     await detail.getByRole('textbox', { name: 'Job description' }).fill('We use Python and Kubernetes every day.');
     await detail.getByRole('button', { name: 'Save', exact: true }).click();
@@ -214,7 +256,7 @@ test.describe('job tracker', () => {
     await expect(
       page.getByRole('region', { name: 'Notifications' }).getByText("Saved can't be cleared; change its date instead."),
     ).toBeVisible();
-    await timeline.getByRole('button', { name: 'Add a date for Applied' }).click();
+    await timeline.getByRole('button', { name: 'Add date for Applied' }).click();
     const picker = page.getByRole('dialog', { name: 'Date for Applied' });
     await picker.locator('button.rdp-day_button:not([disabled])', { hasText: /^1$/ }).first().click();
     await picker.getByRole('button', { name: 'Save' }).click();
@@ -332,21 +374,26 @@ test.describe('job tracker', () => {
     await expect(page.getByRole('tab', { name: 'Archived (3)' })).toBeVisible();
   });
 
-  test('Import CSV wizard', async ({ page }) => {
-    await signInFresh(page, 'tracker-import@tailorit.dev');
+  test('Import CSV wizard: map columns, review companies, map statuses and job types', async ({ page }) => {
+    const request = await signInFresh(page, 'tracker-import@tailorit.dev');
     await page.goto('/tracker?view=list');
     await expect(page.getByText('Add your first job application!')).toBeVisible();
     await expect(page.getByText('No more endless spreadsheets, keep track of everything in one place.')).toBeVisible();
+    // A company the account already tracks is one TailorIT knows (so are the job board's).
+    await request.post('/api/applications', {
+      headers: { Origin: ORIGIN },
+      data: { title: 'Earlier Role', companyName: 'Acme', employmentType: 'full_time' },
+    });
 
     await page.getByRole('button', { name: /^Options/ }).click();
     await page.getByRole('menuitem', { name: 'Import CSV' }).click();
     const wizard = page.getByRole('dialog', { name: 'Import Applications from CSV' });
     await expect(wizard.getByText('Expected headers: Company name, Position Title. Location is optional.')).toBeVisible();
     const csv = [
-      'Company,Job Title,Where,Stage,Date Applied',
-      'Acme,Backend Engineer,Remote,Phone call,10/01/2026',
-      'Globex,Software Engineering Intern,"Austin, TX",Rejected,2026-09-15',
-      'Initech,Data Analyst,,Applied,',
+      'Company,Job Title,Where,Stage,Date Applied,Type',
+      'Acme,Backend Engineer,Remote,Phone call,10/01/2026,Permanent',
+      'Qwertyuiop Dynamics,Software Engineering Intern,"Austin, TX",Rejected,2026-09-15,',
+      'Initech,Data Analyst,,Applied,,Seasonal',
     ].join('\n');
     await wizard.getByLabel('CSV file').setInputFiles({ name: 'applications.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
     await expect(wizard.getByText('Which row holds the column names?')).toBeVisible();
@@ -359,17 +406,94 @@ test.describe('job tracker', () => {
     await page.getByRole('option', { name: 'Where' }).click();
     await wizard.getByRole('button', { name: 'Next' }).click();
 
+    // Review companies: the ones TailorIT does not know yet, each of which can be changed.
+    await expect(wizard.getByRole('heading', { name: 'Review companies' })).toBeVisible();
+    await expect(wizard.getByRole('combobox', { name: 'Acme' })).toHaveCount(0);
+    const unknown = wizard.getByRole('combobox', { name: 'Qwertyuiop Dynamics' });
+    await expect(unknown).toHaveValue('Qwertyuiop Dynamics');
+    await unknown.fill('Globex');
+    await page.keyboard.press('Tab');
+    await wizard.getByRole('button', { name: 'Next' }).click();
+
     await expect(wizard.getByRole('heading', { name: 'Map status values' })).toBeVisible();
     await wizard.getByRole('combobox', { name: 'Status for Phone call' }).click();
     await page.getByRole('option', { name: 'Screen' }).click();
+    await wizard.getByRole('button', { name: 'Next' }).click();
+
+    // Map job types: "Permanent" reads as Full-Time; "Seasonal" is asked about.
+    await expect(wizard.getByRole('heading', { name: 'Map job types' })).toBeVisible();
+    await expect(wizard.getByRole('combobox', { name: 'Job type for Permanent' })).toHaveCount(0);
+    await wizard.getByRole('combobox', { name: 'Job type for Seasonal' }).click();
+    await page.getByRole('option', { name: 'Contract' }).click();
     await wizard.getByRole('button', { name: 'Import 3 applications' }).click();
     await expect(wizard.getByText('All 3 applications imported successfully!')).toBeVisible();
     await wizard.getByRole('button', { name: 'Done' }).click();
 
     const rows = page.locator('[data-application-row]');
-    await expect(rows).toHaveCount(3);
+    await expect(rows).toHaveCount(4);
     await expect(rows.filter({ hasText: 'Backend Engineer' }).getByRole('list')).toContainText('Screen10/1/26');
     await expect(rows.filter({ hasText: 'Software Engineering Intern' })).toContainText('Austin, TX');
+    // What the review chose is what was imported.
+    await expect(rows.filter({ hasText: 'Software Engineering Intern' })).toContainText('Globex');
+    const types = (await (await request.get('/api/applications?sort=title&order=asc')).json()) as {
+      items: Array<{ title: string; employmentType: string }>;
+    };
+    expect(types.items.map((item) => [item.title, item.employmentType])).toEqual([
+      ['Backend Engineer', 'full_time'],
+      ['Data Analyst', 'contract'],
+      ['Earlier Role', 'full_time'],
+      ['Software Engineering Intern', 'internship'],
+    ]);
+  });
+
+  test('Import CSV: a batch that fails waits for Retry or Skip, and the summary names its rows', async ({ page }) => {
+    const request = await signInFresh(page, 'tracker-import-retry@tailorit.dev');
+    await request.post('/api/applications', {
+      headers: { Origin: ORIGIN },
+      data: { title: 'Earlier Role', companyName: 'Acme', employmentType: 'full_time' },
+    });
+    // The import endpoint fails the next `failures` requests (a server that is briefly down).
+    let failures = 0;
+    await page.route('**/api/applications/import', async (route) => {
+      if (failures === 0) return route.continue();
+      failures -= 1;
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'internal', message: 'The server is busy. Please try again.' } }),
+      });
+    });
+    const runImport = async (titles: string[]) => {
+      await page.getByRole('button', { name: /^Options/ }).click();
+      await page.getByRole('menuitem', { name: 'Import CSV' }).click();
+      const wizard = page.getByRole('dialog', { name: 'Import Applications from CSV' });
+      const csv = ['Company,Position Title', ...titles.map((title) => `Acme,${title}`)].join('\n');
+      await wizard.getByLabel('CSV file').setInputFiles({ name: 'applications.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+      await wizard.getByRole('button', { name: 'Next' }).click();
+      await wizard.getByRole('button', { name: `Import ${titles.length} applications` }).click();
+      return wizard;
+    };
+    await page.goto('/tracker?view=list');
+
+    // Retry sends the same rows again (a failed batch wrote nothing).
+    failures = 1;
+    let wizard = await runImport(['First Role', 'Second Role']);
+    await expect(wizard.getByText('Import paused')).toBeVisible();
+    await expect(wizard.getByText(/Rows 2–3 couldn.t be imported: The server is busy\. Please try again\./)).toBeVisible();
+    await wizard.getByRole('button', { name: 'Retry' }).click();
+    await expect(wizard.getByText('All 2 applications imported successfully!')).toBeVisible();
+    await wizard.getByRole('button', { name: 'Done' }).click();
+    await expect(page.locator('[data-application-row]')).toHaveCount(3);
+
+    // Skip moves on without them; the summary says which rows were not imported, and why.
+    failures = 1;
+    wizard = await runImport(['Third Role']);
+    await wizard.getByRole('button', { name: 'Skip these rows' }).click();
+    await expect(wizard.getByRole('heading', { name: 'Import Complete' })).toBeVisible();
+    await expect(wizard.getByText('0 of 1 applications imported. These rows were not imported:')).toBeVisible();
+    await expect(wizard.getByRole('list', { name: 'Rows not imported' })).toContainText('Row 2: The server is busy. Please try again.');
+    await wizard.getByRole('button', { name: 'Done' }).click();
+    await expect(page.locator('[data-application-row]')).toHaveCount(3);
   });
 
   test('search, filters, chips and empty states', async ({ page }) => {
@@ -390,8 +514,21 @@ test.describe('job tracker', () => {
     // Search (debounced, server-side) over roles and companies.
     await page.getByRole('searchbox', { name: 'Search for roles or companies' }).fill('hooli');
     await expect(page.locator('[data-application-card]')).toHaveCount(2);
+    // Columns without a match say so, not "Move applications into …".
+    await expect(column(page, 12).getByText('None match your search or filters.')).toBeVisible();
+    // Nothing matches: the board says it once, as the list does, instead of a row of empty columns.
+    await page.getByRole('searchbox', { name: 'Search for roles or companies' }).fill('zzz-no-such-role');
+    await expect(page.getByText('Oops! No matching applications found.')).toBeVisible();
+    await expect(page.getByText('Please update your search criteria and try again.')).toBeVisible();
+    await expect(page.locator('[data-column]')).toHaveCount(0);
     await page.getByRole('searchbox', { name: 'Search for roles or companies' }).fill('');
     await expect(page.locator('[data-application-card]')).toHaveCount(3);
+
+    // Options opens on hover (and closes when the pointer leaves), as well as on click.
+    await page.getByRole('button', { name: /^Options/ }).hover();
+    await expect(page.getByRole('menu', { name: 'Options' })).toBeVisible();
+    await page.mouse.move(5, 600);
+    await expect(page.getByRole('menu', { name: 'Options' })).toBeHidden();
 
     // A status filter switches to the list and shows a chip.
     await page.getByRole('button', { name: /^Options/ }).click();
@@ -455,13 +592,15 @@ test.describe('job tracker', () => {
     const archived = page.locator('[data-column="archived"]');
     await expect(archived.getByText('No applications')).toBeVisible();
 
+    // The Archived column is the last one, past the window's right edge: dragTo scrolls the board to it first.
     await dragTo(page, card(column(page, 2), 'Old Role'), archived);
+    await expect.poll(async () => (await serverCounts(request)).archived).toBe(1);
     await expect(card(archived, 'Old Role')).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Archived (1)' })).toBeVisible();
 
-    // Scrolled to the end, the Archived column and Interviewing are both on screen.
-    await archived.scrollIntoViewIfNeeded();
+    // Dragged out onto Interviewing: restored, and moved there.
     await dragTo(page, card(archived, 'Old Role'), column(page, 12));
+    await expect.poll(() => serverCounts(request)).toMatchObject({ active: 2, archived: 0, byStatus: { '12': 1 } });
     await expect(card(column(page, 12), 'Old Role')).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Archived (0)' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Active (2)' })).toBeVisible();
@@ -530,5 +669,64 @@ test.describe('job tracker', () => {
     // The header counts every card in the column, loaded or not.
     await expect(applied.getByRole('heading', { name: 'Applied' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Applied, 30' })).toBeVisible();
+  });
+});
+
+test.describe('job tracker on a phone', () => {
+  test.describe.configure({ retries: 2 });
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('no sideways scroll, whole list titles, and a detail sheet with ✕ beside the title and a Status tab', async ({ page }) => {
+    test.setTimeout(90_000);
+    const request = await signInFresh(page, 'tracker-phone@tailorit.dev');
+    const long = 'Distinguished Platform Solutions Architect';
+    await request.post('/api/applications', {
+      headers: { Origin: ORIGIN },
+      data: { title: long, companyName: 'Experian', location: 'Costa Mesa, CA', employmentType: 'full_time' },
+    });
+    // Two-digit counts make the tabs row as wide as it gets.
+    for (let index = 1; index <= 11; index += 1) {
+      await request.post('/api/applications', {
+        headers: { Origin: ORIGIN },
+        data: { title: `Role ${index}`, companyName: 'Phone Co', employmentType: 'full_time', status: 1 },
+      });
+    }
+    const pageWidth = () => page.evaluate(() => document.documentElement.scrollWidth);
+
+    await page.goto('/tracker');
+    await expect(page.getByRole('tab', { name: 'Active (12)' })).toBeVisible();
+    expect(await pageWidth()).toBeLessThanOrEqual(390);
+    // "Add application" is a "+" that fits beside the tabs, inside the page gutter.
+    const add = (await page.getByRole('button', { name: 'Add application' }).boundingBox())!;
+    expect(add.x + add.width).toBeLessThanOrEqual(390 - 16 + 0.5);
+
+    // The list: the whole title reads (two lines at most), with the status and "Status ⌄" under it.
+    await page.getByRole('tab', { name: 'List' }).click();
+    const row = page.locator('[data-application-row]').filter({ hasText: long });
+    const title = row.getByRole('button', { name: long });
+    await expect(title).toBeVisible();
+    const fits = await title.evaluate((element) => {
+      const text = element.firstElementChild as HTMLElement;
+      return text.scrollWidth <= text.clientWidth + 1 && text.scrollHeight <= text.clientHeight + 1;
+    });
+    expect(fits).toBe(true);
+    const titleBox = (await title.boundingBox())!;
+    const statusBox = (await row.getByRole('button', { name: /^Status: / }).boundingBox())!;
+    expect(statusBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+    expect(await pageWidth()).toBeLessThanOrEqual(390);
+
+    // The detail: ✕ stays on the title's line; the Status tab holds the status timeline and the notes.
+    await title.click();
+    const detail = page.getByRole('dialog', { name: long });
+    const heading = (await detail.getByRole('heading', { name: long }).boundingBox())!;
+    const close = (await detail.getByRole('button', { name: 'Close' }).boundingBox())!;
+    expect(close.y).toBeLessThan(heading.y + heading.height);
+    expect(close.y + close.height).toBeGreaterThan(heading.y);
+    expect(await detail.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await detail.getByRole('tab', { name: 'Status' }).click();
+    await expect(detail.getByRole('combobox', { name: 'Application status' })).toBeVisible();
+    await expect(detail.getByRole('list', { name: 'Status timeline' })).toBeVisible();
+    await expect(detail.getByRole('button', { name: 'Add date for Screen' })).toBeVisible();
+    await expect(detail.getByRole('textbox', { name: 'Notes' })).toBeVisible();
   });
 });

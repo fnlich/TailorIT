@@ -1,10 +1,25 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { COLUMN_PREFS_STORAGE_KEY, readColumnPrefs, type ColumnPrefs } from '@tailorit/shared';
 import { useStoredValue, writeStored } from '@/lib/storage';
 import { readTrackerUrl, trackerSearch, type TrackerUrlState } from './state';
+
+/** Whether a media query matches, kept in step with the window (`serverValue` before hydration). */
+export function useMediaQuery(query: string, serverValue = true): boolean {
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const list = window.matchMedia(query);
+      list.addEventListener('change', listener);
+      return () => list.removeEventListener('change', listener);
+    },
+    [query],
+  );
+  const getSnapshot = useCallback(() => window.matchMedia(query).matches, [query]);
+  const getServerSnapshot = useCallback(() => serverValue, [serverValue]);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
 
 /** `value`, once it has stopped changing for `delay` ms (the search box's 500 ms). */
 export function useDebouncedValue<T>(value: T, delay: number): T {

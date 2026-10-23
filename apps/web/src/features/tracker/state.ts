@@ -157,6 +157,13 @@ export function toggleStatus(statuses: readonly ApplicationStatus[], status: App
   return [...next].sort((a, b) => a - b);
 }
 
+/** Simplify's words when a search or filter matches nothing (the list, and the board in place of its columns). */
+export const NO_MATCH_TITLE = 'Oops! No matching applications found.';
+export const NO_MATCH_TEXT = 'Please update your search criteria and try again.';
+
+/** An empty board column under a search or filter ("Move applications into …" would read as if there were none). */
+export const NO_MATCH_COLUMN_TEXT = 'None match your search or filters.';
+
 /** The status a new application starts in (Simplify: Applied). */
 export const DEFAULT_NEW_STATUS: ApplicationStatus = STATUS.applied;
 

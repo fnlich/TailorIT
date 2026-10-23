@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { CaretDownIcon, MapPinIcon, PlusIcon } from '@/components/ui/icons';
 import { FavoriteButton, type CardHandlers } from '../board/ApplicationCard';
 import { CompanyLogo } from '../CompanyLogo';
+import { NO_MATCH_TEXT, NO_MATCH_TITLE } from '../state';
 import { StatusIcon } from '../status';
 import { ProgressStepper } from './ProgressStepper';
 
@@ -87,32 +88,36 @@ function ListRow({
       data-application-row={application.id}
       onClick={activate}
       className={clsx(
-        'flex cursor-pointer items-center gap-4 rounded-surface border bg-surface py-4 pr-4 pl-5 shadow-soft transition-colors duration-150',
+        // Phones: a grid with the title across the row and the status chip and "Status ⌄" under it; from sm, one row.
+        'grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-surface border bg-surface',
+        'py-4 pr-4 pl-4 shadow-soft transition-colors duration-150 sm:flex sm:gap-4 sm:pl-5',
         selected || checked ? 'border-primary-ink bg-primary/5' : 'border-border hover:bg-[#fafafa]',
       )}
     >
-      {selectMode && (
-        <Checkbox
-          checked={checked}
-          stopPropagation
-          aria-label={`Select ${application.title}`}
-          onCheckedChange={(next) => handlers.onToggleSelected(application, next)}
-        />
-      )}
-      <span onClick={(event) => event.stopPropagation()} className="flex">
-        <FavoriteButton application={application} onToggle={handlers.onToggleFavorite} size="sm" />
+      <span className="flex items-center gap-3 self-start max-sm:-mt-1 sm:gap-4 sm:self-auto">
+        {selectMode && (
+          <Checkbox
+            checked={checked}
+            stopPropagation
+            aria-label={`Select ${application.title}`}
+            onCheckedChange={(next) => handlers.onToggleSelected(application, next)}
+          />
+        )}
+        <span onClick={(event) => event.stopPropagation()} className="flex">
+          <FavoriteButton application={application} onToggle={handlers.onToggleFavorite} size="sm" />
+        </span>
       </span>
       <CompanyLogo name={application.companyName} logoUrl={application.logoUrl} size={64} className="ml-2 max-sm:hidden" />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="col-span-2 flex min-w-0 flex-1 flex-col gap-1">
         <button
           type="button"
           onClick={(event) => {
             event.stopPropagation();
             activate();
           }}
-          className="truncate text-left text-base leading-6 font-semibold text-foreground"
+          className="min-w-0 text-left text-base leading-6 font-semibold text-foreground"
         >
-          {application.title}
+          <span className="block break-words max-sm:line-clamp-2 sm:truncate">{application.title}</span>
         </button>
         <span className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
           <BuildingIcon size={14} className="shrink-0" />
@@ -130,13 +135,13 @@ function ListRow({
         model={model}
         className={clsx('hidden shrink-0 lg:flex', model.steps.length > 5 ? 'w-[520px] xl:w-[740px]' : 'w-[460px] xl:w-[641px]')}
       />
-      <span className="lg:hidden">
+      <span className="col-start-2 row-start-2 justify-self-start lg:hidden">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-chip px-2.5 py-1 text-xs font-medium">
           <StatusIcon status={application.currentStatus} size={14} />
           {STATUS_INFO[application.currentStatus].label}
         </span>
       </span>
-      <span onClick={(event) => event.stopPropagation()} className="flex">
+      <span onClick={(event) => event.stopPropagation()} className="col-start-3 row-start-2 flex">
         <StatusMenuButton application={application} onMove={handlers.onMove} />
       </span>
     </li>
@@ -145,13 +150,16 @@ function ListRow({
 
 function RowSkeleton() {
   return (
-    <li aria-hidden="true" className="flex items-center gap-6 rounded-surface border border-border bg-surface py-5 pr-4 pl-5 shadow-soft">
+    <li
+      aria-hidden="true"
+      className="flex items-center gap-4 rounded-surface border border-border bg-surface py-5 pr-4 pl-4 shadow-soft sm:gap-6 sm:pl-5"
+    >
       <Skeleton className="size-8" rounded="full" />
-      <Skeleton className="size-16" rounded="control" />
-      <div className="flex flex-1 flex-col gap-2">
-        <Skeleton className="h-4 w-64" />
-        <Skeleton className="h-3.5 w-40" />
-        <Skeleton className="h-3.5 w-32" />
+      <Skeleton className="size-16 max-sm:hidden" rounded="control" />
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <Skeleton className="h-4 w-64 max-w-full" />
+        <Skeleton className="h-3.5 w-40 max-w-full" />
+        <Skeleton className="h-3.5 w-32 max-w-full" />
       </div>
       <Skeleton className="hidden h-6 w-[500px] lg:block" />
     </li>
@@ -213,7 +221,7 @@ export function ListView({
     return (
       <div className="rounded-surface border border-border bg-surface shadow-soft">
         {empty === 'no-match' ? (
-          <EmptyState title="Oops! No matching applications found." description="Please update your search criteria and try again." />
+          <EmptyState title={NO_MATCH_TITLE} description={NO_MATCH_TEXT} />
         ) : empty === 'archived' ? (
           <EmptyState title="No archived applications" description="Applications you archive show up here." />
         ) : (

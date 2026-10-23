@@ -131,6 +131,9 @@ function parseAmount(text: string): number | null | 'invalid' {
 
 type Errors = Partial<Record<'title' | 'companyName' | 'postingUrl' | 'salaryMin' | 'salaryMax' | 'salaryPeriod', string>>;
 
+/** The pay fields are checked together, so a change to any of them clears all their errors. */
+const SALARY_FIELDS: ReadonlyArray<keyof Errors> = ['salaryMin', 'salaryMax', 'salaryPeriod'];
+
 /** "Edit Job Posting": the fields Simplify edits here, saved together. */
 function EditForm({ application, onDone }: { application: ApplicationDetail; onDone: () => void }) {
   const client = useQueryClient();
@@ -149,6 +152,15 @@ function EditForm({ application, onDone }: { application: ApplicationDetail; onD
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  /** A field's error goes as soon as the field changes (Save checks again). */
+  const clearErrors = (...fields: Array<keyof Errors>) =>
+    setErrors((current) => {
+      if (!fields.some((field) => current[field])) return current;
+      const next = { ...current };
+      for (const field of fields) delete next[field];
+      return next;
+    });
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -198,10 +210,24 @@ function EditForm({ application, onDone }: { application: ApplicationDetail; onD
       </h3>
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Position Title" required error={errors.title}>
-          <Input value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="Title" />
+          <Input
+            value={title}
+            maxLength={200}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              clearErrors('title');
+            }}
+            placeholder="Title"
+          />
         </Field>
         <Field label="Company" required error={errors.companyName}>
-          <CompanyInput value={companyName} onValueChange={setCompanyName} />
+          <CompanyInput
+            value={companyName}
+            onValueChange={(value) => {
+              setCompanyName(value);
+              clearErrors('companyName');
+            }}
+          />
         </Field>
         <Field label="Location">
           <Input value={location} maxLength={200} onChange={(event) => setLocation(event.target.value)} placeholder="Location" />
@@ -220,7 +246,10 @@ function EditForm({ application, onDone }: { application: ApplicationDetail; onD
             inputMode="decimal"
             value={min}
             aria-invalid={errors.salaryMin ? true : undefined}
-            onChange={(event) => setMin(event.target.value)}
+            onChange={(event) => {
+              setMin(event.target.value);
+              clearErrors(...SALARY_FIELDS);
+            }}
           />
           <Input
             aria-label="Max. Salary"
@@ -228,9 +257,21 @@ function EditForm({ application, onDone }: { application: ApplicationDetail; onD
             inputMode="decimal"
             value={max}
             aria-invalid={errors.salaryMax ? true : undefined}
-            onChange={(event) => setMax(event.target.value)}
+            onChange={(event) => {
+              setMax(event.target.value);
+              clearErrors(...SALARY_FIELDS);
+            }}
           />
-          <Select aria-label="Pay Period" placeholder="Pay Period" options={PERIOD_OPTIONS} value={period} onValueChange={setPeriod} />
+          <Select
+            aria-label="Pay Period"
+            placeholder="Pay Period"
+            options={PERIOD_OPTIONS}
+            value={period}
+            onValueChange={(value) => {
+              setPeriod(value);
+              clearErrors(...SALARY_FIELDS);
+            }}
+          />
         </div>
         {(errors.salaryMin || errors.salaryMax || errors.salaryPeriod) && (
           <p className="text-[13px] leading-5 text-[#c62a29]">{errors.salaryMax ?? errors.salaryMin ?? errors.salaryPeriod}</p>
@@ -245,7 +286,10 @@ function EditForm({ application, onDone }: { application: ApplicationDetail; onD
             value={url}
             placeholder="www.example.com/jobs/123"
             className="rounded-l-none"
-            onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => {
+              setUrl(event.target.value);
+              clearErrors('postingUrl');
+            }}
           />
         </div>
       </Field>

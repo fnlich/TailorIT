@@ -126,7 +126,12 @@ export function OptionsMenu({
 
   return (
     <Menu open={open} onOpenChange={setOpen}>
+      {/*
+        Opens on hover like Simplify's (a mouse resting on it for 100 ms), and still on click, Enter, Space or the arrow
+        keys. A hover-opened menu closes when the pointer leaves it; a click inside keeps it open.
+      */}
       <MenuTrigger
+        openOnHover
         render={
           <FilterPill
             label="Options"

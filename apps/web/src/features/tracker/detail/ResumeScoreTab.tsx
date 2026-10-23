@@ -50,8 +50,9 @@ function KeywordChips({ matched, missing }: { matched: MatchedKeyword[]; missing
 }
 
 /**
- * Resume Score: the job description's keywords against the linked resume (else the default one), as Simplify's
- * "Improve your resume" card shows them: matched chips first, then the missing ones.
+ * Resume Score: the posting's keywords against the linked resume (else the default one), as Simplify's "Improve your
+ * resume" card shows them: matched chips first, then the missing ones. An application tracked from the Jobs page
+ * uses that job's keywords (the score agrees with the Jobs page's); one added by hand, its description's.
  */
 export function ResumeScoreTab({ application, onDocuments }: { application: ApplicationDetail; onDocuments: () => void }) {
   const score = useResumeScore(application.id, true);
@@ -93,7 +94,9 @@ export function ResumeScoreTab({ application, onDocuments }: { application: Appl
         <div>
           <p className="text-sm font-semibold text-foreground">No keywords to score yet</p>
           <p className="text-sm text-muted-foreground">
-            Add a job description in Overview to see how your resume matches this job.
+            {application.jobId !== null
+              ? "This job's posting names no skills to score your resume against."
+              : 'Add a job description in Overview to see how your resume matches this job.'}
           </p>
         </div>
       ) : (

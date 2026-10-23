@@ -98,7 +98,8 @@ export function StatusPanel({ application }: { application: ApplicationDetail })
           ) : (
             <button
               type="button"
-              aria-label={`Add a date for ${label}`}
+              // The name starts with the visible words, so "click Add date" (voice control) finds it.
+              aria-label={`Add date for ${label}`}
               className="rounded-md px-1.5 py-0.5 text-sm font-medium text-primary-ink hover:bg-primary/5"
             >
               Add date

@@ -18,6 +18,7 @@ import { ArchiveIcon, ArrowCounterClockwiseIcon, HeartIcon, PencilSimpleIcon, Tr
 import { userMessage } from '@/lib/api';
 import { CompanyLogo } from '../CompanyLogo';
 import { invalidateApplications, trackerApi, trackerKeys, useApplication, useMoveStatus, useToggleFavorite } from '../data';
+import { useMediaQuery } from '../hooks';
 import { DocumentsTab } from './DocumentsTab';
 import { NotesPanel } from './NotesPanel';
 import { OverviewTab } from './OverviewTab';
@@ -25,7 +26,7 @@ import { QuestionsTab } from './QuestionsTab';
 import { ResumeScoreTab } from './ResumeScoreTab';
 import { StatusPanel } from './StatusPanel';
 
-type DetailTab = 'overview' | 'documents' | 'score' | 'questions';
+type DetailTab = 'overview' | 'status' | 'documents' | 'score' | 'questions';
 
 const TABS: Array<{ value: DetailTab; label: string }> = [
   { value: 'overview', label: 'Overview' },
@@ -33,6 +34,13 @@ const TABS: Array<{ value: DetailTab; label: string }> = [
   { value: 'score', label: 'Resume Score' },
   { value: 'questions', label: 'Questions' },
 ];
+
+/**
+ * Below this width the status and notes column would sit under the whole description, so it becomes a "Status" tab
+ * (Simplify's mobile layout).
+ */
+const TWO_COLUMNS_QUERY = '(min-width: 64rem)';
+const NARROW_TABS: Array<{ value: DetailTab; label: string }> = [TABS[0]!, { value: 'status', label: 'Status' }, ...TABS.slice(1)];
 
 function DetailBody({
   application,
@@ -47,7 +55,10 @@ function DetailBody({
 }) {
   const client = useQueryClient();
   const toast = useToast();
+  const wide = useMediaQuery(TWO_COLUMNS_QUERY);
   const [tab, setTab] = useState<DetailTab>('overview');
+  // The Status tab exists only while the status column is folded into the tabs.
+  const shownTab: DetailTab = wide && tab === 'status' ? 'overview' : tab;
   const [editing, setEditing] = useState(initialEdit);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [askApplied, setAskApplied] = useState(false);
@@ -76,13 +87,22 @@ function DetailBody({
     }
   };
 
+  const statusAndNotes = (
+    <>
+      <StatusPanel application={application} />
+      <NotesPanel key={application.id} application={application} />
+    </>
+  );
+
   return (
     <>
-      <header className="flex flex-wrap items-start gap-4 border-b border-border px-6 py-5">
+      <header className="flex flex-wrap items-start gap-x-4 gap-y-3 border-b border-border px-4 py-4 sm:px-6 sm:py-5">
         <CompanyLogo name={application.companyName} logoUrl={application.logoUrl} size={64} />
         <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 self-center">
           <div className="flex min-w-0 items-center gap-1">
-            <BaseDialog.Title className="min-w-0 truncate text-xl leading-7 font-medium text-foreground">{application.title}</BaseDialog.Title>
+            <BaseDialog.Title className="min-w-0 text-xl leading-7 font-medium break-words text-foreground max-sm:line-clamp-2 sm:truncate">
+              {application.title}
+            </BaseDialog.Title>
             <IconButton
               label="Edit job posting"
               size="sm"
@@ -95,7 +115,8 @@ function DetailBody({
           </div>
           <BaseDialog.Description className="truncate text-sm text-muted-foreground">{application.companyName}</BaseDialog.Description>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Below lg the actions get their own line under the title, so the ✕ always stays on the title's line. */}
+        <div className="order-last flex basis-full flex-wrap items-center gap-2 lg:order-none lg:basis-auto">
           {canApply && (
             <Button
               onClick={() => {
@@ -131,16 +152,29 @@ function DetailBody({
           <Button variant="destructive-outline" icon={<TrashIcon size={16} />} onClick={() => setConfirmDelete(true)}>
             Delete
           </Button>
-          <BaseDialog.Close render={<IconButton label="Close" icon={<XIcon size={18} />} tooltip={false} />} />
         </div>
+        <BaseDialog.Close render={<IconButton label="Close" icon={<XIcon size={18} />} tooltip={false} />} />
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <UnderlineTabs aria-label="Application details" size="md" value={tab} onValueChange={setTab} items={TABS} className="min-w-0">
+        <div className="grid gap-6 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <UnderlineTabs
+            aria-label="Application details"
+            size="md"
+            value={shownTab}
+            onValueChange={setTab}
+            items={wide ? TABS : NARROW_TABS}
+            className="min-w-0"
+          >
             {/* Kept mounted so an unsaved Edit Job Posting survives a look at another tab. */}
             <TabPanel value="overview" className="pt-5" keepMounted>
               <OverviewTab application={application} editing={editing} onEditingChange={setEditing} />
             </TabPanel>
+            {!wide && (
+              // Kept mounted too, so notes being typed are not dropped by a look at another tab.
+              <TabPanel value="status" className="flex flex-col gap-4 pt-5" keepMounted>
+                {statusAndNotes}
+              </TabPanel>
+            )}
             <TabPanel value="documents" className="pt-5">
               <DocumentsTab application={application} />
             </TabPanel>
@@ -151,10 +185,11 @@ function DetailBody({
               <QuestionsTab application={application} />
             </TabPanel>
           </UnderlineTabs>
-          <aside className="flex flex-col gap-4" aria-label="Status and notes">
-            <StatusPanel application={application} />
-            <NotesPanel key={application.id} application={application} />
-          </aside>
+          {wide && (
+            <aside className="flex flex-col gap-4" aria-label="Status and notes">
+              {statusAndNotes}
+            </aside>
+          )}
         </div>
       </div>
       <ConfirmDialog
@@ -190,14 +225,14 @@ function DetailBody({
 function DetailSkeleton() {
   return (
     <div aria-hidden="true">
-      <div className="flex items-center gap-4 border-b border-border px-6 py-5">
+      <div className="flex items-center gap-4 border-b border-border px-4 py-4 sm:px-6 sm:py-5">
         <Skeleton className="size-16" rounded="control" />
-        <div className="flex flex-1 flex-col gap-2">
-          <Skeleton className="h-5 w-72" />
-          <Skeleton className="h-4 w-40" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <Skeleton className="h-5 w-72 max-w-full" />
+          <Skeleton className="h-4 w-40 max-w-full" />
         </div>
       </div>
-      <div className="grid gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-6 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Skeleton className="h-64 w-full" rounded="surface" />
         <Skeleton className="h-64 w-full" rounded="surface" />
       </div>

@@ -19,6 +19,7 @@ import {
   type ApplicationListResponse,
   type BoardResponse,
 } from '@tailorit/shared';
+import { z } from 'zod';
 import { requireUser, userOf } from '../../core/auth/guards';
 import { todayIso, type AppDeps } from '../../core/context';
 import { validationFailed } from '../../core/http/errors';
@@ -29,6 +30,7 @@ import {
   exportCsv,
   exportFileName,
   insightsReport,
+  knownCompanies,
   lettersForApplication,
   resumeScore,
   sankeyReport,
@@ -55,6 +57,14 @@ import { emptyStatusCounts, getDetail, loadOwnedRow, loadQuestions } from './sto
 function idOf(req: Request, name = 'id'): string {
   return parseInput(IdParam, req.params[name], 'link');
 }
+
+/**
+ * POST /api/applications/import/companies: up to 1,000 company names of an import file (the wizard asks in batches).
+ * Answer: `{ known: { [name]: name TailorIT knows it by } }`. Only the wizard reads it, so the contract lives here.
+ */
+const KnownCompaniesBodySchema = z.object({
+  names: z.array(z.string().max(500)).min(1).max(1000),
+});
 
 /**
  * The import contract caps each cell; a spreadsheet cell longer than that is cut to the cap rather than failing the
@@ -177,6 +187,12 @@ export function createApplicationsRouter(deps: AppDeps): Router {
   router.post('/import', (req, res) => {
     const body = parseInput(TrackerImportBodySchema, clipImportCells(req.body), 'import');
     res.json(importApplications(deps, userOf(req).id, body));
+  });
+
+  // The import wizard's "Review companies": the file's company names TailorIT already knows.
+  router.post('/import/companies', (req, res) => {
+    const { names } = parseInput(KnownCompaniesBodySchema, req.body, 'company list');
+    res.json({ known: knownCompanies(deps, userOf(req).id, names) });
   });
 
   router.post('/bulk', (req, res) => {

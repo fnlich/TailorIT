@@ -13,7 +13,10 @@ import { ArchiveIcon, ArrowCounterClockwiseIcon, CaretDownIcon, ChartLineIcon, K
 import { filterChips, selectedLabel, withoutChip, DEFAULT_FILTERS, type FilterState } from '../state';
 import { StatusIcon } from '../status';
 
-/** Row 1: Active (N) | Archived (N) and "+ Add application". */
+/**
+ * Row 1: Active (N) | Archived (N) and "+ Add application" (a "+" alone on phones, where the label does not fit
+ * beside the tabs). The counts show once they are known, never a "(0)" that is only loading.
+ */
 export function TabsRow({
   tab,
   counts,
@@ -32,12 +35,12 @@ export function TabsRow({
         value={tab}
         onValueChange={onTabChange}
         items={[
-          { value: 'active', label: `Active (${counts?.active ?? 0})` },
-          { value: 'archived', label: `Archived (${counts?.archived ?? 0})` },
+          { value: 'active', label: counts ? `Active (${counts.active})` : 'Active' },
+          { value: 'archived', label: counts ? `Archived (${counts.archived})` : 'Archived' },
         ]}
       />
-      <Button icon={<PlusIcon size={16} weight="bold" />} onClick={onAdd}>
-        Add application
+      <Button icon={<PlusIcon size={16} weight="bold" />} className="max-sm:w-9" onClick={onAdd}>
+        <span className="max-sm:sr-only">Add application</span>
       </Button>
     </div>
   );

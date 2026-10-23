@@ -32,10 +32,12 @@ import {
   type ColumnPrefs,
 } from '@tailorit/shared';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Spinner } from '@/components/ui/Spinner';
 import { ArchiveIcon, EyeSlashIcon } from '@/components/ui/icons';
+import { NO_MATCH_COLUMN_TEXT, NO_MATCH_TEXT, NO_MATCH_TITLE } from '../state';
 import { StatusIcon } from '../status';
 import { ApplicationCard, CARD_SURFACE, CardBody, type CardHandlers } from './ApplicationCard';
 
@@ -75,7 +77,8 @@ function statusOf(id: string | number | undefined): ApplicationStatus | null {
   return isApplicationStatus(status) ? status : null;
 }
 
-function EmptyColumn({ status, dropping }: { status: ApplicationStatus; dropping: boolean }) {
+/** An empty column's dashed box: "No applications" and what to do, or "Drop application here" under a dragged card. */
+function EmptyColumn({ text, dropping }: { text: string; dropping: boolean }) {
   return (
     <div
       className={clsx(
@@ -84,7 +87,7 @@ function EmptyColumn({ status, dropping }: { status: ApplicationStatus; dropping
       )}
     >
       <p className="text-sm font-semibold text-muted-foreground">{dropping ? DROP_HERE_TEXT : EMPTY_COLUMN_TITLE}</p>
-      {!dropping && <p className="text-xs text-muted-foreground">{emptyColumnText(status)}</p>}
+      {!dropping && <p className="text-xs text-muted-foreground">{text}</p>}
     </div>
   );
 }
@@ -118,6 +121,7 @@ function Column({
   renderCard,
   onLoadMore,
   loadingMore,
+  filtered,
 }: {
   column: BoardColumn;
   prefs: ColumnPrefs;
@@ -127,6 +131,8 @@ function Column({
   renderCard: (application: ApplicationSummary) => ReactNode;
   onLoadMore: (status: ApplicationStatus) => void;
   loadingMore: boolean;
+  /** A search or filter narrows the board. */
+  filtered: boolean;
 }) {
   const { status } = column;
   const info = STATUS_INFO[status];
@@ -154,7 +160,11 @@ function Column({
           dropping && column.items.length > 0 && 'bg-primary/5 outline outline-1 outline-primary-ink/30',
         )}
       >
-        {column.items.length === 0 ? <EmptyColumn status={status} dropping={dropping} /> : column.items.map(renderCard)}
+        {column.items.length === 0 ? (
+          <EmptyColumn text={filtered ? NO_MATCH_COLUMN_TEXT : emptyColumnText(status)} dropping={dropping} />
+        ) : (
+          column.items.map(renderCard)
+        )}
         {column.nextCursor && <LoadMore onLoad={loadMore} loading={loadingMore} />}
       </div>
     </section>
@@ -176,10 +186,12 @@ function ArchivedColumn({
   model,
   activeFrom,
   renderCard,
+  filtered,
 }: {
   model: ArchivedColumnModel;
   activeFrom: Source | null;
   renderCard: (application: ApplicationSummary) => ReactNode;
+  filtered: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: ARCHIVED_ID });
   const dropping = isOver && activeFrom !== null && activeFrom !== 'archived';
@@ -202,15 +214,7 @@ function ArchivedColumn({
         {model.items === null ? (
           <Skeleton className="h-[155px] w-full" rounded="surface" />
         ) : items.length === 0 ? (
-          <div
-            className={clsx(
-              'flex h-[155px] shrink-0 flex-col items-center justify-center gap-1 rounded-surface border border-dashed px-4 text-center',
-              dropping ? 'border-primary-ink/30 bg-primary/5' : 'border-border',
-            )}
-          >
-            <p className="text-sm font-semibold text-muted-foreground">{dropping ? DROP_HERE_TEXT : EMPTY_COLUMN_TITLE}</p>
-            {!dropping && <p className="text-xs text-muted-foreground">Move applications into archived.</p>}
-          </div>
+          <EmptyColumn text={filtered ? NO_MATCH_COLUMN_TEXT : 'Move applications into archived.'} dropping={dropping} />
         ) : (
           items.map(renderCard)
         )}
@@ -241,6 +245,8 @@ export interface BoardViewProps {
   /** An archived card was dropped on a status column. */
   onRestoreDrop: (application: ApplicationSummary, to: ApplicationStatus) => void;
   refreshing: boolean;
+  /** A search or filter narrows the board: empty columns say so, and a board with no match at all says it once. */
+  filtered: boolean;
 }
 
 /** Simplify's board: 320 px status columns side by side, cards dragged between them (dnd-kit). */
@@ -260,6 +266,7 @@ export function BoardView({
   onArchiveDrop,
   onRestoreDrop,
   refreshing,
+  filtered,
 }: BoardViewProps) {
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -344,6 +351,22 @@ export function BoardView({
     />
   );
 
+  // Nothing anywhere matches the search or filters: one message (the list's) instead of a row of empty columns.
+  const nothingMatches =
+    filtered &&
+    columns !== null &&
+    columns.every((column) => column.total === 0) &&
+    (archived === null || (archived.items !== null && archived.items.length === 0));
+  if (nothingMatches) {
+    return (
+      <div className="px-4 pt-1 sm:px-6 lg:px-[35px]">
+        <div className="rounded-surface border border-border bg-surface shadow-soft">
+          <EmptyState title={NO_MATCH_TITLE} description={NO_MATCH_TEXT} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -380,10 +403,11 @@ export function BoardView({
                   renderCard={renderCard}
                   onLoadMore={onLoadMore}
                   loadingMore={loadingMore === status}
+                  filtered={filtered}
                 />
               );
             })}
-        {archived && <ArchivedColumn model={archived} activeFrom={activeFrom} renderCard={renderCard} />}
+        {archived && <ArchivedColumn model={archived} activeFrom={activeFrom} renderCard={renderCard} filtered={filtered} />}
         <div aria-hidden="true" className="w-px shrink-0" />
       </div>
       <DragOverlay dropAnimation={null}>
