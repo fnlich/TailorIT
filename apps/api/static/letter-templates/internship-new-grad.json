@@ -1,0 +1,17 @@
+{
+  "systemKey": "internship-new-grad",
+  "position": 5,
+  "name": "Internship / New Grad",
+  "fontFamily": "Open Sans",
+  "aiPrompt": "Draw on coursework, projects, internships and activities from my resume. Keep the tone enthusiastic and humble, and never claim experience I do not have.",
+  "blocks": [
+    "{{SALUTATION}}",
+    "I am writing to apply for the {{JOB_TITLE}} position at {{COMPANY_NAME}}. As someone at the start of my career, I am looking for a team where I can learn quickly and contribute real work from the first week.",
+    "{{COMPANY_APPEAL}}",
+    "{{CANDIDATE_STRENGTHS}}",
+    "I would be grateful for the chance to talk with you about the role and about what I could learn and contribute at {{COMPANY_NAME}}.",
+    "{{SIGN_OFF}}",
+    "{{USER_FULL_NAME}}",
+    "{{USER_EMAIL}} | {{USER_PHONE}}"
+  ]
+}

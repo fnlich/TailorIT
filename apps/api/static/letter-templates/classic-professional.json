@@ -1,0 +1,19 @@
+{
+  "systemKey": "classic-professional",
+  "position": 1,
+  "name": "Classic Professional",
+  "fontFamily": "Times New Roman",
+  "aiPrompt": "Keep the tone formal and measured. Favour concrete results from my most recent roles over general statements, and keep each paragraph to three or four sentences.",
+  "blocks": [
+    { "tag": "h1", "align": "center", "text": "{{USER_FULL_NAME}}" },
+    { "align": "center", "text": "{{CONTACT_LINE}}" },
+    "{{TODAY_DATE}}",
+    "{{SALUTATION}}",
+    "I am applying for the {{JOB_TITLE}} position at {{COMPANY_NAME}}, and I would like to explain briefly why I believe my background is a strong match for it.",
+    "{{ROLE_FIT}}",
+    "{{CANDIDATE_STRENGTHS}}",
+    "Thank you for taking the time to review my application. I would welcome the opportunity to discuss how my experience can support the work of your team.",
+    "{{SIGN_OFF}}",
+    "{{USER_FULL_NAME}}"
+  ]
+}

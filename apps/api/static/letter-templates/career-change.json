@@ -1,0 +1,17 @@
+{
+  "systemKey": "career-change",
+  "position": 4,
+  "name": "Career Change",
+  "fontFamily": "Lato",
+  "aiPrompt": "Connect the skills from my previous work to this role in plain language. Be honest that this is a career change, and do not overstate direct experience in the new field.",
+  "blocks": [
+    "{{SALUTATION}}",
+    "I am excited to apply for the {{JOB_TITLE}} role at {{COMPANY_NAME}}. My path to this field has not been a straight line, and I think the ground I have covered is part of what I can offer.",
+    "{{CANDIDATE_STRENGTHS}}",
+    "{{ROLE_FIT}}",
+    "Changing direction has taught me to learn quickly, to ask good questions and to look at familiar problems with fresh eyes. I am ready to put all of that to work for your team.",
+    "Thank you for taking the time to read about where I have been and where I want to go next.",
+    "{{SIGN_OFF}}",
+    "{{USER_FULL_NAME}}"
+  ]
+}

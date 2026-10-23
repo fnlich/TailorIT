@@ -1,0 +1,24 @@
+/* The editor toolbar's and letter menus' icons, one module per icon (see components/ui/icons.ts). */
+export { ArrowUUpLeftIcon } from '@phosphor-icons/react/ArrowUUpLeft';
+export { ArrowUUpRightIcon } from '@phosphor-icons/react/ArrowUUpRight';
+export { CopyIcon } from '@phosphor-icons/react/Copy';
+export { EyeIcon } from '@phosphor-icons/react/Eye';
+export { FileArrowUpIcon } from '@phosphor-icons/react/FileArrowUp';
+export { FileDocIcon } from '@phosphor-icons/react/FileDoc';
+export { FilePdfIcon } from '@phosphor-icons/react/FilePdf';
+export { LinkSimpleIcon } from '@phosphor-icons/react/LinkSimple';
+export { ListBulletsIcon } from '@phosphor-icons/react/ListBullets';
+export { ListIcon } from '@phosphor-icons/react/List';
+export { ListNumbersIcon } from '@phosphor-icons/react/ListNumbers';
+export { QuotesIcon } from '@phosphor-icons/react/Quotes';
+export { SparkleIcon } from '@phosphor-icons/react/Sparkle';
+export { TextAlignCenterIcon } from '@phosphor-icons/react/TextAlignCenter';
+export { TextAlignJustifyIcon } from '@phosphor-icons/react/TextAlignJustify';
+export { TextAlignLeftIcon } from '@phosphor-icons/react/TextAlignLeft';
+export { TextAlignRightIcon } from '@phosphor-icons/react/TextAlignRight';
+export { TextBIcon } from '@phosphor-icons/react/TextB';
+export { TextHOneIcon } from '@phosphor-icons/react/TextHOne';
+export { TextHThreeIcon } from '@phosphor-icons/react/TextHThree';
+export { TextHTwoIcon } from '@phosphor-icons/react/TextHTwo';
+export { TextItalicIcon } from '@phosphor-icons/react/TextItalic';
+export { TextUnderlineIcon } from '@phosphor-icons/react/TextUnderline';

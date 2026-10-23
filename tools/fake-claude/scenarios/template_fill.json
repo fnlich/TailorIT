@@ -1,0 +1,10 @@
+{
+  "values": {
+    "FULL_COVER_LETTER": "Dear Hiring Manager,\n\nI have spent the last several years building products that people rely on every day, and this role is the work I want to do next.\n\nIn my most recent position I took over a release process that regularly slipped by weeks. I found where the delays came from, rewrote the checklist around those findings, and within two quarters we shipped on the planned date.\n\nI would be glad to bring that same care to your team.\n\nSincerely,",
+    "COVER_LETTER_BODY": "I have spent the last several years building products that people rely on every day, and this role is the work I want to do next.\n\nIn my most recent position I took over a release process that regularly slipped by weeks. I found where the delays came from, rewrote the checklist around those findings, and within two quarters we shipped on the planned date.",
+    "COMPANY_APPEAL": "What draws me to your company is the care the job description puts into steady improvement and close work with the people who use the product. That is the way I like to work.",
+    "ROLE_FIT": "The role asks for someone who can bring order to complex work, and that has been the thread through my recent positions. I have taken projects that kept slipping and turned them into plans people could rely on.",
+    "CANDIDATE_STRENGTHS": "My strengths are clear writing, patient problem solving and following through. Colleagues come to me when something is unclear, because I write things down and see them to the end.",
+    "SKILL_HIGHLIGHT": "When a release process at my last company kept slipping by weeks, I traced the delays to their real causes and rebuilt the checklist around them. Within two quarters we were shipping on the planned date."
+  }
+}

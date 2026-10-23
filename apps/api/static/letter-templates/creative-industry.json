@@ -1,0 +1,18 @@
+{
+  "systemKey": "creative-industry",
+  "position": 2,
+  "name": "Creative Industry",
+  "fontFamily": "Poppins",
+  "aiPrompt": "Write with warmth and energy while staying professional. Where it fits, mention a specific project from my resume and what made it work.",
+  "blocks": [
+    "Hello {{COMPANY_NAME}} team,",
+    "When I saw your opening for the {{JOB_TITLE}} role, I knew I wanted to introduce myself and some of the work I am proudest of.",
+    "{{COMPANY_APPEAL}}",
+    "{{SKILL_HIGHLIGHT}}",
+    "The work I enjoy most starts with curiosity and ends with something people remember. I bring that mix of play and care to every brief, and I would love to bring it to your projects.",
+    "Thank you for reading. I would be glad to share more of my portfolio and talk about what we could make together.",
+    "Warm regards,",
+    "{{USER_FULL_NAME}}",
+    "{{USER_PORTFOLIO}}"
+  ]
+}

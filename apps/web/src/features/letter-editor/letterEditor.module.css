@@ -1,0 +1,148 @@
+/*
+ * The letter editor's paper (Simplify's template editor, screenshot 5): a white US Letter page 896 px wide on the
+ * #f8f8f8 canvas, 16 px Times New Roman by default, 1.5 line height, a blank line between paragraphs and 1 in
+ * margins (7em). The print (apps/api cover-letters/document.ts) uses the same proportions at 11 pt.
+ */
+
+.paper {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 896px;
+  aspect-ratio: 8.5 / 11;
+  margin: 0 auto;
+  /* Simplify: 96 px above the first line, 112 px at the sides (percentages are of the paper's width). */
+  padding: clamp(24px, 10.72%, 96px) clamp(28px, 12.5%, 112px);
+  background: #fff;
+  color: #191919;
+  font-size: 16px;
+  line-height: 1.5;
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.035),
+    0 1px 3px rgb(0 0 0 / 0.05),
+    0 8px 24px -12px rgb(0 0 0 / 0.08);
+  cursor: text;
+}
+
+.paper :global(.ProseMirror) {
+  min-height: 100%;
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+
+.paper :global(.ProseMirror) > :first-child {
+  margin-top: 0;
+}
+
+.paper :global(.ProseMirror) > :last-child {
+  margin-bottom: 0;
+}
+
+.paper :global(.ProseMirror p) {
+  margin: 0 0 1.5em;
+}
+
+.paper :global(.ProseMirror h1) {
+  margin: 0 0 0.3em;
+  font-size: 1.75em;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.paper :global(.ProseMirror h2) {
+  margin: 0 0 0.5em;
+  font-size: 1.4em;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.paper :global(.ProseMirror h3) {
+  margin: 0 0 0.5em;
+  font-size: 1.15em;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.paper :global(.ProseMirror blockquote) {
+  margin: 0 0 1.5em;
+  padding-left: 1em;
+  border-left: 3px solid #d7d7d7;
+  color: #3d3d3d;
+}
+
+.paper :global(.ProseMirror blockquote p:last-child) {
+  margin-bottom: 0;
+}
+
+.paper :global(.ProseMirror ul) {
+  margin: 0 0 1.5em;
+  padding-left: 1.6em;
+  list-style: disc;
+}
+
+.paper :global(.ProseMirror ol) {
+  margin: 0 0 1.5em;
+  padding-left: 1.6em;
+  list-style: decimal;
+}
+
+.paper :global(.ProseMirror li > p) {
+  margin: 0;
+}
+
+.paper :global(.ProseMirror a) {
+  color: #0b5c99;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.paper :global(.ProseMirror strong) {
+  font-weight: 700;
+}
+
+.paper :global(.ProseMirror p.is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: #a1a1a1;
+  pointer-events: none;
+}
+
+.paper :global(.ProseMirror-selectednode) {
+  outline: 2px solid #08758c;
+  outline-offset: 1px;
+}
+
+.paper :global(.ProseMirror-gapcursor::after) {
+  border-top-color: #191919;
+}
+
+.readOnly {
+  cursor: default;
+}
+
+/* A {{VARIABLE}} chip (Simplify: radius 4, padding 1px 6px, .85em, weight 500, #e9f6ff / #016094). */
+.variable {
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin: 0 1px;
+  background: #e9f6ff;
+  color: #016094;
+  font-size: 0.85em;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.variable:active {
+  cursor: grabbing;
+}
+
+.readOnly .variable {
+  cursor: default;
+}

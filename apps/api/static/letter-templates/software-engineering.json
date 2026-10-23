@@ -1,0 +1,20 @@
+{
+  "systemKey": "software-engineering",
+  "position": 3,
+  "name": "Software Engineering",
+  "fontFamily": "Roboto",
+  "aiPrompt": "Name the languages, frameworks and systems from my resume that this job asks for. Prefer measurable outcomes such as latency, reliability or scale when my resume states them, and keep the language plain.",
+  "blocks": [
+    { "tag": "h2", "text": "{{USER_FULL_NAME}}" },
+    "{{CONTACT_LINE}}",
+    "{{TODAY_DATE}}",
+    "Dear {{HIRING_MANAGER}},",
+    "I am applying for the {{JOB_TITLE}} position at {{COMPANY_NAME}}. I like building software that people can depend on, and I care as much about how a system is maintained as about how quickly it ships.",
+    "{{ROLE_FIT}}",
+    "{{SKILL_HIGHLIGHT}}",
+    "{{COMPANY_APPEAL}}",
+    "I would be happy to walk through any of this in more detail, including the trade-offs behind the systems I have worked on.",
+    "{{SIGN_OFF}}",
+    "{{USER_FULL_NAME}}"
+  ]
+}

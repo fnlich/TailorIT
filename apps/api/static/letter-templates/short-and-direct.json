@@ -1,0 +1,16 @@
+{
+  "systemKey": "short-and-direct",
+  "position": 6,
+  "name": "Short & Direct",
+  "fontFamily": "Helvetica",
+  "aiPrompt": "Keep the whole letter under 200 words. Write the body as two short paragraphs: what I would bring to the role, and one result from my resume that shows it.",
+  "blocks": [
+    "{{SALUTATION}}",
+    "Please consider me for the {{JOB_TITLE}} role at {{COMPANY_NAME}}.",
+    "{{COVER_LETTER_BODY}}",
+    "Thank you for your time.",
+    "{{SIGN_OFF}}",
+    "{{USER_FULL_NAME}}",
+    "{{CONTACT_LINE}}"
+  ]
+}

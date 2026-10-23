@@ -1,0 +1,114 @@
+'use client';
+
+import { Combobox as BaseCombobox } from '@base-ui/react/combobox';
+import { useQuery } from '@tanstack/react-query';
+import { clsx } from 'clsx';
+import { useEffect, useState } from 'react';
+import { ApplicationListResponseSchema, type ApplicationListResponse, type ApplicationSummary } from '@tailorit/shared/tracker';
+import { MagnifyingGlassIcon } from '@/components/ui/icons';
+import { CONTROL_SURFACE } from '@/components/ui/Input';
+import { MENU_ROW, MENU_SURFACE, Z_FLOATING } from '@/components/ui/styles';
+import { api, isApiError } from '@/lib/api';
+
+/*
+ * "Select a job from tracker": a search over the person's tracked applications (GET /api/applications?q=). Picking
+ * one fills Company Name, Job Title and Job Description. When the tracker's API is not there (yet), the field says
+ * so instead of failing.
+ */
+
+export function JobPicker({ id, onPick }: { id?: string; onPick: (application: ApplicationSummary) => void }) {
+  const [input, setInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(input.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [input]);
+
+  const query = useQuery({
+    queryKey: ['cover-letter', 'job-picker', search],
+    queryFn: ({ signal }) =>
+      api.get<ApplicationListResponse>('/api/applications', {
+        query: { q: search || undefined, limit: 20, tab: 'active' },
+        schema: ApplicationListResponseSchema,
+        signal,
+      }),
+    enabled: open || search !== '',
+    retry: false,
+    staleTime: 30_000,
+  });
+  const missing = query.isError && isApiError(query.error) && (query.error.status === 404 || query.error.status === 405);
+  const items = query.data?.items ?? [];
+
+  if (missing) {
+    return (
+      <input
+        id={id}
+        disabled
+        placeholder="Your tracked jobs will appear here"
+        className={clsx(CONTROL_SURFACE, 'h-9 w-full px-3')}
+      />
+    );
+  }
+
+  return (
+    <BaseCombobox.Root<ApplicationSummary>
+      items={items}
+      filteredItems={items}
+      filter={null}
+      value={null}
+      open={open}
+      onOpenChange={setOpen}
+      inputValue={input}
+      onInputValueChange={setInput}
+      itemToStringLabel={(application) => `${application.title} · ${application.companyName}`}
+      isItemEqualToValue={(a, b) => a.id === b.id}
+      onValueChange={(application) => {
+        if (!application) return;
+        onPick(application);
+        setInput('');
+        setOpen(false);
+      }}
+    >
+      <div className="relative flex w-full items-center">
+        <span className="pointer-events-none absolute left-3 flex text-muted-foreground">
+          <MagnifyingGlassIcon size={16} />
+        </span>
+        <BaseCombobox.Input id={id} placeholder="Search a job" className={clsx(CONTROL_SURFACE, 'h-9 w-full min-w-0 pr-3 pl-9')} />
+      </div>
+      <BaseCombobox.Portal>
+        <BaseCombobox.Positioner sideOffset={6} className={clsx(Z_FLOATING, 'outline-none')}>
+          <BaseCombobox.Popup
+            className={clsx(
+              MENU_SURFACE,
+              'max-h-[min(18rem,var(--available-height))] w-(--anchor-width) max-w-(--available-width) overflow-y-auto overscroll-contain',
+            )}
+          >
+            <p className="px-1.5 py-2 text-sm text-muted-foreground empty:hidden">
+              {query.isFetching && items.length === 0
+                ? 'Searching...'
+                : query.isError
+                  ? 'Your tracked jobs could not be loaded.'
+                  : items.length === 0
+                    ? search
+                      ? 'No tracked jobs match.'
+                      : 'No tracked jobs yet. Add one in the Job Tracker.'
+                    : ''}
+            </p>
+            <BaseCombobox.List className="outline-none">
+              {(application: ApplicationSummary) => (
+                <BaseCombobox.Item key={application.id} value={application} className={MENU_ROW}>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate font-medium">{application.title}</span>
+                    <span className="truncate text-xs leading-4 text-muted-foreground">{application.companyName}</span>
+                  </span>
+                </BaseCombobox.Item>
+              )}
+            </BaseCombobox.List>
+          </BaseCombobox.Popup>
+        </BaseCombobox.Positioner>
+      </BaseCombobox.Portal>
+    </BaseCombobox.Root>
+  );
+}
