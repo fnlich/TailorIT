@@ -18,7 +18,7 @@ export function readEnvText(filePath) {
   if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
     return Buffer.from(buffer.subarray(2)).swap16().toString('utf16le');
   }
-  return buffer.toString('utf8').replace(/^﻿/, '');
+  return buffer.toString('utf8').replace(/^\uFEFF/, '');
 }
 
 /** `KEY=value` lines, `#` comments, optional `export `, single or double quotes (double quotes honour \n). */
