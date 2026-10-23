@@ -40,7 +40,17 @@ export function startAuth(deps: AppDeps): () => void {
     deps.log.info('[auth] SMTP is not configured: sign-in codes are printed in this console instead of emailed.');
   }
   if (deps.config.auth.devFixedCode) {
-    deps.log.warn('[auth] AUTH_DEV_FIXED_CODE is set: that code signs in ANY address. Use it for tests only.');
+    // Loud on purpose: with this set, the sign-in page is open to whoever can reach the web server.
+    const rule = `[auth] ${'!'.repeat(100)}`;
+    deps.log.warn(rule);
+    deps.log.warn(
+      '[auth] AUTH_DEV_FIXED_CODE is set: anyone who can reach this server can sign in as any address, ' +
+        'administrators included.',
+    );
+    deps.log.warn(
+      '[auth] Use it for automated tests only, and keep the web server on localhost (WEB_HOST) while it is set.',
+    );
+    deps.log.warn(rule);
   }
 
   const timer = setInterval(prune, PRUNE_EVERY_MS);

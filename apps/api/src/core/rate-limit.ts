@@ -51,7 +51,7 @@ export const SIGN_IN_WINDOW_MS = 10 * 60_000;
 export const SIGN_IN_ADDRESS_LIMIT = 10;
 /** Attempts per address per day: caps slow guessing that stays under the 10-minute limit. */
 export const SIGN_IN_ADDRESS_DAILY_LIMIT = 30;
-/** All sign-in attempts together per 10 minutes: protects the SMTP account from being used to mail many addresses. */
+/** Code emails sent per 10 minutes, all addresses together: protects the SMTP account from mailing many addresses. */
 export const SIGN_IN_GLOBAL_LIMIT = 300;
 
 const DAY_MS = 24 * 60 * 60_000;
@@ -71,19 +71,58 @@ function addressOf(req: Request): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
+/** POST /auth/email/request, the one sign-in route that sends an email. */
+function isCodeRequest(req: Request): boolean {
+  return req.originalUrl.split('?')[0]!.endsWith('/email/request');
+}
+
 /**
- * The sign-in limits, shared by POST /auth/email/request, /auth/email/verify and /auth/google. Every code request
- * counts (each one sends an email) and so does every refusal; a sign-in that worked does not.
+ * The backstop on code emails, all addresses together: SIGN_IN_GLOBAL_LIMIT per SIGN_IN_WINDOW_MS (a sliding window).
+ * A code request counts when it ends, answered or abandoned by its client, unless it was refused (status >= 400 by
+ * then): an abandoned request may still be sending its email, while refusals send nothing. Requests still running hold
+ * a place, so a burst cannot overshoot. (express-rate-limit cannot say this: it either keeps abandoned requests on the
+ * count, junk included, or drops them, emails included.)
+ */
+function codeEmailBackstop(deps: Pick<AppDeps, 'now'>, skip: () => boolean): RequestHandler {
+  let sent: number[] = [];
+  let running = 0;
+  return (req, res, next) => {
+    if (skip() || !isCodeRequest(req)) return next();
+    const now = deps.now().getTime();
+    sent = sent.filter((at) => now - at < SIGN_IN_WINDOW_MS);
+    if (sent.length + running >= SIGN_IN_GLOBAL_LIMIT) {
+      const oldest = sent[0] ?? now;
+      const retryAfterSeconds = Math.max(1, Math.ceil((oldest + SIGN_IN_WINDOW_MS - now) / 1000));
+      const message = `There have been too many sign-in attempts. ${waitSentence(retryAfterSeconds)}`;
+      return next(new AppError('rate_limited', message, { retryAfterSeconds }));
+    }
+    running += 1;
+    let ended = false;
+    const end = () => {
+      if (ended) return;
+      ended = true;
+      running -= 1;
+      if (res.statusCode < 400) sent.push(deps.now().getTime());
+    };
+    res.once('finish', end);
+    res.once('close', end);
+    next();
+  };
+}
+
+/**
+ * The sign-in limits, shared by POST /auth/email/request, /auth/email/verify and /auth/google.
  *
- * - Per address: 10 per 10 minutes and 30 per day. On top of the per-code rules (60 s resend cooldown, 5 attempts per
+ * - Per address: 10 per 10 minutes and 30 per day. Every code request counts (each one sends an email) and so does
+ *   every refusal; a sign-in that worked does not. On top of the per-code rules (60 s resend cooldown, 5 attempts per
  *   code) this caps guessing against one account however many networks the guesses come from.
- * - Everything together: 300 per 10 minutes, a backstop against using the server to mail many addresses.
- * Google sign-ins name no address; Google's own token verification is what stops guessing there, so they only meet the
- * backstop.
+ * - Everything together: 300 code emails per 10 minutes, a backstop against using the server to mail many addresses.
+ *   Only code requests that send an email count, and only code requests are held back: if refusals counted, a few
+ *   hundred junk requests (no address, wrong codes) would lock everyone out of signing in, renewably.
+ * Google sign-ins name no address; Google's own token verification is what stops guessing there.
  */
 export function signInRateLimit(deps: AppDeps): RequestHandler[] {
-  const counts = (req: Request, status: number) =>
-    status >= 400 || req.originalUrl.split('?')[0]!.endsWith('/email/request');
+  const counts = (req: Request, status: number) => status >= 400 || isCodeRequest(req);
   // AUTH_DEV_FIXED_CODE (development and tests only) lets anyone sign in as anyone, so limiting attempts protects
   // nothing there, while automated tests sign in many times.
   const skip = () => deps.config.auth.devFixedCode !== null;
@@ -94,19 +133,12 @@ export function signInRateLimit(deps: AppDeps): RequestHandler[] {
       key: (req) => `address:${addressOf(req)}`,
       message: (seconds) => `There have been too many sign-in attempts for this address. ${waitSentence(seconds)}`,
       counts,
-      // A request without an address (Google) is the backstop's to count.
+      // A request without an address (Google, or no body at all) has nothing to key on.
       skip: (req) => skip() || addressOf(req) === '',
     });
 
   return [
-    keyedRateLimit({
-      windowMs: SIGN_IN_WINDOW_MS,
-      limit: SIGN_IN_GLOBAL_LIMIT,
-      key: () => 'all',
-      message: (seconds) => `There have been too many sign-in attempts. ${waitSentence(seconds)}`,
-      counts,
-      skip,
-    }),
+    codeEmailBackstop(deps, skip),
     perAddress(SIGN_IN_WINDOW_MS, SIGN_IN_ADDRESS_LIMIT),
     perAddress(DAY_MS, SIGN_IN_ADDRESS_DAILY_LIMIT),
   ];

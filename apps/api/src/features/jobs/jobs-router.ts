@@ -94,7 +94,7 @@ export function createJobsRouter(deps: AppDeps): Router {
   router.get('/:id/analysis', (req, res) => {
     const jobId = jobIdOf(req);
     requireJob(deps, jobId);
-    const analysis = analysisForJob(deps, jobId, { queue: true });
+    const analysis = analysisForJob(deps, jobId, { queue: true, userId: userOf(req).id });
     if (!analysis) throw notFound('That job');
     res.json(analysis);
   });

@@ -660,7 +660,7 @@ describe('GET /api/jobs/:id/analysis', () => {
 
   it("asks J1's service (queueing the AI analysis) and passes on its refining flag; falls back when it fails", async () => {
     const id = insertJob(ctx.deps.db, { title: 'Platform Engineer', description: posting });
-    const calls: Array<{ jobId: number; interactive?: boolean; via: string }> = [];
+    const calls: Array<{ jobId: number; interactive?: boolean; requestedBy?: string; via: string }> = [];
     const view: JobAnalysisView = {
       source: 'ai',
       refining: false,
@@ -674,7 +674,7 @@ describe('GET /api/jobs/:id/analysis', () => {
     };
     ctx.deps.services.jobAnalysis = {
       ensure: (jobId, options) => {
-        calls.push({ jobId, interactive: options?.interactive, via: 'ensure' });
+        calls.push({ jobId, interactive: options?.interactive, requestedBy: options?.requestedBy, via: 'ensure' });
         return { analysis: view, refining: true };
       },
       get: (jobId) => {
@@ -684,7 +684,8 @@ describe('GET /api/jobs/:id/analysis', () => {
     };
     const res = await get(`/api/jobs/${id}/analysis`);
     expect(res.body).toMatchObject({ source: 'ai', refining: true, requirements: ['From the AI'] });
-    expect(calls).toEqual([{ jobId: id, interactive: true, via: 'ensure' }]);
+    // A view queues on the background slot, against the viewer's hourly budget of new AI analyses.
+    expect(calls).toEqual([{ jobId: id, interactive: false, requestedBy: me.account.id, via: 'ensure' }]);
 
     // The match reads the current analysis without queueing anything.
     insertResume(ctx.deps.db, me.account.id, 'I run k8s in production.');

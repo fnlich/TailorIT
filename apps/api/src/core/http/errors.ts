@@ -78,6 +78,15 @@ export function errorHandler(log: Logger): ErrorRequestHandler {
       sendError(res, new AppError('file_too_large', 'That request is too large.'), req.requestId);
       return;
     }
+    // Any other client error a library raised (a path parameter that does not decode, a charset body-parser cannot
+    // read...) stays a client error. Its own message is not shown: it can quote the request or name internals.
+    if (Number.isInteger(status) && status >= 400 && status < 500) {
+      log.debug(`[${req.requestId}] ${req.method} ${req.originalUrl}: ${status} ${err?.message ?? String(err)}`);
+      const answer =
+        status === 404 ? notFound() : new AppError('validation_failed', 'The request is not valid.', { status });
+      sendError(res, answer, req.requestId);
+      return;
+    }
     log.error(`[${req.requestId}] ${req.method} ${req.originalUrl} failed`, err);
     sendError(res, new AppError('internal', 'Something went wrong on our side. Please try again.'), req.requestId);
   };

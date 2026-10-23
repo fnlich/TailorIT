@@ -212,7 +212,14 @@ export function createResumesRouter(deps: AppDeps): Router {
       const store = getFileStore(deps);
       // The store checks the size and what the bytes are (PDF or DOCX; a .doc is refused with a hint).
       const stored = store.save({ userId, purpose: 'resume', buffer: upload.buffer, originalName: upload.originalname });
-      const reading = await readUpload(deps, upload.buffer, stored.kind);
+      let reading: Awaited<ReturnType<typeof readUpload>>;
+      try {
+        reading = await readUpload(deps, upload.buffer, stored.kind);
+      } catch (error) {
+        // The reader refused the file (too large unpacked, damaged, timed out) or is busy: keep nothing.
+        store.remove(stored.id, userId);
+        throw error;
+      }
       if (parse && !readableForImport(reading.text)) {
         store.remove(stored.id, userId);
         throw validationFailed(UNREADABLE_TEXT);

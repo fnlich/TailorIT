@@ -11,7 +11,8 @@ import type { EnsuredAnalysis, JobAnalysisService } from './types';
 
 // The analysis a job shows (docs/ARCHITECTURE.md §9): the best one stored for its text (AI > free_tailor lake >
 // deterministic). With AI_JOB_ANALYSIS=lazy, the first view of a job without an AI analysis queues one, system-owned
-// and deduplicated by the text's hash; the page shows the current best with "Refining..." until it lands.
+// and deduplicated by the text's hash; the page shows the current best with "Refining..." until it lands. Views queue
+// on the background slot, and each account starts at most AI_ANALYSES_PER_USER_PER_HOUR new ones.
 
 /** A failed AI analysis of one text is not asked for again for this long. */
 export const RETRY_AFTER_FAILURE_MS = 30 * 60_000;
@@ -25,6 +26,15 @@ const MIN_TEXT_FOR_AI = 80;
  * behind a pile of system work on the CLI's few slots.
  */
 export const MAX_PENDING_ANALYSES = 3;
+
+/**
+ * New AI analyses one account can start per hour by opening jobs (a sliding window, in memory). Past it, that account
+ * sees the current best analysis without "Refining..." until the hour has moved on; jobs that already have an AI
+ * analysis, or one under way, are not limited. Without it, one script sweeping job ids would keep the CLI busy with
+ * system work, on the owner's subscription, for as long as it ran.
+ */
+export const AI_ANALYSES_PER_USER_PER_HOUR = 20;
+const BUDGET_WINDOW_MS = 60 * 60_000;
 
 export const JobAnalysisTaskInputSchema = z.object({
   jobId: z.number().int().positive(),
@@ -106,6 +116,8 @@ export function createJobAnalysisService(deps: AppDeps): JobAnalysisServiceInter
   const { db, log } = deps;
   /** contentHash -> when its last AI analysis failed (this process only). */
   const failedAt = new Map<string, number>();
+  /** userId -> when the AI analyses that account started began, within the budget window (this process only). */
+  const startedBy = new Map<string, number[]>();
 
   const sql = {
     job: db.prepare<[number], JobRow>(`${JOB_SELECT} WHERE j.id = ?`),
@@ -160,18 +172,39 @@ export function createJobAnalysisService(deps: AppDeps): JobAnalysisServiceInter
     return !(failed !== undefined && Date.now() - failed < RETRY_AFTER_FAILURE_MS);
   }
 
-  function queue(job: JobRow, priority: 'interactive' | 'background'): boolean {
+  /** An account's analyses started within the window (and the map forgets accounts whose window is empty). */
+  function recentStarts(userId: string, nowMs: number): number[] {
+    const recent = (startedBy.get(userId) ?? []).filter((at) => nowMs - at < BUDGET_WINDOW_MS);
+    if (recent.length > 0) startedBy.set(userId, recent);
+    else startedBy.delete(userId);
+    return recent;
+  }
+
+  function withinBudget(userId: string): boolean {
+    return recentStarts(userId, deps.now().getTime()).length < AI_ANALYSES_PER_USER_PER_HOUR;
+  }
+
+  function spendBudget(userId: string): void {
+    const nowMs = deps.now().getTime();
+    startedBy.set(userId, [...recentStarts(userId, nowMs), nowMs]);
+    if (startedBy.size > 1000) for (const id of [...startedBy.keys()]) recentStarts(id, nowMs);
+  }
+
+  function queue(job: JobRow, priority: 'interactive' | 'background', requestedBy?: string): boolean {
     const service = ai();
     if (!service || !canAsk(job)) return false;
     if ((sql.pending.get()?.n ?? 0) >= MAX_PENDING_ANALYSES) return false;
+    if (requestedBy !== undefined && !withinBudget(requestedBy)) return false;
     try {
-      service.enqueue({
+      // System-owned (the result serves everyone who opens the job); the account that asked pays from its budget.
+      const accepted = service.enqueue({
         kind: 'job_analysis',
         userId: null,
         input: { jobId: job.id, contentHash: job.content_hash, version: JOB_ANALYSIS_PROMPT_VERSION } satisfies JobAnalysisTaskInput,
         priority,
         dedupeKey: dedupeKeyOf(job.content_hash),
       });
+      if (requestedBy !== undefined && !accepted.deduped) spendBudget(requestedBy);
       return true;
     } catch (error) {
       // Paused, turned off, no background slot: the deterministic analysis stands.
@@ -266,7 +299,11 @@ export function createJobAnalysisService(deps: AppDeps): JobAnalysisServiceInter
       if (!job) return null;
       const { best, hasCurrentAi } = current(job);
       let refining = false;
-      if (!hasCurrentAi) refining = isRefining(job.content_hash) || queue(job, options.interactive ? 'interactive' : 'background');
+      if (!hasCurrentAi) {
+        refining =
+          isRefining(job.content_hash) ||
+          queue(job, options.interactive ? 'interactive' : 'background', options.requestedBy);
+      }
       return { analysis: analysisView(best, job, refining), refining };
     },
 

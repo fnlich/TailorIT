@@ -10,13 +10,23 @@ export interface EnsuredAnalysis {
   refining: boolean;
 }
 
+export interface EnsureOptions {
+  /** Queue at interactive priority instead of on the background slot. */
+  interactive?: boolean;
+  /**
+   * The account whose request this is. A new AI analysis it starts counts against that account's hourly budget
+   * (AI_ANALYSES_PER_USER_PER_HOUR); past it, the current best analysis is shown and nothing is queued.
+   */
+  requestedBy?: string;
+}
+
 export interface JobAnalysisService {
   /**
    * The analysis to show for a job. With AI_JOB_ANALYSIS=lazy and no AI analysis yet, queues one (deduplicated by the
-   * posting's content hash; interactive priority when a person is looking) and answers the current best meanwhile.
+   * posting's content hash; background priority unless `interactive`) and answers the current best meanwhile.
    * Null when the job does not exist.
    */
-  ensure(jobId: number, options?: { interactive?: boolean }): EnsuredAnalysis | null;
+  ensure(jobId: number, options?: EnsureOptions): EnsuredAnalysis | null;
   /** The current best analysis without queueing anything. */
   get(jobId: number): EnsuredAnalysis | null;
 }

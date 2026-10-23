@@ -3,12 +3,17 @@ import { requireAi } from '../src/ai/index';
 import { amountStated, finishAiAnalysis, grounded } from '../src/features/job-analysis/ai';
 import { DETERMINISTIC_VERSION } from '../src/features/job-analysis/deterministic';
 import { JobAnalysisOutputSchema, jobAnalysisPrompt } from '../src/features/job-analysis/prompt';
-import { dedupeKeyOf, type JobAnalysisServiceInternals } from '../src/features/job-analysis/service';
+import {
+  AI_ANALYSES_PER_USER_PER_HOUR,
+  dedupeKeyOf,
+  type JobAnalysisServiceInternals,
+} from '../src/features/job-analysis/service';
 import { saveAnalysis } from '../src/features/job-analysis/store';
 import { startJobAnalysisWarmup } from '../src/features/job-analysis/warmup';
 import { createIngestService } from '../src/features/ingest/service';
 import { insertSource } from '../src/features/ingest/sources';
 import type { RawPosting } from '../src/features/ingest/types';
+import { signIn } from './auth-helpers';
 import { createTestContext, TEST_NOW, type TestContext } from './helpers';
 
 // The job analysis service against the fake Claude CLI (tools/fake-claude/scenarios/job_analysis.json).
@@ -223,6 +228,66 @@ describe('JobAnalysisService', () => {
     expect(warmup.tick()).toBeNull();
     await requireAi(context.deps).waitFor(analysisTasks(context)[0]!.id);
   });
+});
+
+describe('analyses started by opening jobs', () => {
+  /** The analysis task queued for one job (created_at is the frozen clock, so order by it says nothing). */
+  const taskFor = (context: TestContext, jobId: number) =>
+    analysisTasks(context).find((task) => (JSON.parse(task.input) as { jobId: number }).jobId === jobId);
+
+  it('run on the background slot, owned by no one, when a person opens a job', async () => {
+    const { ctx: context } = await setup();
+    const viewer = await signIn(context, 'viewer@example.com');
+    const job = context.deps.db.prepare('SELECT id FROM jobs').get() as { id: number };
+    const first = await viewer.agent.get(`/api/jobs/${job.id}/analysis`);
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({ source: 'deterministic', refining: true });
+    const task = taskFor(context, job.id)!;
+    expect(task).toMatchObject({ priority: 0, user_id: null });
+    await requireAi(context.deps).waitFor(task.id);
+    expect((await viewer.agent.get(`/api/jobs/${job.id}/analysis`)).body).toMatchObject({ source: 'ai', refining: false });
+  });
+
+  it(`are limited to ${AI_ANALYSES_PER_USER_PER_HOUR} new ones per account per hour`, async () => {
+    const count = AI_ANALYSES_PER_USER_PER_HOUR + 2;
+    const postings = Array.from({ length: count }, (_, index) =>
+      posting(String(index + 1), {
+        title: `Platform Engineer, Team ${index + 1}`,
+        descriptionHtml: `${DESCRIPTION}<p>Team ${index + 1} owns its own corner of the platform.</p>`,
+        url: `https://jobs.example.com/acme/team-${index + 1}`,
+      }),
+    );
+    const { ctx: context, analysis } = await setup({}, postings);
+    const ids = (context.deps.db.prepare('SELECT id FROM jobs ORDER BY id').all() as Array<{ id: number }>).map((row) => row.id);
+    expect(ids).toHaveLength(count);
+    const open = (jobId: number, userId: string) => analysis.ensure(jobId, { requestedBy: userId })!;
+    const finish = (jobId: number) => requireAi(context.deps).waitFor(taskFor(context, jobId)!.id);
+
+    // One at a time, so the global cap on pending analyses never decides.
+    for (const id of ids.slice(0, AI_ANALYSES_PER_USER_PER_HOUR)) {
+      expect(open(id, 'sweeper').refining).toBe(true);
+      await finish(id);
+    }
+    const spent = analysisTasks(context).length;
+    expect(spent).toBe(AI_ANALYSES_PER_USER_PER_HOUR);
+
+    // Over budget: the deterministic analysis, without "Refining...", and nothing queued.
+    const refused = open(ids[AI_ANALYSES_PER_USER_PER_HOUR]!, 'sweeper');
+    expect(refused).toMatchObject({ refining: false, analysis: { source: 'deterministic', refining: false } });
+    expect(analysisTasks(context)).toHaveLength(spent);
+    // What is already analysed costs nothing; another account has its own budget; and a job someone else had queued
+    // shows as refining to the sweeper too, without spending anything.
+    expect(open(ids[0]!, 'sweeper')).toMatchObject({ refining: false, analysis: { source: 'ai' } });
+    expect(open(ids[AI_ANALYSES_PER_USER_PER_HOUR]!, 'someone-else').refining).toBe(true);
+    expect(open(ids[AI_ANALYSES_PER_USER_PER_HOUR]!, 'sweeper').refining).toBe(true);
+    await finish(ids[AI_ANALYSES_PER_USER_PER_HOUR]!);
+    expect(open(ids[AI_ANALYSES_PER_USER_PER_HOUR + 1]!, 'sweeper').refining).toBe(false);
+
+    // A sliding hour: once the first ones are an hour old, the account may start new ones again.
+    context.setNow(new Date(TEST_NOW.getTime() + 60 * 60_000 + 1_000));
+    expect(open(ids[AI_ANALYSES_PER_USER_PER_HOUR + 1]!, 'sweeper').refining).toBe(true);
+    await finish(ids[AI_ANALYSES_PER_USER_PER_HOUR + 1]!);
+  }, 60_000);
 });
 
 describe('AI analysis post-processing', () => {

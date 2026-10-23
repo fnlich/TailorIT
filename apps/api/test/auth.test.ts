@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
+import type { Request, Response } from 'express';
 import { afterEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { AccountSchema, AuthOptionsSchema } from '@tailorit/shared';
 import type { GoogleTokenPayload } from '../src/core/auth/google';
 import type { MailMessage } from '../src/core/mail/mailer';
-import { SIGN_IN_GLOBAL_LIMIT } from '../src/core/rate-limit';
+import { SIGN_IN_GLOBAL_LIMIT, signInRateLimit } from '../src/core/rate-limit';
 import { startAuth } from '../src/features/auth/index';
 import { signIn, type TestAgent } from './auth-helpers';
 import { createTestContext, ORIGIN, TEST_NOW, type TestContext } from './helpers';
@@ -443,6 +445,18 @@ describe('sessions', () => {
     }
   });
 
+  it('warns loudly at startup while the development fixed code is on, and only then', () => {
+    const lines = (c: TestContext) => (c.deps.log as unknown as { lines: string[] }).lines;
+    const fixed = use();
+    startAuth(fixed.deps)();
+    const warning = lines(fixed).filter((line) => line.startsWith('warn [auth]') && /AUTH_DEV_FIXED_CODE/.test(line));
+    expect(warning.join('\n')).toMatch(/anyone who can reach this server can sign in as any address/);
+    fixed.cleanup();
+    const quiet = use({ env: CODES_IN_LOG });
+    startAuth(quiet.deps)();
+    expect(lines(quiet).some((line) => /AUTH_DEV_FIXED_CODE/.test(line))).toBe(false);
+  });
+
   it('prunes expired sessions and codes at startup', async () => {
     const c = use();
     const { account } = await signIn(c, 'prune@example.com');
@@ -642,15 +656,66 @@ describe('sign-in rate limit', () => {
     expect((await fail()).status).toBe(429); // 11
   });
 
-  it('has a global backstop across all addresses', async () => {
+  it('has a global backstop on code emails across all addresses, which never holds back signing in', async () => {
     const c = use({ env: CODES_IN_LOG });
     for (let i = 0; i < SIGN_IN_GLOBAL_LIMIT; i += 1) {
-      const res = await send(c, '/api/auth/email/verify', { email: `nobody${i}@example.com`, code: '123456' });
-      expect(res.status).toBe(401);
+      const res = await send(c, '/api/auth/email/request', { email: `person${i}@example.com` });
+      expect(res.status).toBe(200);
     }
-    const blocked = await send(c, '/api/auth/email/verify', { email: 'fresh@example.com', code: '123456' });
+    const blocked = await send(c, '/api/auth/email/request', { email: 'fresh@example.com' });
     expect(blocked.status).toBe(429);
     expect(blocked.body.error.message).toMatch(/^There have been too many sign-in attempts\. Please wait/);
+    // It protects the mail account: codes already sent still sign in, and Google is not affected.
+    const code = loggedCode(c, 'person0@example.com');
+    expect((await send(c, '/api/auth/email/verify', { email: 'person0@example.com', code })).status).toBe(200);
+    expect((await send(c, '/api/auth/google', { credential: 'x' })).status).not.toBe(429);
+  });
+
+  it('does not let a flood of junk sign-in requests lock everyone out', async () => {
+    const c = use({ env: CODES_IN_LOG });
+    const junk = [
+      (i: number) => send(c, '/api/auth/email/request', i % 8 === 0 ? {} : { email: `not an address ${i}` }),
+      () => send(c, '/api/auth/email/verify', {}),
+      (i: number) => send(c, '/api/auth/email/verify', { email: `nobody${i}@example.com`, code: '123456' }),
+      () => send(c, '/api/auth/google', { credential: 'x' }),
+    ];
+    for (let i = 0; i < SIGN_IN_GLOBAL_LIMIT + 40; i += 1) {
+      const res = await junk[i % junk.length]!(i);
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.status).not.toBe(429);
+    }
+    const real = await send(c, '/api/auth/email/request', { email: 'owner@example.com' });
+    expect(real.status).toBe(200);
+    const code = loggedCode(c, 'owner@example.com');
+    expect((await send(c, '/api/auth/email/verify', { email: 'owner@example.com', code })).status).toBe(200);
+  });
+
+  it('counts abandoned code requests that may be sending an email, never abandoned refusals', () => {
+    const c = use({ env: CODES_IN_LOG });
+    const [backstop] = signInRateLimit(c.deps);
+    /** One code request through the backstop, its answer's status already decided, and how next() was called. */
+    const start = (status: number) => {
+      const req = { originalUrl: '/api/auth/email/request', body: {} } as unknown as Request;
+      const res = Object.assign(new EventEmitter(), { statusCode: status }) as unknown as Response;
+      let passed: unknown = 'next was not called';
+      backstop!(req, res, (error?: unknown) => {
+        passed = error;
+      });
+      return { res, passed: () => passed };
+    };
+    // Refused, then the client went away: costs nothing, however many.
+    for (let i = 0; i < SIGN_IN_GLOBAL_LIMIT + 10; i += 1) start(400).res.emit('close');
+    // Requests still running hold a place...
+    const running = Array.from({ length: SIGN_IN_GLOBAL_LIMIT }, () => start(200));
+    expect(running.every((one) => one.passed() === undefined)).toBe(true);
+    expect(start(200).passed()).toMatchObject({ code: 'rate_limited' });
+    // ...and give it back when they end refused.
+    running[0]!.res.statusCode = 422;
+    running[0]!.res.emit('close');
+    expect(start(200).passed()).toBeUndefined();
+    // Abandoned while the code was on its way (status still 200): counted, so the backstop stays shut.
+    for (const one of running.slice(1)) one.res.emit('close');
+    expect(start(200).passed()).toMatchObject({ code: 'rate_limited' });
   });
 
   it('is off while the development fixed code is configured', async () => {

@@ -1,17 +1,21 @@
-import mammoth from 'mammoth';
-import { PDFParse } from 'pdf-parse';
 import { textToHtmlParagraphs } from '@tailorit/shared';
-import { detectFileKind, type FileKind } from '../../core/files/index';
+import { detectFileKind, parseDocx, parsePdf, type FileKind, type PdfTextItem } from '../../core/files/index';
 import { AppError } from '../../core/http/errors';
 
 // Uploaded cover letters and templates: the text of a PDF or DOCX, split into paragraphs, as editor HTML. Loose
 // variable spellings that PDF text extraction produces (`{ {COMPANY_NAME} }`) are read as `{{COMPANY_NAME}}`.
+// The file itself is read in the sandboxed reader process (core/files/parse.ts); the paragraphs are found here.
 
 export const UNSUPPORTED_UPLOAD = 'Please upload a PDF or DOCX file.';
 const UNREADABLE =
   'We could not read any text in that file. If it is a scanned PDF, upload a DOCX or a PDF with selectable text.';
+const DAMAGED = 'Could not read file. It may be damaged; try saving it again and uploading the copy.';
 /** Letters are short; anything past this is cut (a stray 300-page PDF must not become one paragraph each). */
 const MAX_TEXT = 60_000;
+/** A letter or template is a page or two: only the first pages of a PDF are read. */
+export const LETTER_MAX_PDF_PAGES = 10;
+/** A Word file's text is cut to this in the reader, before any other work (MAX_TEXT of it is kept). */
+const MAX_DOCX_TEXT = 200_000;
 
 /** The kind of an uploaded letter or template, from its bytes: PDF or DOCX, else 415. */
 export function uploadKind(buffer: Buffer): Extract<FileKind, 'pdf' | 'docx'> {
@@ -21,18 +25,6 @@ export function uploadKind(buffer: Buffer): Extract<FileKind, 'pdf' | 'docx'> {
   throw new AppError('unsupported_file', `${UNSUPPORTED_UPLOAD}${hint}`);
 }
 
-/** The parts of pdf.js's document that pdf-parse loads and that paragraph finding reads. */
-interface PdfTextItem {
-  str?: string;
-  transform?: number[];
-  width?: number;
-  height?: number;
-}
-interface PdfDocumentLike {
-  numPages: number;
-  getPage(pageNumber: number): Promise<{ getTextContent(): Promise<{ items: PdfTextItem[] }>; cleanup?: () => void }>;
-}
-
 export interface PdfLine {
   y: number;
   height: number;
@@ -40,12 +32,12 @@ export interface PdfLine {
   page: number;
 }
 
-/** The page's text items as lines (top to bottom), words spaced by their positions. */
-async function pdfLines(doc: PdfDocumentLike): Promise<PdfLine[]> {
+/** Each page's text items (pdf.js, first page first) as lines, top to bottom, words spaced by their positions. */
+export function pdfLines(pages: readonly (readonly PdfTextItem[])[]): PdfLine[] {
   const lines: PdfLine[] = [];
-  for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
-    const page = await doc.getPage(pageNumber);
-    const { items } = await page.getTextContent();
+  for (let index = 0; index < pages.length; index += 1) {
+    const pageNumber = index + 1;
+    const items = pages[index]!;
     let line: (PdfLine & { endX: number }) | null = null;
     for (const item of items) {
       if (typeof item.str !== 'string' || !item.transform) continue;
@@ -64,7 +56,6 @@ async function pdfLines(doc: PdfDocumentLike): Promise<PdfLine[]> {
       line = { y, height, text: item.str, page: pageNumber, endX: x + (item.width ?? 0) };
     }
     if (line) lines.push(line);
-    page.cleanup?.();
   }
   return lines
     .map(({ y, height, text, page }) => ({ y, height, page, text: text.replace(/\s+/g, ' ').trim() }))
@@ -110,27 +101,27 @@ export function paragraphsFromLines(lines: readonly PdfLine[]): string {
 }
 
 async function pdfText(buffer: Buffer): Promise<string> {
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
+  const pdf = await parsePdf(buffer, {
+    maxPages: LETTER_MAX_PDF_PAGES,
+    textOptions: { pageJoiner: '', cellSeparator: ' ' },
+    items: true,
+  });
+  if (pdf.text === null) throw new Error(pdf.problems.join('; ') || 'The PDF has no readable text.');
+  const fallback = () => pdfLinesToParagraphs(pdf.pages.map((page) => page.text).join('\n\n'));
+  // The text items' positions show where paragraphs end.
+  if (!pdf.items) return fallback();
   try {
-    const result = await parser.getText({ pageJoiner: '', cellSeparator: ' ' });
-    const fallback = () => pdfLinesToParagraphs(result.pages.map((page) => page.text).join('\n\n'));
-    // pdf-parse keeps the pdf.js document it loaded; its text positions show where paragraphs end.
-    const doc = (parser as unknown as { doc?: PdfDocumentLike }).doc;
-    if (!doc || typeof doc.getPage !== 'function') return fallback();
-    try {
-      const text = paragraphsFromLines(await pdfLines(doc));
-      return text.trim() ? text : fallback();
-    } catch {
-      return fallback();
-    }
-  } finally {
-    await parser.destroy().catch(() => undefined);
+    const text = paragraphsFromLines(pdfLines(pdf.items));
+    return text.trim() ? text : fallback();
+  } catch {
+    return fallback();
   }
 }
 
 async function docxText(buffer: Buffer): Promise<string> {
-  const result = await mammoth.extractRawText({ buffer });
-  return result.value;
+  const docx = await parseDocx(buffer, { maxChars: MAX_DOCX_TEXT });
+  if (docx.text === null) throw new Error(docx.problems.join('; ') || 'The document has no readable text.');
+  return docx.text;
 }
 
 /**
@@ -182,9 +173,9 @@ export async function extractUploadText(buffer: Buffer): Promise<{ kind: 'pdf' |
   try {
     text = kind === 'pdf' ? await pdfText(buffer) : await docxText(buffer);
   } catch (error) {
-    throw new AppError('unsupported_file', 'Could not read file. It may be damaged; try saving it again and uploading the copy.', {
-      cause: error,
-    });
+    // The reader's own refusals (too large once unpacked, too complex, busy) already say what happened.
+    if (error instanceof AppError) throw error;
+    throw new AppError('unsupported_file', DAMAGED, { cause: error });
   }
   const clean = text.split(String.fromCharCode(0)).join('').slice(0, MAX_TEXT).trim();
   if (!clean) throw new AppError('unsupported_file', UNREADABLE);

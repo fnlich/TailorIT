@@ -6,6 +6,7 @@ import { nowIso, type AppDeps } from '../context';
 import { AppError, notFound } from '../http/errors';
 import { detectFileKind, isPasswordProtectedOffice, kindOfMime, MIME_BY_KIND, type FileKind } from './detect';
 import { cleanFileName } from './names';
+import { assertDocxUnpackable } from './unpack';
 import { createUploadSingle, fileTooLarge, type UploadSingleOptions } from './upload';
 
 // Uploaded files live under <DATA_DIR>/files/<userId>/<fileId> (thumbnails beside them as <fileId>.thumb.png), with
@@ -46,7 +47,10 @@ export interface FileStore {
   readonly root: string;
   /** UPLOAD_MAX_MB in bytes. */
   readonly maxBytes: number;
-  /** Checks size and magic bytes, then stores. Throws 413 `file_too_large` or 415 `unsupported_file`. */
+  /**
+   * Checks size and magic bytes (and, for a Word file, what it unpacks to), then stores. Throws 413 `file_too_large`
+   * or 415 `unsupported_file`.
+   */
   save(input: SaveFileInput): StoredFile;
   /** One of the user's files, or null (including when it is someone else's). */
   get(fileId: string, userId: string): StoredFile | null;
@@ -178,6 +182,8 @@ export function createFileStore(deps: AppDeps): FileStore {
       if (buffer.length > maxBytes) throw fileTooLarge(originalName, maxMb);
       const kind = detectFileKind(buffer);
       if (!kind || !accept.includes(kind)) throw unsupportedFile(accept, buffer, kind);
+      // A ZIP bomb is refused before it is stored (and long before anything unpacks it).
+      if (kind === 'docx') assertDocxUnpackable(buffer);
       assertPlainId(userId);
 
       const id = randomUUID();

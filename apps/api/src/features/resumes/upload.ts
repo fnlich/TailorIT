@@ -1,15 +1,21 @@
-import mammoth from 'mammoth';
-import { PDFParse } from 'pdf-parse';
 import type { AppDeps } from '../../core/context';
-import type { FileKind } from '../../core/files/index';
-import { getPdfService } from '../../core/pdf/index';
+import { parseDocx, parsePdf, type FileKind } from '../../core/files/index';
+import { getPdfService, type PdfService } from '../../core/pdf/index';
 
 // What TailorIT reads from an uploaded resume: its text (keyword matching, and the AI import's input), its page count
 // and a PNG of its first page for the Resumes tab. Each part is best effort: a file whose text cannot be read is
-// still a stored upload; only "Make an editable copy" needs the text.
+// still a stored upload; only "Make an editable copy" needs the text. The file is read in the sandboxed reader process
+// (core/files/parse.ts), which refuses (4xx) a file that makes it crash, run out of memory or time.
 
 /** The longest text kept from an upload (and handed to the AI import). */
 export const MAX_EXTRACTED_TEXT = 60_000;
+/** Only the first pages of a PDF are read for its text and thumbnail; the stored page count is the whole file's. */
+export const RESUME_MAX_PDF_PAGES = 30;
+/** A Word file's text is cut to this in the reader, before any other work (MAX_EXTRACTED_TEXT of it is kept). */
+const MAX_DOCX_TEXT = 200_000;
+/** A Word thumbnail is the first page: it is drawn from the document's first blocks only, and at most this much HTML. */
+const THUMBNAIL_BLOCKS = 120;
+const THUMBNAIL_HTML_CHARS = 2_000_000;
 /** Under this many characters a file has no readable text (a scan, an image-only PDF). */
 export const MIN_IMPORT_TEXT = 50;
 export const UNREADABLE_TEXT =
@@ -34,34 +40,16 @@ function tidyText(text: string): string {
 }
 
 async function readPdf(buffer: Buffer): Promise<UploadReading> {
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
-  try {
-    let text: string | null = null;
-    let pageCount: number | null = null;
-    try {
-      const result = await parser.getText({ pageJoiner: '' });
-      text = tidyText(result.text);
-      pageCount = result.total > 0 ? result.total : null;
-    } catch {
-      text = null;
-    }
-    let thumbnail: Buffer | null = null;
-    try {
-      const shot = await parser.getScreenshot({
-        partial: [1],
-        desiredWidth: THUMBNAIL_WIDTH_PX,
-        imageBuffer: true,
-        imageDataUrl: false,
-      });
-      const first = shot.pages[0];
-      if (first?.data && first.data.length > 0) thumbnail = Buffer.from(first.data);
-    } catch {
-      thumbnail = null;
-    }
-    return { text, pageCount, thumbnail };
-  } finally {
-    await parser.destroy().catch(() => undefined);
-  }
+  const pdf = await parsePdf(buffer, {
+    maxPages: RESUME_MAX_PDF_PAGES,
+    textOptions: { pageJoiner: '' },
+    thumbnailWidth: THUMBNAIL_WIDTH_PX,
+  });
+  return {
+    text: pdf.text === null ? null : tidyText(pdf.text),
+    pageCount: pdf.pageCount !== null && pdf.pageCount > 0 ? pdf.pageCount : null,
+    thumbnail: pdf.thumbnail,
+  };
 }
 
 /** The page a DOCX's first-page thumbnail is drawn on (Chrome, when one is installed). */
@@ -75,28 +63,39 @@ function docxPage(bodyHtml: string): string {
   );
 }
 
-async function readDocx(deps: AppDeps, buffer: Buffer): Promise<UploadReading> {
-  let text: string | null = null;
-  try {
-    text = tidyText((await mammoth.extractRawText({ buffer })).value);
-  } catch {
-    text = null;
-  }
-  let thumbnail: Buffer | null = null;
+/** The browser that draws Word thumbnails, when one is set up and installed. */
+function thumbnailRenderer(deps: AppDeps): PdfService | null {
   try {
     const pdf = getPdfService(deps);
-    if (pdf.available()) {
-      const html = (await mammoth.convertToHtml({ buffer }, { externalFileAccess: false })).value;
-      const png = await pdf.screenshotPng(docxPage(html), { width: 794, height: 1123 });
-      thumbnail = png.length > 0 ? png : null;
-    }
+    return pdf.available() ? pdf : null;
   } catch {
-    thumbnail = null;
+    return null;
   }
-  return { text, pageCount: null, thumbnail };
 }
 
-/** Reads an upload the file store has already accepted (its kind decided from its bytes). */
+async function readDocx(deps: AppDeps, buffer: Buffer): Promise<UploadReading> {
+  const renderer = thumbnailRenderer(deps);
+  const docx = await parseDocx(buffer, {
+    maxChars: MAX_DOCX_TEXT,
+    ...(renderer ? { html: { maxBlocks: THUMBNAIL_BLOCKS, maxChars: THUMBNAIL_HTML_CHARS } } : {}),
+  });
+  let thumbnail: Buffer | null = null;
+  if (renderer && docx.html !== null) {
+    try {
+      const png = await renderer.screenshotPng(docxPage(docx.html), { width: 794, height: 1123 });
+      thumbnail = png.length > 0 ? png : null;
+    } catch {
+      thumbnail = null;
+    }
+  }
+  return { text: docx.text === null ? null : tidyText(docx.text), pageCount: null, thumbnail };
+}
+
+/**
+ * Reads an upload the file store has already accepted (its kind decided from its bytes). Throws the reader's refusals:
+ * 413 `file_too_large` (a Word file too large once unpacked), 415 `unsupported_file` (the reader crashed, ran out of
+ * memory or time before the text was read) and 429 `rate_limited` (busy reading other files).
+ */
 export async function readUpload(deps: AppDeps, buffer: Buffer, kind: FileKind | null): Promise<UploadReading> {
   if (kind === 'pdf') return readPdf(buffer);
   if (kind === 'docx') return readDocx(deps, buffer);

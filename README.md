@@ -132,6 +132,10 @@ In production the development sign-in helpers (`AUTH_DEV_LOG_CODES`, `AUTH_DEV_F
 SMTP or Google. Set `APP_ORIGIN` to the address people open (the API refuses changes from any other origin), and put
 HTTPS in front of it for anything beyond your own machine.
 
+The web server listens on this machine only (`WEB_HOST=localhost`, in development and production alike). To serve
+other machines, put a reverse proxy in front of it, or set `WEB_HOST=0.0.0.0` to listen on every network interface;
+never combine `0.0.0.0` with `AUTH_DEV_FIXED_CODE`.
+
 ## Tests
 
 | Command | What |

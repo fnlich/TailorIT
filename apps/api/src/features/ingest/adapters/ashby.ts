@@ -11,7 +11,14 @@ export const ASHBY_API = 'https://api.ashbyhq.com/posting-api/job-board';
 export function ashbyBoard(input: string): string {
   const text = input.trim();
   const fromUrl = /ashbyhq\.com\/(?:posting-api\/job-board\/)?([A-Za-z0-9_.%-]+)/i.exec(text);
-  return decodeURIComponent(fromUrl?.[1] ?? text).replace(/[^A-Za-z0-9_. -]/g, '');
+  const typed = fromUrl?.[1] ?? text;
+  let name = typed;
+  try {
+    name = decodeURIComponent(typed);
+  } catch {
+    // "acme%": not percent-encoding after all (decodeURIComponent throws a URIError); the name is used as typed.
+  }
+  return name.replace(/[^A-Za-z0-9_. -]/g, '');
 }
 
 const EMPLOYMENT: Record<string, EmploymentType> = {

@@ -58,13 +58,33 @@ const ZIP64_EOCD_SIGNATURE = 0x06064b50;
 const CENTRAL_HEADER_SIGNATURE = 0x02014b50;
 const CENTRAL_HEADER_LENGTH = 46;
 const MAX_ENTRIES = 20_000;
+const SATURATED_32 = 0xffffffff;
+/** The ZIP64 extended-information extra field: the 64-bit values of the saturated 32-bit fields. */
+const ZIP64_EXTRA_ID = 0x0001;
+
+/** One central-directory entry. The sizes are what the archive declares; nothing is unpacked to read them. */
+export interface ZipEntry {
+  name: string;
+  /** 0 stored, 8 deflated (the two a DOCX uses). */
+  method: number;
+  /** General purpose flags: bit 0 encrypted, bit 3 sizes in a data descriptor, bit 11 UTF-8 name. */
+  flags: number;
+  compressedSize: number;
+  uncompressedSize: number;
+  localHeaderOffset: number;
+}
+
+/** The entry names in a ZIP's central directory, or null when the archive's structure does not hold together. */
+export function zipEntryNames(buffer: Buffer): string[] | null {
+  return zipEntries(buffer)?.map((entry) => entry.name) ?? null;
+}
 
 /**
- * The entry names in a ZIP's central directory, or null when the archive's structure does not hold together. A
- * minimal reader (no decompression): find the end-of-central-directory record (the last 64 KiB may hold a comment),
- * follow a ZIP64 locator if the classic fields are saturated, then walk the fixed-size central headers.
+ * The entries of a ZIP's central directory, or null when the archive's structure does not hold together. A minimal
+ * reader (no decompression): find the end-of-central-directory record (the last 64 KiB may hold a comment), follow a
+ * ZIP64 locator if the classic fields are saturated, then walk the central headers (ZIP64 extra fields included).
  */
-export function zipEntryNames(buffer: Buffer): string[] | null {
+export function zipEntries(buffer: Buffer): ZipEntry[] | null {
   if (buffer.length < EOCD_MIN_LENGTH) return null;
   let eocd = -1;
   const lowest = Math.max(0, buffer.length - EOCD_MIN_LENGTH - 0xffff);
@@ -92,7 +112,7 @@ export function zipEntryNames(buffer: Buffer): string[] | null {
   }
   if (entries > MAX_ENTRIES || directoryOffset + directorySize > buffer.length) return null;
 
-  const names: string[] = [];
+  const found: ZipEntry[] = [];
   let at = directoryOffset;
   for (let index = 0; index < entries; index += 1) {
     if (at + CENTRAL_HEADER_LENGTH > buffer.length) return null;
@@ -101,10 +121,48 @@ export function zipEntryNames(buffer: Buffer): string[] | null {
     const extraLength = buffer.readUInt16LE(at + 30);
     const commentLength = buffer.readUInt16LE(at + 32);
     const nameEnd = at + CENTRAL_HEADER_LENGTH + nameLength;
-    if (nameEnd > buffer.length) return null;
-    // UTF-8 (general purpose flag bit 11) or CP437; the names that matter here are ASCII either way.
-    names.push(buffer.toString('utf8', at + CENTRAL_HEADER_LENGTH, nameEnd));
-    at = nameEnd + extraLength + commentLength;
+    const extraEnd = nameEnd + extraLength;
+    if (extraEnd > buffer.length) return null;
+    let uncompressedSize = buffer.readUInt32LE(at + 24);
+    let compressedSize = buffer.readUInt32LE(at + 20);
+    let localHeaderOffset = buffer.readUInt32LE(at + 42);
+    if (uncompressedSize === SATURATED_32 || compressedSize === SATURATED_32 || localHeaderOffset === SATURATED_32) {
+      // The extra field holds only the saturated values, always in this order.
+      const wide = zip64Values(buffer, nameEnd, extraEnd);
+      if (!wide) return null;
+      let next = 0;
+      if (uncompressedSize === SATURATED_32) uncompressedSize = wide[next++] ?? Number.NaN;
+      if (compressedSize === SATURATED_32) compressedSize = wide[next++] ?? Number.NaN;
+      if (localHeaderOffset === SATURATED_32) localHeaderOffset = wide[next++] ?? Number.NaN;
+      if (![uncompressedSize, compressedSize, localHeaderOffset].every(Number.isSafeInteger)) return null;
+    }
+    found.push({
+      // UTF-8 (general purpose flag bit 11) or CP437; the names that matter here are ASCII either way.
+      name: buffer.toString('utf8', at + CENTRAL_HEADER_LENGTH, nameEnd),
+      method: buffer.readUInt16LE(at + 10),
+      flags: buffer.readUInt16LE(at + 8),
+      compressedSize,
+      uncompressedSize,
+      localHeaderOffset,
+    });
+    at = extraEnd + commentLength;
   }
-  return names;
+  return found;
+}
+
+/** The 64-bit values of an entry's ZIP64 extra field (between `start` and `end`), or null when it has none. */
+function zip64Values(buffer: Buffer, start: number, end: number): number[] | null {
+  let at = start;
+  while (at + 4 <= end) {
+    const id = buffer.readUInt16LE(at);
+    const dataEnd = at + 4 + buffer.readUInt16LE(at + 2);
+    if (dataEnd > end) return null;
+    if (id === ZIP64_EXTRA_ID) {
+      const values: number[] = [];
+      for (let value = at + 4; value + 8 <= dataEnd; value += 8) values.push(Number(buffer.readBigUInt64LE(value)));
+      return values;
+    }
+    at = dataEnd;
+  }
+  return null;
 }

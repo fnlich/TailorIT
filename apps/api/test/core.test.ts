@@ -1,8 +1,12 @@
+import express from 'express';
 import { afterEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { buildConfig } from '../src/config/env';
 import { openMemoryDatabase } from '../src/core/db/connection';
 import { migrate, readMigrations } from '../src/core/db/migrate';
+import { errorHandler } from '../src/core/http/errors';
+import { createMemoryLogger } from '../src/core/log';
+import { signIn } from './auth-helpers';
 import { createTestContext, ORIGIN, type TestContext } from './helpers';
 
 let ctx: TestContext | null = null;
@@ -128,6 +132,50 @@ describe('http core', () => {
       .send('{"broken":');
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('validation_failed');
+  });
+
+  it('keeps client errors that libraries raise as client errors, not 500s', async () => {
+    ctx = createTestContext();
+    // Express cannot decode these path parameters: a URIError carrying status 400.
+    const font = await request(ctx.app).get('/api/cover-letters/fonts/%E0%A4%A');
+    expect(font.status).toBe(400);
+    expect(font.body.error).toMatchObject({ code: 'validation_failed', message: 'The request is not valid.' });
+    const me = await signIn(ctx, 'decoder@example.com');
+    const letter = await me.agent.get('/api/cover-letters/%E0%A4%A');
+    expect(letter.status).toBe(400);
+    expect(letter.body.error.code).toBe('validation_failed');
+    expect(letter.body.error.message).not.toMatch(/decode|%E0/);
+    // body-parser refuses a charset it cannot read with 415.
+    const charset = await request(ctx.app)
+      .post('/api/nope')
+      .set('Origin', ORIGIN)
+      .set('Content-Type', 'application/json; charset=koi8-r')
+      .send('{"a":1}');
+    expect(charset.status).toBe(415);
+    expect(charset.body.error.code).toBe('validation_failed');
+    // None of them is logged as a server error.
+    expect((ctx.deps.log as unknown as { lines: string[] }).lines.filter((line) => line.startsWith('error '))).toEqual([]);
+  });
+
+  it('answers a library 404 as not_found, other 4xx with their status, and anything else as internal', async () => {
+    const log = createMemoryLogger();
+    const app = express();
+    app.get('/gone', (_req, _res, next) => next(Object.assign(new Error('ENOENT: /srv/private/file'), { status: 404 })));
+    app.get('/method', (_req, _res, next) => next(Object.assign(new Error('nope'), { statusCode: 405 })));
+    app.get('/boom', (_req, _res, next) => next(new Error('the database is on fire')));
+    app.use(errorHandler(log));
+
+    const gone = await request(app).get('/gone');
+    expect(gone.status).toBe(404);
+    expect(gone.body.error.code).toBe('not_found');
+    expect(gone.body.error.message).not.toMatch(/private/);
+    const method = await request(app).get('/method');
+    expect(method.status).toBe(405);
+    expect(method.body.error).toMatchObject({ code: 'validation_failed', message: 'The request is not valid.' });
+    const boom = await request(app).get('/boom');
+    expect(boom.status).toBe(500);
+    expect(boom.body.error.code).toBe('internal');
+    expect(log.lines.filter((line) => line.startsWith('error '))).toHaveLength(1);
   });
 });
 

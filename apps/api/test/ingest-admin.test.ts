@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ashbyBoard } from '../src/features/ingest/adapters/ashby';
 import { GREENHOUSE_API } from '../src/features/ingest/adapters/greenhouse';
 import { IngestHttpError, type IngestHttp } from '../src/features/ingest/http';
 import { createIngestService } from '../src/features/ingest/service';
@@ -107,6 +108,21 @@ describe('sources', () => {
     const removed = await admin.delete(`/api/admin/sources/${id}`).set('Origin', ORIGIN);
     expect(removed.status).toBe(204);
     expect((await admin.get(`/api/admin/sources/${id}`)).status).toBe(404);
+  });
+
+  it('reads an Ashby board name with a stray "%" as typed instead of failing with a 500', async () => {
+    expect(ashbyBoard('acme%')).toBe('acme');
+    expect(ashbyBoard('https://jobs.ashbyhq.com/acme%E0%A4%A')).toBe('acmeE0A4A');
+    expect(ashbyBoard('https://jobs.ashbyhq.com/Acme%20Labs')).toBe('Acme Labs');
+    const created = await admin.post('/api/admin/sources').set('Origin', ORIGIN).send({ kind: 'ashby', config: { board: 'acme%' } });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ kind: 'ashby', name: 'acme', config: { board: 'acme' } });
+    const patched = await admin
+      .patch(`/api/admin/sources/${created.body.id}`)
+      .set('Origin', ORIGIN)
+      .send({ config: { board: 'https://jobs.ashbyhq.com/acme%zz' } });
+    expect(patched.status).toBe(200);
+    expect(patched.body.config).toMatchObject({ board: 'acmezz' });
   });
 
   it('tests a board without saving anything', async () => {

@@ -60,10 +60,14 @@ background work (return a stop function), `commands` adds CLI commands. The cent
   Routes validate, then `sendAccepted(res, requireAi(deps).enqueue({ kind, userId, input }))` → `202 { taskId }`; the
   page polls `GET /api/ai/tasks/:id`. Prompt modules (`PromptModule`: kind, version, system, user, output zod schema) live
   in your feature. Model/effort come from `.env` per kind. Fake CLI scenario for your kind:
-  `tools/fake-claude/scenarios/<kind>.json` (the parsed output value) — see `tools/fake-claude/scenarios/README.md`.
+  `tools/fake-claude/scenarios/<kind>.json` (the parsed output value), or `<kind>.mjs` for an answer computed from
+  the prompt — see `tools/fake-claude/scenarios/README.md`.
 - **Files** (`src/core/files`): `getFileStore(deps)` → `save({userId, purpose, buffer, originalName, accept?})` (checks
-  magic bytes and size; PDF/DOCX), `read`, `remove`, `saveThumbnail`, `readThumbnail`, `setPageCount`, `pathOf`;
-  `uploadSingle(field)` multer middleware (memory, capped at UPLOAD_MAX_MB).
+  magic bytes and size; PDF/DOCX; refuses a DOCX that unpacks to too much), `read`, `remove`, `saveThumbnail`,
+  `readThumbnail`, `setPageCount`, `pathOf`; `uploadSingle(field)` multer middleware (memory, capped at UPLOAD_MAX_MB).
+  Read an uploaded file's contents only through `parsePdf` / `parseDocx` (`core/files/parse.ts`): they run pdf.js and
+  mammoth in a short-lived child process with a small heap, a deadline and page/text caps. Never call pdf-parse or
+  mammoth in the API process.
 - **PDF/screenshots** (`src/core/pdf`): `getPdfService(deps)` → `printPdf(html, {format:'A4'|'Letter', margin?,
   preferCSSPageSize?})`, `screenshotPng(html, {width, height, clip?})`. JavaScript is off and every non-`data:` request is
   blocked: embed fonts/images as data URIs. Tests and CLI commands that render must `await getPdfService(deps).close()`.

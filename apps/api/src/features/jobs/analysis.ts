@@ -287,14 +287,21 @@ function fromService(result: EnsuredAnalysis): JobAnalysisView {
 }
 
 /**
- * The analysis to show for a job: the job-analysis service's (`queue` lets it start the AI analysis, as when a person
- * opens the job), else the fallback. Null when the job does not exist.
+ * The analysis to show for a job: the job-analysis service's, else the fallback. Null when the job does not exist.
+ * `queue` lets the service start the AI analysis, as when a person opens the job: on the background slot (people's own
+ * AI requests come first) and against `userId`'s hourly budget of new analyses.
  */
-export function analysisForJob(deps: AppDeps, jobId: number, options: { queue: boolean }): JobAnalysisView | null {
+export function analysisForJob(
+  deps: AppDeps,
+  jobId: number,
+  options: { queue: true; userId: string } | { queue: false },
+): JobAnalysisView | null {
   const service = serviceOf(deps);
   if (service) {
     try {
-      const result = options.queue ? service.ensure(jobId, { interactive: true }) : service.get(jobId);
+      const result = options.queue
+        ? service.ensure(jobId, { interactive: false, requestedBy: options.userId })
+        : service.get(jobId);
       if (result) return fromService(result);
     } catch (error) {
       deps.log.warn(`[jobs] the job analysis service failed for job ${jobId}; using the stored analysis`, error);

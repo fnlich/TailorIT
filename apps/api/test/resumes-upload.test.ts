@@ -23,11 +23,14 @@ beforeEach(() => {
 });
 afterEach(async () => {
   vi.unstubAllEnvs();
-  // A DOCX upload draws its thumbnail with Chrome when one is installed.
-  if (ctx) await getPdfService(ctx.deps).close();
-  ctx?.cleanup();
+  // A DOCX upload draws its thumbnail with Chrome when one is installed. The context is taken first, so a slow
+  // Chrome close (seconds on a loaded machine) can never clean up the next test's context.
+  const current = ctx;
   ctx = null;
-});
+  if (!current) return;
+  await getPdfService(current.deps).close();
+  current.cleanup();
+}, 30_000);
 
 // ------------------------------------------------------------------------------------------------ test files
 

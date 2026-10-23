@@ -10,11 +10,14 @@ import { createTestContext, ORIGIN, type TestContext } from './helpers';
 // is installed: skipped otherwise).
 
 let ctx: TestContext | null = null;
+// Taken first, so a slow Chrome close (seconds on a loaded machine) can never clean up the next test's context.
 afterEach(async () => {
-  if (ctx) await getPdfService(ctx.deps).close();
-  ctx?.cleanup();
+  const current = ctx;
   ctx = null;
-});
+  if (!current) return;
+  await getPdfService(current.deps).close();
+  current.cleanup();
+}, 30_000);
 
 const DOCUMENT = {
   name: 'Odile Brannstrom',
