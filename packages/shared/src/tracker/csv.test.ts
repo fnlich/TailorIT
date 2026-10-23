@@ -114,15 +114,20 @@ describe('export', () => {
     expect(csvCell('line\nbreak')).toBe('"line\nbreak"');
     expect(csvCell('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`);
     expect(csvCell('-cmd')).toBe("'-cmd");
-    expect(csvCell('- follow up')).toBe('- follow up');
+    expect(csvCell('- follow up')).toBe("'- follow up");
+    expect(csvCell('-2+3+cmd|calc')).toBe("'-2+3+cmd|calc");
+    expect(csvCell('+1 555 0100')).toBe("'+1 555 0100");
+    expect(csvCell('@SUM(A1)')).toBe("'@SUM(A1)");
     expect(csvCell('-5')).toBe('-5');
+    expect(csvCell('+1.5')).toBe('+1.5');
+    expect(csvCell('120000')).toBe('120000');
   });
 
   it('builds the file with a header and CRLF line ends', () => {
     const csv = buildExportCsv([application]);
     expect(csv.split('\r\n')[0]).toBe(EXPORT_CSV_COLUMNS.join(','));
     expect(csv.startsWith('Company,Position Title,')).toBe(true);
-    expect(exportCsvFileName('2026-10-22')).toBe('tailorit-applications-2026-10-22.csv');
+    expect(exportCsvFileName('2026-10-22')).toBe('TailorIT_Tracked_Jobs_2026-10-22.csv');
   });
 });
 

@@ -135,7 +135,9 @@ export function exportCsvRow(application: ExportApplication): string[] {
  */
 export function csvCell(value: string): string {
   let text = value;
-  if (/^[=+@\t\r]/.test(text) || /^-[^\s\d]/.test(text)) text = `'${text}`;
+  // Spreadsheet formula injection: Excel and Sheets read a cell starting with = + - @ tab or CR as a formula (even
+  // "-2+3+cmd|..." or "- note"), so it gets a leading apostrophe, unless it is a plain number such as -12 or +1.5.
+  if (/^[=+\-@\t\r]/.test(text) && !/^[+-]?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
   return /[",\r\n]|^\s|\s$/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
@@ -151,7 +153,7 @@ export function buildExportCsv(applications: readonly ExportApplication[]): stri
 
 /** "tailorit-applications-2026-10-22.csv". */
 export function exportCsvFileName(date: Date | string | number): string {
-  return `tailorit-applications-${toIsoDate(date) ?? 'export'}.csv`;
+  return `TailorIT_Tracked_Jobs_${toIsoDate(date) ?? 'export'}.csv`;
 }
 
 // ------------------------------------------------------------------------------------------------------ import

@@ -79,6 +79,15 @@ export function createCoverLettersRouter(deps: AppDeps): Router {
       templateId: template?.id ?? null,
       ...(template ? { fontFamily: template.fontFamily } : {}),
     });
+    // A letter started from a tracked application becomes that application's cover letter, unless one is linked.
+    if (facts?.applicationId) {
+      deps.db
+        .prepare(
+          `UPDATE applications SET cover_letter_id = ?, updated_at = ?
+           WHERE id = ? AND user_id = ? AND cover_letter_id IS NULL`,
+        )
+        .run(row.id, deps.now().toISOString(), facts.applicationId, user.id);
+    }
     res.status(201).json(toDetail(row));
   });
 

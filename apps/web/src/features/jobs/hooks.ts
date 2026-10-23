@@ -206,7 +206,7 @@ interface TrackJobInput {
 export function useSaveJob() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ jobId }: TrackJobInput) => trackJob(jobId, SAVED_STATUS),
+    mutationFn: ({ jobId }: TrackJobInput) => trackJob(jobId, SAVED_STATUS, localToday()),
     onMutate: async ({ jobId }) => {
       await client.cancelQueries({ queryKey: jobsKeys.detail(jobId) });
       patchJob(client, jobId, { saved: true });

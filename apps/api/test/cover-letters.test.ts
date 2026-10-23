@@ -227,6 +227,15 @@ describe('cover letters: CRUD and ownership', () => {
     const stolen = await other.agent.post('/api/cover-letters').set('Origin', ORIGIN).send({ applicationId });
     expect(stolen.status).toBe(404);
 
+    // The first letter started from an application becomes its cover letter; a second one doesn't replace it.
+    const linked = () =>
+      (ctx.deps.db.prepare('SELECT cover_letter_id FROM applications WHERE id = ?').get(applicationId) as {
+        cover_letter_id: string | null;
+      }).cover_letter_id;
+    expect(linked()).toBe(fromApplication.id);
+    await newLetter(me, { applicationId });
+    expect(linked()).toBe(fromApplication.id);
+
     const jobId = addJob({ title: 'Platform Engineer', company: 'Fabrikam', description: 'Keep the fleet healthy.' });
     const fromJob = await newLetter(me, { jobId });
     expect(fromJob).toMatchObject({ jobId, companyName: 'Fabrikam', jobTitle: 'Platform Engineer', jobDescription: 'Keep the fleet healthy.' });
