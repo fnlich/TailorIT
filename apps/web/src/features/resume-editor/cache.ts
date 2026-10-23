@@ -39,7 +39,22 @@ export function markDefaultInList(client: QueryClient, id: string | null): void 
   patch(client, (items) => items.map((item) => (item.isDefault === (item.id === id) ? item : { ...item, isDefault: item.id === id })));
 }
 
-/** Reads every resume query again (list, details). */
+/**
+ * What other areas compute from the person's resumes (above all the default one): the Jobs page's keyword match
+ * (work package J2) and the tracker's Resume Score (work package T).
+ */
+export const RESUME_DEPENDENT_KEYS = [
+  ['jobs', 'match'],
+  ['tracker', 'score'],
+] as const;
+
+/**
+ * Reads every resume query again (list, details), and marks what is scored against a resume as stale, so a new
+ * default or an edit shows on the Jobs page and in the tracker the next time they are open.
+ */
 export function invalidateResumes(client: QueryClient): Promise<void> {
-  return client.invalidateQueries({ queryKey: resumeKeys.all });
+  return Promise.all([
+    client.invalidateQueries({ queryKey: resumeKeys.all }),
+    ...RESUME_DEPENDENT_KEYS.map((queryKey) => client.invalidateQueries({ queryKey })),
+  ]).then(() => undefined);
 }

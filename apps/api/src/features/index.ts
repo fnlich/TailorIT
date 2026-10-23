@@ -14,6 +14,7 @@ import { jobAnalysisFeature } from './job-analysis/index';
 import { ingestFeature } from './ingest/index';
 import { jobsFeature } from './jobs/index';
 import { applicationsFeature } from './applications/index';
+import { demoFeature } from './demo/index';
 
 /**
  * Every feature of the API, in setup order: services are created in this order (AI before the features that queue
@@ -35,4 +36,5 @@ export const FEATURES: Feature[] = [
   ingestFeature,
   jobsFeature,
   applicationsFeature,
+  demoFeature,
 ];

@@ -488,18 +488,27 @@ test.describe('job tracker', () => {
     await expect(page).not.toHaveURL(/app=/);
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
-    // A letter the cover letter editor made for this application is offered in Documents.
-    const letter = await request.post('/api/cover-letters', { headers: { Origin: ORIGIN }, data: { applicationId: created.id } });
-    test.skip(!letter.ok(), 'the cover letter API is not available on this server');
-    const { title } = (await letter.json()) as { title: string };
+    // The first letter the cover letter editor makes for an application becomes its cover letter; a later one is
+    // offered under "Written for this job" and can take its place.
+    const makeLetter = async () => {
+      const letter = await request.post('/api/cover-letters', { headers: { Origin: ORIGIN }, data: { applicationId: created.id } });
+      return letter.ok() ? ((await letter.json()) as { id: string }) : null;
+    };
+    const first = await makeLetter();
+    test.skip(!first, 'the cover letter API is not available on this server');
+    const second = (await makeLetter())!;
     await page.goto(`/tracker?app=${created.id}`);
     const detail = page.getByRole('dialog', { name: 'Keys Role' });
     await detail.getByRole('tab', { name: 'Documents' }).click();
+    const letters = detail.getByRole('region', { name: 'Cover Letter' });
     const written = detail.getByRole('region', { name: 'Written for this job' });
-    await expect(written).toContainText(title);
+    await expect(letters.locator(`a[href="/cover-letter/${first!.id}"]`)).toHaveCount(1);
+    await expect(written.locator(`a[href="/cover-letter/${second.id}"]`)).toBeVisible();
     await written.getByRole('button', { name: 'Use for this application' }).click();
-    await expect(detail.getByRole('link', { name: 'Edit' }).first()).toHaveAttribute('href', /\/cover-letter\//);
-    await expect(written).toHaveCount(0);
+    // The second is the application's letter now, and the first is offered in its place.
+    await expect(written.locator(`a[href="/cover-letter/${first!.id}"]`)).toBeVisible();
+    await expect(written.locator(`a[href="/cover-letter/${second.id}"]`)).toHaveCount(0);
+    await expect(letters.locator(`a[href="/cover-letter/${second.id}"]`)).toHaveCount(1);
   });
 
   test('a column loads 25 cards, then more', async ({ page }) => {

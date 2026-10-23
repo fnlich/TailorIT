@@ -52,6 +52,9 @@ import { PlaceholderBanner, ReplacePlaceholderDialog } from './PlaceholderBanner
 
 const DOCUMENTS_HREF = '/documents?tab=cover-letters';
 
+/** The tracker's React Query keys all start with 'tracker' (work package T). */
+const TRACKER_KEY = ['tracker'] as const;
+
 export function CoverLetterEditorPage({ letterId }: { letterId: string }) {
   const query = useQuery({
     queryKey: letterKeys.detail(letterId),
@@ -340,6 +343,9 @@ export function NewCoverLetterPage({
       .then((letter) => {
         queryClient.setQueryData(letterKeys.detail(letter.id), letter);
         void queryClient.invalidateQueries({ queryKey: letterKeys.all, exact: true });
+        // Started from a tracked application, the letter became its cover letter on the server: the tracker reads it
+        // again instead of showing the application without it.
+        if (letter.applicationId) void queryClient.invalidateQueries({ queryKey: TRACKER_KEY });
         router.replace(`/cover-letter/${letter.id}`);
       })
       .catch((caught: unknown) => setError(userMessage(caught, 'The cover letter could not be created. Please try again.')));

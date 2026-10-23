@@ -817,3 +817,84 @@ CREATE TABLE ai_tasks(id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id) ON 
    - Stage A: class-token and `data-section` finders, `findClosingTag`, guards, generated-block comments, ancestors/parent key (`sectionLocator.ts:114-275,557-600`).
    - Stage B: loop heuristics (`:68-93,210-239,302-482`).
 9. **Preview semantics**: `buildPreviewResume` (`resumeDocument.ts:779-843`) plus `withSampleDefaults` (`sampleResume.ts:262-394`), using TailorIT's **own** sample person (`static/sample-resume.json`).
+
+---
+
+## As built (2026-10-23)
+
+What the work packages built differently from the plan above, or added to it, as their commits and the code show.
+Everything not listed here was built as planned.
+
+**Foundation (F1–F5)**
+- Sign-in rate limits are keyed by the address a request names, plus a global backstop, never by IP (the plan said
+  per IP): behind Next's `/api` rewrite every browser arrives from 127.0.0.1, and a client's `X-Forwarded-For` passes
+  through unchanged.
+- The Google button is shown only when `GOOGLE_CLIENT_ID` is set, and works only once `APP_ORIGIN` is an authorized
+  JavaScript origin of that client. The development server and every test sign in with email codes.
+- Settings exposes the display name, the contact details and the job preferences that drive the Jobs page (experience
+  levels, job types, work arrangements, minimum salary). The preferences' `categories` and `locations` columns exist
+  in the API but have no UI.
+- Vitest runs as projects in `vitest.config.ts` (shared, render, api, web) instead of a `vitest.workspace.ts`. No
+  package needed a migration of its own: the schema is still `0001_init.sql` alone.
+- Settings the plan did not list: `LOG_LEVEL`, `AI_ENABLED`, `AI_CLI_FALLBACK_MODEL`, `INGEST_TIMEZONE`,
+  `INGEST_HTTP_TIMEOUT_MS`. Next's `/api` proxy timeout is 120 s (`experimental.proxyTimeout`).
+
+**Resumes (R1, R2)**
+- Parity rests on 1,161 golden cases rendered by free_tailor's own compiled code (the plan estimated about 600); all
+  match and the allowlist is empty.
+- Burgundy Rule and Navy Rule keep their CSS in a separate `cssContent`, which free_tailor places before the doctype,
+  so both render in quirks mode there. TailorIT does the same for parity (the preview's CSP meta tag is never put ahead
+  of a doctype, so it does not change the mode of the other 24).
+- An uploaded resume opens on a file page (View, downloads, "Make an editable copy"), not in the editor.
+- `POST /api/resumes/bullets` answers like `POST /api/ai/resume-bullets`.
+
+**Cover letters and templates (C)**
+- An uploaded letter keeps its file, but its grid thumbnail and preview show the extracted text laid out as a letter,
+  not a picture of the original pages.
+- A letter started from a tracked application (`POST /cover-letters {applicationId}`, the tracker's "Generate cover
+  letter") becomes that application's cover letter when it has none yet. Letters tied to an application later (the
+  dialog's "Select a job from tracker") are offered under "Written for this job" in the tracker, with "Use for this
+  application".
+- Endpoints beyond the plan: `GET /cover-letters/fonts.css` and `/cover-letters/fonts/:file` (the bundled OFL fonts,
+  public), `GET /cover-letter-templates/:id/preview`, `POST /cover-letter-templates/:id/import` and
+  `GET /cover-letter-templates/:id/export`.
+
+**Job Tracker (T)**
+- The detail has no Email tab (the plan's P2 follow-up templates were not built): Overview, Documents, Resume Score,
+  Questions.
+- Pay periods are Hourly, Daily, Weekly, Monthly and Yearly; Simplify's Bi-Weekly is not offered.
+- The board has an optional Archived column (Options › Visible columns): dropping a card on it archives the
+  application, dragging it out restores it.
+- Status dates are the browser's local day; the server refuses only dates that are in the future in every time zone
+  (UTC+14).
+- CSV export writes a UTF-8 BOM and escapes every cell a spreadsheet would read as a formula; the file is
+  `TailorIT_Tracked_Jobs_<date>.csv`.
+- Endpoints beyond the plan: `GET /applications/companies` (company suggestions), `GET /applications/:id/cover-letters`
+  (letters written for it) and `GET /applications/:id/resume-score` (the linked resume, else the default one).
+
+**Jobs (J1, J2)**
+- The admin console is one page with tabs, `/settings/admin?tab=sources|runs|import|reports|ai|users`, instead of
+  `/settings/admin/sources`.
+- Boards and the free_tailor lake run daily; CSV/JSON imports and the demo seed run only by hand. The demo seed is the
+  "Demo jobs" source: 129 postings from 15 fictional companies, links on reserved `.example` domains (`npm run
+  seed:jobs`, Admin › Sources, or `SEED_DEMO=true` on an empty database). Lake rows older than
+  `FT_LAKE_MAX_AGE_DAYS` come in inactive.
+- Save and Apply send the browser's local date, as the tracker does.
+- Endpoints beyond the plan: `GET /jobs/count`, `GET /jobs/facets/summary`, `DELETE /companies/:id/hide`,
+  `PATCH /saved-searches/:id`, `GET /admin/sources/:id`, `POST /admin/sources/test` and `GET /admin/runs/:id`.
+
+**Integration (I)**
+- `npm run seed:demo` (`apps/api/src/features/demo`) loads the demo jobs and fills an account (default
+  `demo@tailorit.dev`, "Alex Rivera") through the features' own functions, without AI: preferences, two built resumes
+  covering all fifteen section kinds, an uploaded PDF printed from one of them, 30 applications in every status over
+  three months, three cover letters and two templates. What it wrote is recorded in `app_settings`
+  (`demo_seed:<userId>`), so a second run changes nothing and `--refresh` replaces exactly that; `--email` fills
+  another account without touching what the person made.
+- Three cross-feature cache fixes, so a change made in one area shows in the next without a reload: starting a cover
+  letter from a tracked application refreshes the tracker (the application showed "Link existing cover letter" for a
+  letter already linked); every resume change marks the Jobs keyword match and the tracker's Resume Score stale
+  (after "Set as default" the Jobs card kept scoring the previous resume); saving preferences in Settings marks the
+  Jobs match stale (its experience-level check kept comparing against the previous levels).
+- `e2e/specs/integration.spec.ts` follows one job from search to the tracker, a generated cover letter and a new
+  default resume, moving between the areas with the header links; `e2e/visual/compare.spec.ts` captures the demo
+  account at 1567×889 beside the user's screenshots (`e2e/artifacts/compare/`).

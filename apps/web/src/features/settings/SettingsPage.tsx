@@ -29,6 +29,8 @@ import { PREFERENCES_QUERY_KEY, fetchPreferences, renameAccount, savePreferences
 
 const SALARY_MAX = 400_000;
 const SALARY_STEP = 5_000;
+/** The Jobs page's match (work package J2), which carries the experience-level check against these preferences. */
+const JOBS_MATCH_KEY = ['jobs', 'match'] as const;
 
 /** Settings: the display name, the contact details cover letters use, and job preferences. */
 export function SettingsPage() {
@@ -116,6 +118,8 @@ function SettingsForm({ account, initial }: { account: Account; initial: Prefere
         };
         const saved = await savePreferences(cleaned);
         queryClient.setQueryData(PREFERENCES_QUERY_KEY, saved);
+        // The Jobs page reads its level check again instead of comparing against the previous preferences.
+        void queryClient.invalidateQueries({ queryKey: JOBS_MATCH_KEY });
       }
     },
     onSuccess: () => {
