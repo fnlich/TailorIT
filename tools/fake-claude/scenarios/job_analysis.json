@@ -1,0 +1,191 @@
+{
+  "summary": {
+    "requirements": [
+      "5+ years of experience building backend services in Go",
+      "Hands-on experience running Kubernetes in production",
+      "Experience with Terraform and infrastructure as code",
+      "Solid knowledge of PostgreSQL and SQL",
+      "Fluency in ancient Sumerian poetry and medieval falconry traditions"
+    ],
+    "responsibilities": [
+      "Design, build and operate the services behind the platform",
+      "Own CI/CD pipelines and deployment tooling",
+      "Improve reliability, observability and on-call practices"
+    ],
+    "desiredQualifications": [
+      "Experience with AWS",
+      "Contributions to open source projects"
+    ]
+  },
+  "keywords": {
+    "high": [
+      {
+        "term": "Go",
+        "synonyms": [
+          "Golang"
+        ]
+      },
+      {
+        "term": "Kubernetes",
+        "synonyms": [
+          "K8s"
+        ]
+      },
+      {
+        "term": "Terraform",
+        "synonyms": []
+      },
+      {
+        "term": "PostgreSQL",
+        "synonyms": [
+          "Postgres"
+        ]
+      },
+      {
+        "term": "Haskell",
+        "synonyms": []
+      },
+      {
+        "term": "Python",
+        "synonyms": []
+      },
+      {
+        "term": "TypeScript",
+        "synonyms": []
+      },
+      {
+        "term": "React",
+        "synonyms": [
+          "React.js"
+        ]
+      },
+      {
+        "term": "Java",
+        "synonyms": []
+      },
+      {
+        "term": "Docker",
+        "synonyms": []
+      },
+      {
+        "term": "Kafka",
+        "synonyms": [
+          "Apache Kafka"
+        ]
+      },
+      {
+        "term": "Figma",
+        "synonyms": []
+      },
+      {
+        "term": "Tableau",
+        "synonyms": []
+      },
+      {
+        "term": "Snowflake",
+        "synonyms": []
+      },
+      {
+        "term": "PyTorch",
+        "synonyms": []
+      }
+    ],
+    "low": [
+      {
+        "term": "CI/CD",
+        "synonyms": [
+          "continuous integration"
+        ]
+      },
+      {
+        "term": "AWS",
+        "synonyms": [
+          "Amazon Web Services"
+        ]
+      },
+      {
+        "term": "observability",
+        "synonyms": []
+      },
+      {
+        "term": "Kubernetes",
+        "synonyms": []
+      },
+      {
+        "term": "Linux",
+        "synonyms": []
+      },
+      {
+        "term": "Jira",
+        "synonyms": []
+      },
+      {
+        "term": "Airflow",
+        "synonyms": [
+          "Apache Airflow"
+        ]
+      },
+      {
+        "term": "Spark",
+        "synonyms": [
+          "Apache Spark"
+        ]
+      },
+      {
+        "term": "Looker",
+        "synonyms": []
+      },
+      {
+        "term": "GraphQL",
+        "synonyms": []
+      },
+      {
+        "term": "Node.js",
+        "synonyms": []
+      },
+      {
+        "term": "Prometheus",
+        "synonyms": []
+      },
+      {
+        "term": "Grafana",
+        "synonyms": []
+      },
+      {
+        "term": "Swift",
+        "synonyms": []
+      },
+      {
+        "term": "Kotlin",
+        "synonyms": []
+      },
+      {
+        "term": "Splunk",
+        "synonyms": []
+      }
+    ]
+  },
+  "experienceLevels": [
+    "senior"
+  ],
+  "leadership": "ic",
+  "minYears": 5,
+  "category": {
+    "id": "devops-infrastructure",
+    "subcategoryIds": [
+      "platform-engineering",
+      "frontend"
+    ]
+  },
+  "workArrangement": "remote",
+  "employmentType": "full_time",
+  "salary": {
+    "min": 999999,
+    "max": 1999999,
+    "currency": "USD",
+    "period": "year"
+  },
+  "sponsorsH1b": null,
+  "requiresClearance": false,
+  "degree": null
+}
