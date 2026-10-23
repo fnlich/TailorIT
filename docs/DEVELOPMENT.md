@@ -68,6 +68,8 @@ background work (return a stop function), `commands` adds CLI commands. The cent
   preferCSSPageSize?})`, `screenshotPng(html, {width, height, clip?})`. JavaScript is off and every non-`data:` request is
   blocked: embed fonts/images as data URIs. Tests and CLI commands that render must `await getPdfService(deps).close()`.
 - **Mail/auth** (`src/core/auth`, `src/core/mail`): sessions, accounts (`getAccount`), admin promotion.
+- **Skill library** (`src/core/skills-vocabulary.ts`): `getSkillLibrary()` → `{hard, soft, vocabulary, byKey}` from
+  `static/skills/skills.json` (read once). Use `vocabulary` for keyword extraction/matching.
 
 ### Tests
 - Vitest + supertest. `createTestContext()` (`test/helpers.ts`): in-memory migrated DB, temp DATA_DIR, frozen clock
@@ -75,6 +77,39 @@ background work (return a stop function), `commands` adds CLI commands. The cent
 - `signIn(ctx, email, {admin?, name?})` (`test/auth-helpers.ts`) → `{agent, account, cookie}`.
 - Mutating requests: `.set('Origin', ORIGIN)`.
 - AI: `await requireAi(ctx.deps).waitFor(taskId)`; failures via `vi.stubEnv('FAKE_CLAUDE_MODE', 'stall'|'auth'|...)`.
+
+## Web (`apps/web`)
+
+- **Kit**: `@/components/ui` (Base UI + Simplify tokens): Button/IconButton/`buttonClasses()`, Field + Input/Textarea/
+  Select/Combobox (creatable)/Checkbox (`onCheckedChange(checked, {shiftKey})`)/Switch/RadioGroup/Slider/RangeSlider,
+  Badge/CountBadge/Chip/FilterPill/SegmentedControl/UnderlineTabs+TabPanel, Menu* (submenus, checkbox/radio items,
+  `tone="danger"`), ContextMenu*, Popover*, Dialog*, Sheet* (right, `3xl`/`7xl`), Tooltip, `useToast()`, ConfirmDialog
+  (async), DatePickerPopover, LetterAvatar, Spinner, Skeleton, EmptyState, Notice, Stepper. Icons:
+  `@/components/ui/icons` (Phosphor; 16 px regular by default; `weight="fill"` for filled heart/bookmark/check).
+  There is no tailwind-merge: pass `className` for layout only (margin, width), never colours or padding. Need a new
+  primitive? Build it inside your feature folder; don't edit the kit (report the need instead).
+- **Tokens** (`src/styles/globals.css`): `bg-primary` (#14a1c0) is for backgrounds; text/border "primary" is
+  `primary-ink` (#08758c). Radii `rounded-control` 10 / `rounded-surface` 16 / `rounded-popup` 14 / `rounded-menu` 10;
+  shadows `shadow-soft|control|menu|popover|dialog`; canvas `bg-canvas`, cards `bg-surface border`.
+- **Shell**: `@/components/shell/AppHeader`, `EditorBar` (name, documentsHref, onRename, validateName, info, status,
+  actions) for full-screen editors.
+- **Data**: `api.get|post|put|patch|delete(path, {body, schema?})` from `@/lib/api` (same-origin `/api`, throws
+  `ApiError` with code/message/fields; `userMessage(error)` for display). React Query is set up (`@/lib/query`).
+  `useAuth()/useAccount()` from `@/lib/auth`. AI: `useAiTask(taskId, {kind})` (`@/lib/useAiTask`) polls and rotates the
+  progress line. Redirect to /login happens automatically on `not_signed_in`.
+- **Documents layer**: `@/features/documents/core` — DocumentCollection (table | cards variants, grid/list views,
+  search, selection, bulk delete), DocumentCard, DocumentThumb (lazy, LRU, sandboxed `srcDoc` iframe or image),
+  PageThumb, NewTile, ActionMenu, ViewToggle, SearchBox, RenameDialog, BulkDeleteDialog, cell helpers.
+- **Feature code** lives in `src/features/<area>/`; route files in `src/app/**/page.tsx` stay thin and import a feature
+  component. Placeholders to replace (keep export names): `features/documents/resumes/ResumesTab.tsx`,
+  `features/resume-editor/ResumeEditorPage.tsx` ({resumeId|null}), `features/documents/cover-letters/CoverLettersTab.tsx`,
+  `features/documents/templates/TemplatesTab.tsx`, `features/cover-letter-editor/CoverLetterEditorPage.tsx`
+  (CoverLetterEditorPage {letterId}, NewCoverLetterPage), `features/template-editor/TemplateEditorPage.tsx`
+  (TemplateEditorPage {templateId}, NewTemplatePage), `features/jobs/JobsPage.tsx`, `features/tracker/TrackerPage.tsx`,
+  `features/settings/AdminPage.tsx`.
+- **Checks**: `npx vitest run --project web` for pure logic (`src/**/*.test.ts`); Playwright specs in
+  `e2e/specs/<package>.spec.ts` (channel `chrome`), visual captures in `e2e/visual/` writing to `e2e/artifacts/`
+  (git-ignored). Compare against `e2e/reference/simplify-*.png` by looking at both images.
 
 ## Shared contracts (`packages/shared`)
 zod schemas + types + pure functions used by both apps (browser-safe: no Node APIs, no JSON imports). Import from
