@@ -270,7 +270,8 @@ export function AllFiltersDialog({ query, onApply }: { query: JobsQuery; onApply
                 onCheckedChange={(on) => change({ h1b: on || undefined })}
               />
             )}
-            {available?.industries && (
+            {/* No label over an empty row: the industries show once their list is in. */}
+            {available?.industries && (industries.data?.items.length ?? 0) > 0 && (
               <Row label="Industry">
                 <ChipChoices
                   values={(industries.data?.items ?? []).map((item) => item.value as JobsQuery['industries'][number])}

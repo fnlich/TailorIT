@@ -596,6 +596,42 @@ describe('GET /api/jobs/:id', () => {
     expect((await get(`/api/jobs/${other}`)).body.userState).toMatchObject({ saved: true, appliedOn: null });
   });
 
+  it('un-saving archives the application: not saved, no tie; Undo or saving again brings it back, notes and all', async () => {
+    const db = ctx.deps.db;
+    const id = insertJob(db, { title: 'Bookmarked' });
+    const post = (path: string, body?: object) => me.agent.post(path).set('Origin', ORIGIN).send(body);
+    const state = async () => (await get(`/api/jobs/${id}`)).body.userState;
+    const card = async () => (await get('/api/jobs')).body.items.find((item: { id: number }) => item.id === id);
+
+    const created = await post('/api/applications', { jobId: id, status: 1, occurredOn: '2026-10-22' });
+    expect(created.status).toBe(201);
+    const applicationId = created.body.id as string;
+    await me.agent.patch(`/api/applications/${applicationId}`).set('Origin', ORIGIN).send({ notesHtml: '<p>Ask about the team</p>' }).expect(200);
+    expect(await state()).toMatchObject({ saved: true, applicationId });
+
+    // The page's un-save.
+    await post(`/api/applications/${applicationId}/archive`).expect(200);
+    expect(await state()).toMatchObject({ saved: false, applicationId: null, appliedOn: null });
+    expect(await card()).toMatchObject({ saved: false, applicationId: null });
+
+    // Undo.
+    await post(`/api/applications/${applicationId}/restore`).expect(200);
+    expect(await state()).toMatchObject({ saved: true, applicationId });
+    expect(await card()).toMatchObject({ saved: true, applicationId });
+
+    // Saving again: the tracker restores the archived application rather than starting a new one.
+    await post(`/api/applications/${applicationId}/archive`).expect(200);
+    const again = await post('/api/applications', { jobId: id, status: 1, occurredOn: '2026-10-22' });
+    expect(again.body).toMatchObject({ id: applicationId, notesHtml: '<p>Ask about the team</p>', archivedAt: null });
+    expect(await state()).toMatchObject({ saved: true, applicationId });
+
+    // An archived application that reached Applied still ties the job to it.
+    const applied = insertJob(db, { title: 'Applied, then archived' });
+    const appliedId = insertApplication(db, me.account.id, applied, 2, '2026-10-20');
+    db.prepare('UPDATE applications SET archived_at = ? WHERE id = ?').run('2026-10-21T00:00:00.000Z', appliedId);
+    expect((await get(`/api/jobs/${applied}`)).body.userState).toMatchObject({ saved: false, applicationId: appliedId, appliedOn: '2026-10-20' });
+  });
+
   it('opens inactive jobs, and 404s unknown or malformed ids', async () => {
     const db = ctx.deps.db;
     const closed = insertJob(db, { title: 'Closed', active: false });
@@ -702,6 +738,66 @@ describe('GET /api/jobs/:id/analysis', () => {
     const fallback = await get(`/api/jobs/${id}/analysis`);
     expect(fallback.status).toBe(200);
     expect(fallback.body.source).toBe('deterministic');
+  });
+});
+
+// ---------------------------------------------------------------------------------- the analysis with its match
+
+describe('GET /api/jobs/:id/insights', () => {
+  const posting =
+    '<h3>Requirements</h3><ul><li>Kubernetes and Docker in production.</li><li>Strong Python.</li></ul><p>We use Terraform.</p>';
+
+  it('answers the analysis and the match computed from that same analysis', async () => {
+    const id = insertJob(ctx.deps.db, { title: 'Platform Engineer', description: posting, levels: ['senior'] });
+    insertResume(ctx.deps.db, me.account.id, 'I run k8s and write Python.');
+    const view = (source: 'deterministic' | 'ai', refining: boolean, terms: string[]): JobAnalysisView => ({
+      source,
+      refining,
+      requirements: [`From ${source}`],
+      responsibilities: [],
+      desired: [],
+      keywords: { high: terms.map((term) => ({ term, synonyms: [] })), low: [] },
+      experienceLevels: ['senior'],
+      categoryId: null,
+      subcategoryIds: [],
+    });
+    // The AI analysis lands between the two reads: the answer must not pair one analysis with the other's match.
+    const calls: string[] = [];
+    ctx.deps.services.jobAnalysis = {
+      ensure: (_jobId, options) => {
+        calls.push(`ensure:${String(options?.requestedBy === me.account.id)}`);
+        return { analysis: view('deterministic', true, ['Kubernetes', 'Docker']), refining: true };
+      },
+      get: () => {
+        calls.push('get');
+        return { analysis: view('ai', false, ['Kubernetes', 'Python', 'Terraform']), refining: false };
+      },
+    };
+    const res = await get(`/api/jobs/${id}/insights`);
+    expect(res.status).toBe(200);
+    expect(JobAnalysisViewSchema.safeParse(res.body.analysis).success).toBe(true);
+    expect(MatchResultSchema.safeParse(res.body.match).success).toBe(true);
+    expect(res.body.analysis).toMatchObject({ source: 'deterministic', refining: true, requirements: ['From deterministic'] });
+    expect(res.body.match).toMatchObject({
+      state: 'ok',
+      matchedCount: 1,
+      total: 2,
+      matched: [{ term: 'Kubernetes', priority: 'high' }],
+      missing: [{ term: 'Docker', priority: 'high' }],
+      levelMatch: { state: 'none', jobLabels: ['Senior'] },
+    });
+    // Opening the job queues the AI analysis against the viewer's budget, once.
+    expect(calls).toEqual(['ensure:true']);
+  });
+
+  it('works without the analysis service, and 404s an unknown job', async () => {
+    const id = insertJob(ctx.deps.db, { title: 'Platform Engineer', description: posting });
+    const res = await get(`/api/jobs/${id}/insights`);
+    expect(res.status).toBe(200);
+    expect(res.body.analysis.source).toBe('deterministic');
+    expect(res.body.match).toMatchObject({ state: 'no_resume', matchedCount: 0 });
+    expect(res.body.match.total).toBe(res.body.analysis.keywords.high.length + res.body.analysis.keywords.low.length);
+    expect((await get('/api/jobs/999999/insights')).status).toBe(404);
   });
 });
 

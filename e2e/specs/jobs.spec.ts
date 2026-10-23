@@ -108,6 +108,17 @@ test.describe('Jobs page', () => {
     await expect(detail(page).getByRole('button', { name: 'Saved', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(card.getByRole('button', { name: `Remove ${title} from saved jobs` })).toBeVisible();
 
+    // Un-save archives the tracker application (never deletes it) and offers Undo, which saves it again.
+    await detail(page).getByRole('button', { name: 'Saved', exact: true }).click();
+    await expect(page.getByText('Removed from saved jobs', { exact: true })).toBeVisible();
+    await expect(saveButton).toHaveAttribute('aria-pressed', 'false');
+    await expect(card.getByRole('button', { name: `Save ${title}` })).toBeVisible();
+    const archived = (await (await page.request.get('/api/applications?tab=archived')).json()) as { items: Array<{ title: string }> };
+    expect(archived.items.map((item) => item.title)).toContain(title);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(detail(page).getByRole('button', { name: 'Saved', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(card.getByRole('button', { name: `Remove ${title} from saved jobs` })).toBeVisible();
+
     // Apply opens the posting in a new tab, then asks "Did you apply?"; Yes records Applied today.
     const popup = page.waitForEvent('popup');
     await detail(page).getByRole('button', { name: 'Apply', exact: true }).click();
@@ -215,6 +226,61 @@ test.describe('Jobs page', () => {
     await panel.getByRole('tab', { name: 'Company' }).click();
     await expect(panel.getByRole('heading', { name: 'About the company' })).toBeInViewport();
     await expect(panel.getByRole('tab', { name: 'Company' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('on a phone: choosing a job brings its detail into view, nothing is cut off, and the arrow goes back', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signInFresh(page, 'phone');
+    await openJobs(page);
+
+    // The toolbar wraps without a divider left at either end of a row.
+    const dividers = await page.locator('[data-toolbar-divider]').evaluateAll((items) =>
+      items
+        .filter((item) => item.getBoundingClientRect().width > 0)
+        .map((item) => {
+          const middle = (element: Element | null) => {
+            const box = element?.getBoundingClientRect();
+            return box && box.width > 0 ? box.top + box.height / 2 : null;
+          };
+          return { self: middle(item), before: middle(item.previousElementSibling), after: middle(item.nextElementSibling) };
+        }),
+    );
+    for (const divider of dividers) {
+      expect(divider.before).not.toBeNull();
+      expect(divider.after).not.toBeNull();
+      expect(Math.abs(divider.before! - divider.self!)).toBeLessThan(4);
+      expect(Math.abs(divider.after! - divider.self!)).toBeLessThan(4);
+    }
+
+    const card = cards(page).nth(2);
+    const title = (await card.locator('h3').innerText()).trim();
+    await card.locator('a').click();
+    const heading = detail(page).getByRole('heading', { level: 1 });
+    await expect(heading).toHaveText(title);
+    await expect(heading).toBeInViewport();
+
+    // Every header action is inside the panel: the row wraps instead of running off its left edge.
+    const panel = (await detail(page).boundingBox())!;
+    for (const control of await page.locator('[data-detail-header]').locator('button, a').all()) {
+      if (!(await control.isVisible())) continue;
+      const box = (await control.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(panel.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(panel.x + panel.width + 0.5);
+    }
+
+    await detail(page).getByRole('button', { name: 'Back to the job list' }).click();
+    await expect(card).toBeInViewport();
+  });
+
+  test('a job that no longer exists offers "Back to jobs" (not "Try again")', async ({ page }) => {
+    await signInFresh(page, 'gone');
+    await page.goto('/jobs?jobId=999999999');
+    await expect(detail(page).getByText('This job is no longer available')).toBeVisible();
+    await expect(detail(page).getByRole('button', { name: 'Try again' })).toHaveCount(0);
+    await detail(page).getByRole('button', { name: 'Back to jobs' }).click();
+    // The list's first job opens instead.
+    await expect(cards(page).first().locator('a')).toHaveAttribute('aria-current', 'true');
+    await expect(page).not.toHaveURL(/jobId=999999999/);
   });
 
   test('hide a job (with undo), share a link and report a job', async ({ page, context }) => {

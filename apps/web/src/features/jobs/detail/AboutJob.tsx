@@ -70,7 +70,7 @@ function Summary({ analysis, onShowFull }: { analysis: JobAnalysisView; onShowFu
 /**
  * "About the job" with Simplify's Summary | Full posting toggle. Summary lists the analysis's Requirements,
  * Responsibilities and Desired Qualifications; Full posting shows the sanitized description. A quiet "Refining…"
- * shows while the AI analysis is being made.
+ * shows while the AI analysis is being made; when it lands the bullets change in place.
  */
 export function AboutJob({
   analysis,
@@ -88,7 +88,12 @@ export function AboutJob({
     ? analysis.requirements.length + analysis.responsibilities.length + analysis.desired.length > 0
     : !analysisFailed;
   const [chosen, setChosen] = useState<AboutView | null>(null);
-  const view: AboutView = chosen ?? (hasSummary ? 'summary' : 'full');
+  // The view the first analysis opened on stays when a refined one lands (no summary yet, then the AI's): the
+  // reader is never moved from the full posting they are reading.
+  const [opened, setOpened] = useState<AboutView | null>(null);
+  const initial: AboutView = hasSummary ? 'summary' : 'full';
+  if (opened === null && (analysis || analysisFailed)) setOpened(initial);
+  const view: AboutView = chosen ?? opened ?? initial;
 
   return (
     <section aria-labelledby="about-the-job">

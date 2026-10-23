@@ -1,24 +1,28 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PAGE_GUTTER } from '@/components/shell/layout';
 import { PageSpinner } from '@/components/ui/Spinner';
-import { useToast } from '@/components/ui/Toast';
-import { userMessage } from '@/lib/api';
 import type { JobListItem } from './api';
 import { JobDetailPanel } from './detail/JobDetailPanel';
 import { clearedQuery } from './filters';
-import { useFacet, useJobsList, useSaveJob, useUnsaveJob } from './hooks';
+import { useFacet, useJobsList, useSaveToggle } from './hooks';
 import { JobList } from './list/JobList';
 import { JobsToolbar } from './toolbar/JobsToolbar';
 import { queryKeyOf } from './url';
 import { useJobsUrl } from './useJobsUrl';
 
+/** Below Tailwind's `lg` the page is one column: the selected job's detail sits under the list. */
+function isOneColumn(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 1023.98px)').matches;
+}
+
 /**
  * Simplify's Jobs page (`/jobs?jobId=…&filters`): the toolbar on the canvas, then one white bordered frame split into
  * the list (a third) and the selected job (two thirds), each scrolling on its own. The first job opens by itself;
- * the address keeps the job and every filter.
+ * the address keeps the job and every filter. In one column (narrow screens) choosing a job scrolls its detail into
+ * view, and the detail's back arrow returns to the list.
  */
 export function JobsPage() {
   return (
@@ -29,12 +33,12 @@ export function JobsPage() {
 }
 
 function JobsPageContent() {
-  const toast = useToast();
   const { query, jobId, setQuery, updateQuery, selectJob } = useJobsUrl();
   const list = useJobsList(query);
-  const save = useSaveJob();
-  const unsave = useUnsaveJob();
+  const { toggle } = useSaveToggle();
   const listScrollRef = useRef<HTMLDivElement>(null);
+  /** Counts the jobs chosen in one column: each change asks the detail panel to scroll itself into view. */
+  const [revealDetail, setRevealDetail] = useState(0);
   const companies = useFacet('companies', '', query.companies.length > 0);
 
   const items = useMemo(() => list.data?.pages.flatMap((page) => page.items) ?? [], [list.data]);
@@ -57,25 +61,32 @@ function JobsPageContent() {
   );
 
   const toggleSave = useCallback(
-    (job: JobListItem) => {
-      if (job.appliedOn) {
-        toast.info("You've applied to this job", 'It is in your Job Tracker as Applied.');
-        return;
-      }
-      if (job.saved && job.applicationId) {
-        unsave.mutate(
-          { jobId: job.id, applicationId: job.applicationId },
-          { onError: (error) => toast.error('The job could not be removed from saved jobs', userMessage(error)) },
-        );
-        return;
-      }
-      save.mutate(
-        { jobId: job.id },
-        { onError: (error) => toast.error('The job could not be saved', userMessage(error)) },
-      );
-    },
-    [save, unsave, toast],
+    (job: JobListItem) => toggle({ jobId: job.id, saved: job.saved, appliedOn: job.appliedOn, applicationId: job.applicationId }),
+    [toggle],
   );
+
+  // A job chosen from the list; in one column its detail (under the list) scrolls into view.
+  const openJob = useCallback(
+    (id: number) => {
+      selectJob(id);
+      if (isOneColumn()) setRevealDetail((count) => count + 1);
+    },
+    [selectJob],
+  );
+
+  // Back to the list from the detail (one column), with the chosen job in view.
+  const showList = useCallback(() => {
+    const panel = listScrollRef.current;
+    if (!panel || !isOneColumn()) return;
+    panel.querySelector('[aria-current="true"]')?.scrollIntoView({ block: 'nearest' });
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  // A job that no longer exists: back to the list, where the first job opens.
+  const backToJobs = useCallback(() => {
+    selectJob(null);
+    showList();
+  }, [selectJob, showList]);
 
   // After hiding, the next job in the list opens (or the one before when it was the last).
   const onJobsHidden = useCallback(
@@ -104,22 +115,23 @@ function JobsPageContent() {
         onReplace={setQuery}
         onClearAll={() => setQuery(clearedQuery(query))}
       />
+      {/* Clipped, not a scroll container: in one column the detail's sticky header then sticks under the app header. */}
       <div
         data-jobs-frame
-        className="mt-4 grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-t-surface border border-b-0 border-border bg-surface lg:grid-cols-3"
+        className="mt-4 grid min-h-0 flex-1 grid-cols-1 overflow-clip rounded-t-surface border border-b-0 border-border bg-surface lg:grid-cols-3"
       >
         <div
           ref={listScrollRef}
           role="region"
           aria-label="Job list"
-          className="max-h-[60vh] min-h-0 overflow-y-auto lg:max-h-none"
+          className="max-h-[60vh] min-h-0 scroll-mt-[79px] overflow-y-auto lg:max-h-none"
         >
           <JobList
             query={query}
             list={list}
             selectedId={jobId}
             scrollRef={listScrollRef}
-            onSelect={selectJob}
+            onSelect={openJob}
             onToggleSave={toggleSave}
             onQueryChange={updateQuery}
             onClearAll={() => setQuery(clearedQuery(query))}
@@ -130,6 +142,9 @@ function JobsPageContent() {
           jobId={jobId}
           waiting={waitingForFirst}
           onJobsHidden={onJobsHidden}
+          revealSignal={revealDetail}
+          onShowList={showList}
+          onBackToJobs={backToJobs}
           className="border-t border-border lg:col-span-2 lg:border-t-0 lg:border-l"
         />
       </div>

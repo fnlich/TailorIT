@@ -16,7 +16,7 @@ import type { RawPosting } from '../src/features/ingest/types';
 import { signIn } from './auth-helpers';
 import { createTestContext, TEST_NOW, type TestContext } from './helpers';
 
-// The job analysis service against the fake Claude CLI (tools/fake-claude/scenarios/job_analysis.json).
+// The job analysis service against the fake Claude CLI (tools/fake-claude/scenarios/job_analysis.mjs).
 
 let ctx: TestContext | null = null;
 afterEach(() => {

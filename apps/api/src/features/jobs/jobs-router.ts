@@ -8,6 +8,7 @@ import {
   matchResult,
   noResumeMatch,
   searchParamsToJobsQuery,
+  type JobAnalysisView,
   type JobFacetResponse,
   type LevelMatch,
   type MatchResult,
@@ -36,6 +37,31 @@ import {
 
 /** GET /api/jobs/:id/match: the job analysis card, plus the facts grid's experience-level check. */
 export type JobMatchWithLevel = MatchResult & { levelMatch: LevelMatch };
+
+/**
+ * GET /api/jobs/:id/insights: the analysis and the match computed from that very analysis, so the page's summary and
+ * keyword card change together when the AI analysis lands. `match` is null when it could not be computed.
+ */
+export interface JobInsights {
+  analysis: JobAnalysisView;
+  match: JobMatchWithLevel | null;
+}
+
+/** The viewer's default resume scored against an analysis's keywords, with the experience-level check. */
+function matchFor(
+  deps: AppDeps,
+  userId: string,
+  job: { experience_levels: string },
+  analysis: JobAnalysisView | null,
+): JobMatchWithLevel {
+  const keywords = analysis?.keywords ?? { high: [], low: [] };
+  const evidence = getResumeEvidence(deps, userId);
+  const match = evidence ? matchResult(evidence.text, keywords, evidence.resumeId) : noResumeMatch(keywords);
+  return {
+    ...match,
+    levelMatch: levelMatch(jobLevels(experienceLevelsOf(job.experience_levels), analysis), preferredLevels(deps, userId)),
+  };
+}
 
 /** A job id from the path; anything that is not one is a job that does not exist. */
 export function jobIdOf(req: Request): number {
@@ -103,14 +129,25 @@ export function createJobsRouter(deps: AppDeps): Router {
     const user = userOf(req);
     const jobId = jobIdOf(req);
     const job = requireJob(deps, jobId);
-    const analysis = analysisForJob(deps, jobId, { queue: false });
-    const keywords = analysis?.keywords ?? { high: [], low: [] };
-    const evidence = getResumeEvidence(deps, user.id);
-    const match = evidence ? matchResult(evidence.text, keywords, evidence.resumeId) : noResumeMatch(keywords);
-    const body: JobMatchWithLevel = {
-      ...match,
-      levelMatch: levelMatch(jobLevels(experienceLevelsOf(job.experience_levels), analysis), preferredLevels(deps, user.id)),
-    };
+    const body: JobMatchWithLevel = matchFor(deps, user.id, job, analysisForJob(deps, jobId, { queue: false }));
+    res.json(body);
+  });
+
+  // What the job page polls: the analysis (opening a job starts the AI one, as /analysis does) and the match read off
+  // that same analysis. A match that fails leaves the summary standing.
+  router.get('/:id/insights', (req, res) => {
+    const user = userOf(req);
+    const jobId = jobIdOf(req);
+    const job = requireJob(deps, jobId);
+    const analysis = analysisForJob(deps, jobId, { queue: true, userId: user.id });
+    if (!analysis) throw notFound('That job');
+    let match: JobMatchWithLevel | null = null;
+    try {
+      match = matchFor(deps, user.id, job, analysis);
+    } catch (error) {
+      deps.log.warn(`[jobs] the keyword match failed for job ${jobId}`, error);
+    }
+    const body: JobInsights = { analysis, match };
     res.json(body);
   });
 

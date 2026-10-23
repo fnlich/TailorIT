@@ -10,7 +10,6 @@ import {
   SavedSearchSchema,
   jobsQueryToQueryString,
   listResponse,
-  type JobAnalysisView,
   type JobDetail,
   type JobFacet,
   type JobFacetResponse,
@@ -33,9 +32,16 @@ export type JobListItem = z.infer<typeof JobListItemSchema>;
 export const JobListPageSchema = listResponse(JobListItemSchema);
 export type JobListPage = z.infer<typeof JobListPageSchema>;
 
-/** GET /api/jobs/:id/match: the "Improve Your Resume" card plus the facts grid's experience-level check. */
+/** The "Improve Your Resume" card plus the facts grid's experience-level check. */
 export const JobMatchSchema = MatchResultSchema.extend({ levelMatch: LevelMatchSchema.optional() });
 export type JobMatch = z.infer<typeof JobMatchSchema>;
+
+/**
+ * GET /api/jobs/:id/insights: the analysis ("About the job") and the match computed from that same analysis (the
+ * keyword card), so the two always change together. `match` is null when it could not be computed.
+ */
+export const JobInsightsSchema = z.object({ analysis: JobAnalysisViewSchema, match: JobMatchSchema.nullable() });
+export type JobInsights = z.infer<typeof JobInsightsSchema>;
 
 const HiddenSchema = z.object({ hidden: z.boolean() });
 const CountSchema = z.object({ total: z.number().int().nonnegative() });
@@ -48,9 +54,7 @@ export const jobsKeys = {
   count: (queryString: string) => ['jobs', 'count', queryString] as const,
   details: ['jobs', 'detail'] as const,
   detail: (id: number) => ['jobs', 'detail', id] as const,
-  analysis: (id: number) => ['jobs', 'analysis', id] as const,
-  matches: ['jobs', 'match'] as const,
-  match: (id: number, analysisVersion: string) => ['jobs', 'match', id, analysisVersion] as const,
+  insights: (id: number) => ['jobs', 'insights', id] as const,
   facet: (facet: JobFacet, q: string) => ['jobs', 'facets', facet, q] as const,
   facetsSummary: ['jobs', 'facets', 'summary'] as const,
   savedSearches: ['jobs', 'saved-searches'] as const,
@@ -78,12 +82,8 @@ export function fetchJob(id: number, signal?: AbortSignal) {
   return api.get<JobDetail>(`/api/jobs/${id}`, { schema: JobDetailSchema, signal });
 }
 
-export function fetchAnalysis(id: number, signal?: AbortSignal) {
-  return api.get<JobAnalysisView>(`/api/jobs/${id}/analysis`, { schema: JobAnalysisViewSchema, signal });
-}
-
-export function fetchMatch(id: number, signal?: AbortSignal) {
-  return api.get<JobMatch>(`/api/jobs/${id}/match`, { schema: JobMatchSchema, signal });
+export function fetchInsights(id: number, signal?: AbortSignal) {
+  return api.get<JobInsights>(`/api/jobs/${id}/insights`, { schema: JobInsightsSchema, signal });
 }
 
 export function fetchFacet(facet: JobFacet, q: string, signal?: AbortSignal) {
@@ -134,5 +134,13 @@ export function trackJob(jobId: number, status: typeof SAVED_STATUS | typeof APP
   });
 }
 
-/** Un-saves a job: deletes its application while it is still only Saved. */
-export const untrackJob = (applicationId: string) => api.delete(`/api/applications/${encodeURIComponent(applicationId)}`);
+/**
+ * Un-saves a job: archives its application (never deletes it, so its notes survive and Undo can bring it back). The
+ * Jobs page counts an archived application that is only Saved as not saved.
+ */
+export const archiveApplication = (applicationId: string) =>
+  api.post<ApplicationRef>(`/api/applications/${encodeURIComponent(applicationId)}/archive`, undefined, { schema: ApplicationRefSchema });
+
+/** Undo of an un-save: the archived application is active (and the job saved) again. */
+export const restoreApplication = (applicationId: string) =>
+  api.post<ApplicationRef>(`/api/applications/${encodeURIComponent(applicationId)}/restore`, undefined, { schema: ApplicationRefSchema });

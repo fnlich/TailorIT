@@ -60,8 +60,8 @@ function SearchBox({ q, onSearch, className }: { q: string; onSearch: (q: string
   );
 }
 
-function Divider() {
-  return <span aria-hidden="true" className="h-5 w-px shrink-0 bg-border" />;
+function Divider({ className }: { className?: string }) {
+  return <span aria-hidden="true" data-toolbar-divider className={clsx('h-5 w-px shrink-0 bg-border', className)} />;
 }
 
 export interface JobsToolbarProps {
@@ -74,7 +74,8 @@ export interface JobsToolbarProps {
 
 /**
  * The toolbar on the canvas: the search pill (as wide as the list panel), then right-aligned Location ⇕, Job Type,
- * Experience Level and Category pills, All filters, the saved-search bookmark and ✕ (clear all).
+ * Experience Level and Category pills, All filters, the saved-search bookmark and ✕ (clear all). When the row wraps
+ * (narrow screens), All filters, the bookmark and ✕ move as one group, and no divider is left at a row's end.
  */
 export function JobsToolbar({ query, onChange, onReplace, onClearAll, className }: JobsToolbarProps) {
   return (
@@ -89,19 +90,21 @@ export function JobsToolbar({ query, onChange, onReplace, onClearAll, className 
         <JobTypeFilter query={query} onChange={onChange} />
         <ExperienceLevelFilter query={query} onChange={onChange} />
         <CategoryFilter query={query} onChange={onChange} />
-        <Divider />
-        <AllFiltersDialog query={query} onApply={onReplace} />
-        <Divider />
-        <SavedSearches query={query} onApply={onReplace} />
-        <IconButton
-          label="Clear all filters"
-          tooltip="Clear all"
-          variant="outline"
-          shape="round"
-          icon={<XIcon size={18} weight="bold" />}
-          disabled={!hasJobFilters(query)}
-          onClick={onClearAll}
-        />
+        <Divider className="hidden lg:block" />
+        <div className="flex items-center gap-2">
+          <AllFiltersDialog query={query} onApply={onReplace} />
+          <Divider />
+          <SavedSearches query={query} onApply={onReplace} />
+          <IconButton
+            label="Clear all filters"
+            tooltip="Clear all"
+            variant="outline"
+            shape="round"
+            icon={<XIcon size={18} weight="bold" />}
+            disabled={!hasJobFilters(query)}
+            onClick={onClearAll}
+          />
+        </div>
       </div>
     </div>
   );

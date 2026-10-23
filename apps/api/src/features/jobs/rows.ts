@@ -33,7 +33,7 @@ export const SUMMARY_COLUMNS = `
   j.primary_location, j.location_count, j.work_arrangement, j.employment_type, j.experience_levels,
   j.salary_min, j.salary_max, j.salary_currency, j.salary_period,
   j.posted_at, j.first_seen_at, j.source_updated_at, j.active,
-  a.id AS application_id, a.current_status AS application_status,
+  a.id AS application_id, a.current_status AS application_status, a.archived_at AS application_archived_at,
   ${appliedOnSql('a')} AS applied_on`;
 
 /**
@@ -73,6 +73,7 @@ export interface SummaryRow {
   active: number;
   application_id: string | null;
   application_status: number | null;
+  application_archived_at: string | null;
   applied_on: string | null;
 }
 
@@ -193,8 +194,14 @@ export function toJobLocation(row: LocationRow): JobLocation {
   };
 }
 
+/**
+ * The viewer's tie to a job. Saved: the application is still only Saved and not archived (un-saving archives it, its
+ * notes and all, so Undo and saving again bring it back). An archived application that never got past Saved ties
+ * nothing to the job any more; one that did (Applied and on) still does.
+ */
 export function toListItem(row: SummaryRow): JobListItem {
-  const tracked = row.application_id !== null;
+  const onlySaved = row.application_status === STATUS.saved;
+  const applicationId = row.application_id !== null && !(onlySaved && row.application_archived_at) ? row.application_id : null;
   return {
     id: row.id,
     title: row.title,
@@ -208,9 +215,9 @@ export function toListItem(row: SummaryRow): JobListItem {
     postedAt: isoTimestamp(row.posted_at) ?? isoTimestamp(row.first_seen_at),
     updatedAt: isoTimestamp(row.source_updated_at),
     active: row.active === 1,
-    saved: tracked && row.application_status === STATUS.saved,
+    saved: applicationId !== null && onlySaved,
     appliedOn: isoDay(row.applied_on),
-    applicationId: row.application_id,
+    applicationId,
   };
 }
 

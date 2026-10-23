@@ -10,28 +10,32 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { toIsoDate, type JobDetail, type JobFacet, type JobReportBody, type JobsQuery } from '@tailorit/shared';
+import { useCallback } from 'react';
+import { useToast } from '@/components/ui/Toast';
+import { userMessage } from '@/lib/api';
 import {
   APPLIED_STATUS,
   SAVED_STATUS,
+  archiveApplication,
   createSavedSearch,
   deleteSavedSearch,
-  fetchAnalysis,
   fetchFacet,
   fetchFacetsSummary,
+  fetchInsights,
   fetchJob,
   fetchJobsCount,
   fetchJobsPage,
-  fetchMatch,
   fetchSavedSearches,
   hideCompany,
   hideJob,
   jobsKeys,
   listQueryString,
   reportJob,
+  restoreApplication,
   trackJob,
   unhideCompany,
   unhideJob,
-  untrackJob,
+  type ApplicationRef,
   type JobListItem,
   type JobListPage,
 } from './api';
@@ -79,24 +83,18 @@ export function useJobDetail(id: number | null) {
   });
 }
 
-/** The analysis; polled every 4 s while the AI one is being made ("Refining…"), then swapped in. */
-export function useJobAnalysis(id: number | null) {
+/**
+ * The analysis and the keyword match read off it, in one answer, so "About the job" and the keyword card change
+ * together. Polled every 4 s while the AI analysis is being made ("Refining…"); what is shown stays on screen until
+ * the next answer replaces it whole (no loading state in between).
+ */
+export function useJobInsights(id: number | null) {
   return useQuery({
-    queryKey: jobsKeys.analysis(id ?? 0),
-    queryFn: ({ signal }) => fetchAnalysis(id!, signal),
+    queryKey: jobsKeys.insights(id ?? 0),
+    queryFn: ({ signal }) => fetchInsights(id!, signal),
     enabled: id !== null,
-    staleTime: 5 * 60_000,
-    refetchInterval: (query) => (query.state.data?.refining ? 4000 : false),
-  });
-}
-
-/** The keyword match, refetched when the analysis it was computed from changes (deterministic → AI). */
-export function useJobMatch(id: number | null, analysisVersion: string | null) {
-  return useQuery({
-    queryKey: jobsKeys.match(id ?? 0, analysisVersion ?? ''),
-    queryFn: ({ signal }) => fetchMatch(id!, signal),
-    enabled: id !== null && analysisVersion !== null,
     staleTime: 60_000,
+    refetchInterval: (query) => (query.state.data?.analysis.refining ? 4000 : false),
   });
 }
 
@@ -211,22 +209,33 @@ export function useSaveJob() {
       await client.cancelQueries({ queryKey: jobsKeys.detail(jobId) });
       patchJob(client, jobId, { saved: true });
     },
-    // The tracker answers the existing application when there is one: still Saved, or already further along.
-    onSuccess: (application, { jobId }) =>
-      patchJob(client, jobId, {
-        saved: application.currentStatus === undefined || application.currentStatus === SAVED_STATUS,
-        applicationId: application.id,
-      }),
+    // The tracker answers the existing application when there is one (restored if it was archived): still Saved, or
+    // already further along.
+    onSuccess: (application, { jobId }) => patchJob(client, jobId, savedStateOf(application)),
     onError: (_error, { jobId }) => patchJob(client, jobId, { saved: false }),
     onSettled: (_data, _error, { jobId }) => refreshAfterTracking(client, jobId),
   });
 }
 
-/** Un-save: removes the job's application while it is only Saved. Optimistic. */
+function savedStateOf(application: ApplicationRef): Pick<JobListItem, 'saved' | 'applicationId'> {
+  return {
+    saved: application.currentStatus === undefined || application.currentStatus === SAVED_STATUS,
+    applicationId: application.id,
+  };
+}
+
+interface ApplicationInput extends TrackJobInput {
+  applicationId: string;
+}
+
+/**
+ * Un-save: archives the job's application (its notes and dates stay in the Job Tracker's archive, and Undo restores
+ * it). Optimistic.
+ */
 export function useUnsaveJob() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ applicationId }: TrackJobInput & { applicationId: string }) => untrackJob(applicationId),
+    mutationFn: ({ applicationId }: ApplicationInput) => archiveApplication(applicationId),
     onMutate: async ({ jobId }) => {
       await client.cancelQueries({ queryKey: jobsKeys.detail(jobId) });
       patchJob(client, jobId, { saved: false });
@@ -235,6 +244,88 @@ export function useUnsaveJob() {
     onError: (_error, { jobId }) => patchJob(client, jobId, { saved: true }),
     onSettled: (_data, _error, { jobId }) => refreshAfterTracking(client, jobId),
   });
+}
+
+/** Undo of an un-save: restores the archived application, so the job is saved again. Optimistic. */
+export function useRestoreSavedJob() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ applicationId }: ApplicationInput) => restoreApplication(applicationId),
+    onMutate: async ({ jobId, applicationId }) => {
+      await client.cancelQueries({ queryKey: jobsKeys.detail(jobId) });
+      patchJob(client, jobId, { saved: true, applicationId });
+    },
+    onSuccess: (application, { jobId }) => patchJob(client, jobId, savedStateOf(application)),
+    onError: (_error, { jobId }) => patchJob(client, jobId, { saved: false, applicationId: null }),
+    onSettled: (_data, _error, { jobId }) => refreshAfterTracking(client, jobId),
+  });
+}
+
+/** What the bookmark needs to know about a job: the list card's fields, or the detail's user state and id. */
+export interface SaveTarget {
+  jobId: number;
+  saved: boolean;
+  appliedOn: string | null;
+  applicationId: string | null;
+}
+
+/**
+ * The Save bookmark of the list cards and the detail: saves the job, or un-saves it with "Removed from saved jobs" and
+ * Undo. An applied job is left as it is (it is in the Job Tracker as Applied). `confirmSave` also confirms a save.
+ */
+export function useSaveToggle() {
+  const toast = useToast();
+  const save = useSaveJob();
+  const unsave = useUnsaveJob();
+  const restore = useRestoreSavedJob();
+  const { mutate: saveJob } = save;
+  const { mutate: unsaveJob } = unsave;
+  const { mutate: restoreJob } = restore;
+
+  const toggle = useCallback(
+    (job: SaveTarget, options: { confirmSave?: boolean } = {}) => {
+      if (job.appliedOn) {
+        toast.info("You've applied to this job", 'It is in your Job Tracker as Applied.');
+        return;
+      }
+      const { jobId, applicationId } = job;
+      if (job.saved && applicationId) {
+        unsaveJob(
+          { jobId, applicationId },
+          {
+            onSuccess: () =>
+              toast.toast({
+                type: 'info',
+                title: 'Removed from saved jobs',
+                description: 'It is archived in your Job Tracker, notes and all.',
+                action: {
+                  label: 'Undo',
+                  onClick: () =>
+                    restoreJob(
+                      { jobId, applicationId },
+                      { onError: (error) => toast.error('The job could not be saved again', userMessage(error)) },
+                    ),
+                },
+              }),
+            onError: (error) => toast.error('The job could not be removed from saved jobs', userMessage(error)),
+          },
+        );
+        return;
+      }
+      saveJob(
+        { jobId },
+        {
+          onSuccess: () => {
+            if (options.confirmSave) toast.success('Job saved', 'Find it in your Job Tracker under Saved.');
+          },
+          onError: (error) => toast.error('The job could not be saved', userMessage(error)),
+        },
+      );
+    },
+    [toast, saveJob, unsaveJob, restoreJob],
+  );
+
+  return { toggle, pending: save.isPending || unsave.isPending || restore.isPending };
 }
 
 /** "Did you apply?" → Yes, and "Already Applied?": tracks the job as Applied today. */

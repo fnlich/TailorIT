@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Button, buttonClasses } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { IconButton } from '@/components/ui/IconButton';
 import { BookmarkSimpleIcon, BriefcaseIcon, CaretDownIcon, ClockIcon, EyeIcon, EyeSlashIcon } from '@/components/ui/icons';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/Menu';
 import { Notice } from '@/components/ui/Notice';
@@ -19,20 +20,11 @@ import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { UnderlineTabs } from '@/components/ui/UnderlineTabs';
-import { userMessage } from '@/lib/api';
+import { isApiError, userMessage } from '@/lib/api';
 import { useNow } from '@/lib/useNow';
 import { CompanyLogo } from '../CompanyLogo';
-import {
-  useHideCompany,
-  useHideJob,
-  useJobAnalysis,
-  useJobDetail,
-  useJobMatch,
-  useMarkApplied,
-  useSaveJob,
-  useUnsaveJob,
-} from '../hooks';
-import { ExportIcon, FlagIcon } from '../icons';
+import { useHideCompany, useHideJob, useJobDetail, useJobInsights, useMarkApplied, useSaveToggle } from '../hooks';
+import { ArrowLeftIcon, ExportIcon, FlagIcon } from '../icons';
 import { jobLevelsOf } from '../format';
 import { jobShareUrl } from '../url';
 import { AboutJob } from './AboutJob';
@@ -57,6 +49,12 @@ export interface JobDetailPanelProps {
   waiting?: boolean;
   /** Called after jobs left the list (this one, or its company's): the page opens the next job. */
   onJobsHidden: (hidden: { jobId?: number; companyId?: number }) => void;
+  /** Changes when a job is chosen in the one-column layout: the panel scrolls itself into view. */
+  revealSignal?: number;
+  /** Back to the list (one column only: the back arrow shows below `lg`). */
+  onShowList?: () => void;
+  /** Leaves a job that no longer exists ("Back to jobs"). */
+  onBackToJobs?: () => void;
   className?: string;
 }
 
@@ -112,9 +110,18 @@ function DetailSkeleton() {
 /**
  * The right panel: a sticky header (Overview | Company anchors, the Applied chip or "Already Applied?", Save, Apply
  * or INACTIVE), then the company row with hide / share / report, the title, chips, the facts grid, "About the job"
- * beside the "Improve Your Resume" card, and the Company section. It scrolls on its own.
+ * beside the "Improve Your Resume" card, and the Company section. It scrolls on its own from `lg` up; below, the page
+ * scrolls and the header sticks under the app header.
  */
-export function JobDetailPanel({ jobId, waiting = false, onJobsHidden, className }: JobDetailPanelProps) {
+export function JobDetailPanel({
+  jobId,
+  waiting = false,
+  onJobsHidden,
+  revealSignal = 0,
+  onShowList,
+  onBackToJobs,
+  className,
+}: JobDetailPanelProps) {
   const detail = useJobDetail(jobId);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -122,6 +129,11 @@ export function JobDetailPanel({ jobId, waiting = false, onJobsHidden, className
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
   }, [jobId]);
+
+  // In one column the panel sits under the list: a job chosen there brings it into view (under the app header).
+  useEffect(() => {
+    if (revealSignal > 0) scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [revealSignal]);
 
   let content: ReactNode;
   if (jobId === null && waiting) {
@@ -137,6 +149,25 @@ export function JobDetailPanel({ jobId, waiting = false, onJobsHidden, className
     );
   } else if (detail.isPending) {
     content = <DetailSkeleton />;
+  } else if (detail.isError && isApiError(detail.error) && detail.error.code === 'not_found') {
+    // Trying again cannot bring back a job that is gone.
+    content = (
+      <div className="p-6">
+        <Notice
+          tone="info"
+          title="This job is no longer available"
+          action={
+            onBackToJobs && (
+              <Button variant="outline" size="sm" onClick={onBackToJobs}>
+                Back to jobs
+              </Button>
+            )
+          }
+        >
+          It may have been taken down, or the link is out of date.
+        </Notice>
+      </div>
+    );
   } else if (detail.isError) {
     content = (
       <div className="p-6">
@@ -154,13 +185,21 @@ export function JobDetailPanel({ jobId, waiting = false, onJobsHidden, className
       </div>
     );
   } else {
-    content = <JobDetailBody key={detail.data.id} job={detail.data} scrollRef={scrollRef} onJobsHidden={onJobsHidden} />;
+    content = (
+      <JobDetailBody
+        key={detail.data.id}
+        job={detail.data}
+        scrollRef={scrollRef}
+        onJobsHidden={onJobsHidden}
+        onShowList={onShowList}
+      />
+    );
   }
 
   return (
     <div
       ref={scrollRef}
-      className={clsx('relative h-full min-h-0 overflow-y-auto', className)}
+      className={clsx('relative h-full min-h-0 scroll-mt-[63px] lg:overflow-y-auto', className)}
       aria-label="Job details"
       role="region"
       aria-busy={detail.isFetching || undefined}
@@ -174,22 +213,20 @@ function JobDetailBody({
   job,
   scrollRef,
   onJobsHidden,
+  onShowList,
 }: {
   job: JobDetail;
   scrollRef: RefObject<HTMLDivElement | null>;
   onJobsHidden: JobDetailPanelProps['onJobsHidden'];
+  onShowList?: () => void;
 }) {
   const toast = useToast();
   const now = useNow();
-  const analysis = useJobAnalysis(job.id);
-  const analysisVersion = analysis.data
-    ? `${analysis.data.source}:${analysis.data.keywords.high.length}:${analysis.data.keywords.low.length}`
-    : analysis.isError
-      ? 'unavailable'
-      : null;
-  const match = useJobMatch(job.id, analysisVersion);
-  const save = useSaveJob();
-  const unsave = useUnsaveJob();
+  // "About the job" and the keyword card come from one answer, so they always change together.
+  const insights = useJobInsights(job.id);
+  const analysis = insights.data?.analysis;
+  const match = insights.data?.match ?? undefined;
+  const saveToggle = useSaveToggle();
   const markApplied = useMarkApplied();
   const hideJob = useHideJob();
   const hideCompany = useHideCompany();
@@ -200,7 +237,7 @@ function JobDetailBody({
 
   const { saved, appliedOn, applicationId, hidden, companyHidden } = job.userState;
   const chip = liveChip({ active: job.active, postedAt: job.postedAt, updatedAt: job.updatedAt }, now);
-  const levels = jobLevelsOf(job.experienceLevels, analysis.data);
+  const levels = jobLevelsOf(job.experienceLevels, analysis);
 
   // Overview | Company follow the scroll position (the Company tab lights up once its section reaches the header).
   useEffect(() => {
@@ -240,26 +277,7 @@ function JobDetailBody({
     [scrollRef],
   );
 
-  const toggleSave = () => {
-    if (appliedOn) {
-      toast.info("You've applied to this job", 'It is in your Job Tracker as Applied.');
-      return;
-    }
-    if (saved && applicationId) {
-      unsave.mutate(
-        { jobId: job.id, applicationId },
-        { onError: (error) => toast.error('The job could not be removed from saved jobs', userMessage(error)) },
-      );
-      return;
-    }
-    save.mutate(
-      { jobId: job.id },
-      {
-        onSuccess: () => toast.success('Job saved', 'Find it in your Job Tracker under Saved.'),
-        onError: (error) => toast.error('The job could not be saved', userMessage(error)),
-      },
-    );
-  };
+  const toggleSave = () => saveToggle.toggle({ jobId: job.id, saved, appliedOn, applicationId }, { confirmSave: true });
 
   const openPosting = () => {
     if (job.applyUrl) window.open(job.applyUrl, '_blank', 'noopener,noreferrer');
@@ -315,11 +333,22 @@ function JobDetailBody({
 
   return (
     <>
-      {/* Sticks to the panel's top on wide screens (the panel scrolls), under the app header on narrow ones. */}
+      {/*
+        Sticks to the panel's top on wide screens (the panel scrolls), under the app header on narrow ones. Narrow, the
+        actions get their own row and wrap from the left (never off the panel's edge), and a back arrow leads to the list.
+      */}
       <div
         data-detail-header
         className="sticky top-[63px] z-20 flex flex-wrap items-stretch gap-x-4 bg-surface px-4 pb-3 shadow-[inset_0_-1px_0_var(--color-border)] sm:px-6 lg:top-0 lg:h-[61px] lg:flex-nowrap lg:pb-0"
       >
+        {onShowList && (
+          <IconButton
+            label="Back to the job list"
+            icon={<ArrowLeftIcon size={18} weight="bold" />}
+            onClick={onShowList}
+            className="-ml-2 self-center lg:hidden"
+          />
+        )}
         <UnderlineTabs
           aria-label="Job sections"
           size="tight"
@@ -328,7 +357,7 @@ function JobDetailBody({
           onValueChange={jumpTo}
           listClassName="h-[61px] shadow-none"
         />
-        <div className="ml-auto flex w-full items-center justify-end gap-3 sm:w-auto sm:gap-4">
+        <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-4">
           {appliedOn ? (
             <Link href={trackerHref} className={buttonClasses({ variant: 'secondary' })} data-applied-chip>
               {appliedChipLabel(appliedOn)}
@@ -343,12 +372,12 @@ function JobDetailBody({
             aria-pressed={saved}
             icon={<BookmarkSimpleIcon size={16} weight={saved ? 'fill' : 'bold'} />}
             onClick={toggleSave}
-            disabled={save.isPending || unsave.isPending}
+            disabled={saveToggle.pending}
           >
             {saved ? 'Saved' : 'Save'}
           </Button>
           {job.active ? (
-            <Button onClick={openPosting} className="min-w-24" disabled={!job.applyUrl}>
+            <Button onClick={openPosting} className="sm:min-w-24" disabled={!job.applyUrl}>
               Apply
             </Button>
           ) : (
@@ -434,7 +463,7 @@ function JobDetailBody({
             </Pill>
           </div>
 
-          <FactsGrid job={job} levels={levels} levelMatch={match.data?.levelMatch} className="mt-8" />
+          <FactsGrid job={job} levels={levels} levelMatch={match?.levelMatch} className="mt-8" />
         </section>
 
         <hr className="mt-5 border-border" />
@@ -442,21 +471,26 @@ function JobDetailBody({
         <div className="mt-5 flex flex-col gap-8 xl:flex-row">
           <div className="min-w-0 flex-1">
             <AboutJob
-              analysis={analysis.data}
-              analysisPending={analysis.isPending}
-              analysisFailed={analysis.isError}
+              analysis={analysis}
+              analysisPending={insights.isPending}
+              analysisFailed={insights.isError && !insights.data}
               descriptionHtml={job.descriptionHtml}
             />
-            <div ref={companyRef} id="job-company" className="mt-12 scroll-mt-[140px] border-t border-border pt-8 lg:scroll-mt-[77px]">
+            <div
+              ref={companyRef}
+              id="job-company"
+              className="mt-12 scroll-mt-[180px] border-t border-border pt-8 sm:scroll-mt-[140px] lg:scroll-mt-[77px]"
+            >
               <CompanySection company={job.company} />
             </div>
           </div>
           <aside className="w-full shrink-0 xl:w-[300px]" aria-label="Job analysis">
+            {/* A failed poll keeps what is shown; only a first load that fails shows the error. */}
             <ImproveResumeCard
-              match={match.data}
-              pending={match.isPending && !analysis.isError}
-              error={match.error}
-              onRetry={() => void match.refetch()}
+              match={match}
+              pending={insights.isPending}
+              error={insights.data ? null : insights.error}
+              onRetry={() => void insights.refetch()}
             />
           </aside>
         </div>

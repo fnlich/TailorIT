@@ -4,6 +4,7 @@ import {
   SALARY_PERIODS,
   WORK_ARRANGEMENTS,
   containsTerm,
+  extractKeywords,
   isJobCategoryId,
   maskFalseFriends,
   isJobSubcategoryId,
@@ -13,18 +14,22 @@ import {
   toAnnualUsd,
   type EmploymentType,
   type ExperienceLevel,
+  type JobKeywords,
   type KeywordGroup,
   type Leadership,
   type SalaryPeriod,
   type WorkArrangement,
 } from '@tailorit/shared';
-import { MAX_HIGH_KEYWORDS, MAX_LOW_KEYWORDS, type AnalysisDraft } from './deterministic';
+import { getSkillLibrary } from '../../core/skills-vocabulary';
+import { inPostingCase, MAX_HIGH_KEYWORDS, MAX_LOW_KEYWORDS, type AnalysisDraft } from './deterministic';
 import type { JobAnalysisOutput } from './prompt';
 import { cleanItem, MAX_SECTION_ITEMS } from './sections';
 
 // What the model answered, made safe to show: keywords the posting does not carry are dropped (a term counts when
-// it or one of its synonyms is in the posting), bullets with little of the posting's wording in them are dropped
-// (the deterministic section stands in when a whole section goes), and every fact is checked against its vocabulary.
+// it or one of its synonyms is in the posting) and the rest are labelled as the posting writes them; a list left
+// empty or short is made up from the deterministic keywords. A bullet is dropped when little of the posting's wording
+// is in it, or it states a number or names a skill the posting does not (the deterministic section stands in when a
+// whole section goes). Every fact is checked against its vocabulary.
 
 export interface AiFacts {
   workArrangement: WorkArrangement | null;
@@ -52,23 +57,107 @@ function contentWords(text: string): string[] {
 }
 
 /**
- * Whether a bullet is the posting's own (most of its content words are in the posting). Short bullets pass: they
- * are usually a skill name the keyword check already covers.
+ * Numbers written one way: dashes as "-", "1 to 2" as "1-2", "5 or more" and "at least 5" as "5+", "40 percent" as
+ * "40%", thousands without separators.
  */
-export function grounded(bullet: string, postingWords: ReadonlySet<string>): boolean {
-  const words = contentWords(bullet);
-  if (words.length < 3) return true;
-  const found = words.filter((word) => postingWords.has(word) || postingWords.has(word.replace(/s$/, ''))).length;
-  return found / words.length >= 0.4;
+function numberText(text: string): string {
+  return text
+    .toLowerCase()
+    // Every hyphen and dash (Unicode "Pd": "–", "—", ...).
+    .replace(/\p{Pd}/gu, '-')
+    .replace(/(\d),(?=\d{3}(?!\d))/g, '$1')
+    .replace(/\b(?:at least|a minimum of|minimum of|minimum|min\.)\s+(\d+(?:\.\d+)?)(?![\d.]*\s*(?:-|to)\s*\d)/g, '$1+')
+    .replace(/(\d)\s*(?:-|to)\s*(?=\d)/g, '$1-')
+    .replace(/(\d)\s*(?:\+|or more\b|or above\b)/g, '$1+')
+    .replace(/(\d)\s*(?:%|percent\b)/g, '$1%');
 }
 
-function bullets(list: readonly string[], postingWords: ReadonlySet<string>): string[] {
+/** A number as `numberText` writes it: "5", "3.5", "1-2", "5+", "40%". */
+const NUMBER = /(?<![\p{L}\p{N}])\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?[+%]?/gu;
+
+export interface PostingNumbers {
+  /** Every number as written ("5+", "1-2", "40%", "120000"). */
+  written: ReadonlySet<string>;
+  /** Every plain value in them ("5", "1", "2", "40", "120000"). */
+  values: ReadonlySet<string>;
+}
+
+export function numbersOf(text: string): PostingNumbers {
+  const written = new Set<string>();
+  const values = new Set<string>();
+  for (const [token] of numberText(text).matchAll(NUMBER)) {
+    written.add(token);
+    for (const value of token.replace(/[+%]$/, '').split('-')) values.add(value);
+  }
+  return { written, values };
+}
+
+/**
+ * Whether every number in a bullet is the posting's: "5+", "1-2" and "40%" as the posting writes them, a plain number
+ * anywhere in it. So "5+ years" never stands for a posting's "8+ years".
+ */
+export function numbersStated(bullet: string, posting: PostingNumbers): boolean {
+  for (const [token] of numberText(bullet).matchAll(NUMBER)) {
+    const plain = /^\d+(?:\.\d+)?$/.test(token);
+    if (plain ? !posting.values.has(token) : !posting.written.has(token)) return false;
+  }
+  return true;
+}
+
+/** The skill library's terms a text names (as the deterministic keyword reading finds them). */
+function namedTerms(text: string): KeywordGroup[] {
+  const found = extractKeywords(text, getSkillLibrary().vocabulary, { maxHigh: 100, maxLow: 100 });
+  return [...found.high, ...found.low];
+}
+
+/** What a bullet is checked against: the posting's words, numbers and text, and the terms the model made up. */
+export interface PostingEvidence {
+  /** The posting's content words, each also without a plural "s". */
+  words: ReadonlySet<string>;
+  numbers: PostingNumbers;
+  /** The posting's title and text, false friends masked ("American Express" names no framework). */
+  text: string;
+  /** Keyword groups the model named that the posting does not carry. */
+  invented: readonly KeywordGroup[];
+}
+
+export function postingEvidence(postingText: string, invented: readonly KeywordGroup[] = []): PostingEvidence {
+  return {
+    words: new Set(contentWords(postingText).flatMap((item) => [item, item.replace(/s$/, '')])),
+    numbers: numbersOf(postingText),
+    text: maskFalseFriends(postingText),
+    invented,
+  };
+}
+
+/**
+ * Whether a bullet is the posting's own: most of its content words are in the posting (short bullets, usually a
+ * skill name, pass this test), and, given the full evidence, every number it states and every skill it names (a
+ * skill library term, or a keyword the model made up) is the posting's too. Given only the posting's words, the
+ * word test alone.
+ */
+export function grounded(bullet: string, posting: PostingEvidence | ReadonlySet<string>): boolean {
+  const evidence = 'words' in posting ? posting : null;
+  const postingWords = evidence ? evidence.words : (posting as ReadonlySet<string>);
+  const words = contentWords(bullet);
+  if (words.length >= 3) {
+    const found = words.filter((word) => postingWords.has(word) || postingWords.has(word.replace(/s$/, ''))).length;
+    if (found / words.length < 0.4) return false;
+  }
+  if (!evidence) return true;
+  if (!numbersStated(bullet, evidence.numbers)) return false;
+  const masked = maskFalseFriends(bullet);
+  if (evidence.invented.some((group) => spellingsOf(group).some((spelling) => containsTerm(masked, spelling)))) return false;
+  return namedTerms(bullet).every((group) => spellingsOf(group).some((spelling) => containsTerm(evidence.text, spelling)));
+}
+
+function bullets(list: readonly string[], evidence: PostingEvidence): string[] {
   const out: string[] = [];
   for (const raw of list) {
     if (out.length >= MAX_SECTION_ITEMS) break;
     if (typeof raw !== 'string') continue;
     const item = cleanItem(raw);
-    if (item.length < 3 || !grounded(item, postingWords)) continue;
+    if (item.length < 3 || !grounded(item, evidence)) continue;
     if (!out.some((existing) => existing.toLowerCase() === item.toLowerCase())) out.push(item);
   }
   return out;
@@ -84,16 +173,8 @@ export function groundedKeywords(
   const out: KeywordGroup[] = [];
   for (const raw of groups) {
     if (out.length >= max) break;
-    const term = String(raw.term ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
-    if (!term) continue;
-    const synonyms = [
-      ...new Set(
-        (raw.synonyms ?? [])
-          .map((synonym) => String(synonym ?? '').replace(/\s+/g, ' ').trim().slice(0, 120))
-          .filter((synonym) => synonym && synonym.toLowerCase() !== term.toLowerCase()),
-      ),
-    ].slice(0, 20);
-    const group: KeywordGroup = { term, synonyms };
+    const group = tidyGroup(raw);
+    if (!group) continue;
     const spellings = spellingsOf(group);
     const keys = spellings.map(synonymKey);
     if (keys.some((key) => seen.has(key))) continue;
@@ -102,6 +183,62 @@ export function groundedKeywords(
     out.push(group);
   }
   return out;
+}
+
+/** A keyword group with its term and synonyms trimmed and capped, synonyms once each; null without a term. */
+function tidyGroup(raw: { term: string; synonyms?: readonly string[] }): KeywordGroup | null {
+  const term = String(raw.term ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (!term) return null;
+  const synonyms = [
+    ...new Set(
+      (raw.synonyms ?? [])
+        .map((synonym) => String(synonym ?? '').replace(/\s+/g, ' ').trim().slice(0, 120))
+        .filter((synonym) => synonym && synonym.toLowerCase() !== term.toLowerCase()),
+    ),
+  ].slice(0, 20);
+  return { term, synonyms };
+}
+
+/** The model's keyword groups that the posting does not carry under any of their spellings. */
+export function inventedKeywords(
+  groups: ReadonlyArray<{ term: string; synonyms?: readonly string[] }>,
+  postingText: string,
+): KeywordGroup[] {
+  return groups
+    .map(tidyGroup)
+    .filter((group): group is KeywordGroup => group !== null)
+    .filter((group) => !spellingsOf(group).some((spelling) => containsTerm(postingText, spelling)));
+}
+
+/** Fewer grounded keywords than this and the model's list is filled out with the deterministic ones. */
+export const MIN_AI_KEYWORDS = 5;
+/** How many keywords a short list is filled out to (Simplify's card shows a dozen or so). */
+export const KEYWORD_FILL_TARGET = 12;
+
+/**
+ * The model's grounded keywords, made up from the deterministic ones when they are too few: none, and the
+ * deterministic keywords stand as they are; fewer than MIN_AI_KEYWORDS, and the deterministic ones they lack (by
+ * synonym key, high ones first, each keeping its priority) are added up to KEYWORD_FILL_TARGET. `seen` holds the
+ * model's keys.
+ */
+export function withFallbackKeywords(
+  model: JobKeywords,
+  fallback: JobKeywords | undefined,
+  postingText: string,
+  seen: Set<string>,
+): JobKeywords {
+  const total = model.high.length + model.low.length;
+  if (!fallback || total >= MIN_AI_KEYWORDS) return model;
+  if (total === 0) {
+    return {
+      high: groundedKeywords(fallback.high, postingText, seen, MAX_HIGH_KEYWORDS),
+      low: groundedKeywords(fallback.low, postingText, seen, MAX_LOW_KEYWORDS),
+    };
+  }
+  const room = KEYWORD_FILL_TARGET - total;
+  const high = groundedKeywords(fallback.high, postingText, seen, Math.min(room, MAX_HIGH_KEYWORDS - model.high.length));
+  const low = groundedKeywords(fallback.low, postingText, seen, Math.min(room - high.length, MAX_LOW_KEYWORDS - model.low.length));
+  return { high: [...model.high, ...high], low: [...model.low, ...low] };
 }
 
 const LEVEL_WORDS: Record<string, ExperienceLevel> = {
@@ -211,26 +348,36 @@ const EMPLOYMENT_WORDS: Record<string, EmploymentType> = {
   intern: 'internship',
 };
 
+/** What stands in where the model's answer falls short: the deterministic analysis of the same posting. */
+export interface AnalysisFallback extends Pick<AnalysisDraft, 'requirements' | 'responsibilities' | 'desired'> {
+  /** Its keywords: they replace an empty keyword list and fill out a short one. */
+  keywords?: JobKeywords;
+}
+
 /**
  * The model's answer as the analysis TailorIT stores. `posting` is the text the model read (title, then the
- * description); `fallback` supplies a section the model's answer leaves empty after grounding.
+ * description); `fallback` supplies a section the model's answer leaves empty after grounding, and the keywords a
+ * keyword list left empty or short needs.
  */
 export function finishAiAnalysis(
   output: JobAnalysisOutput,
   posting: { title: string; text: string },
-  fallback: Pick<AnalysisDraft, 'requirements' | 'responsibilities' | 'desired'>,
+  fallback: AnalysisFallback,
 ): FinishedAiAnalysis {
   const postingText = `${posting.title}\n${posting.text}`;
-  const postingWords = new Set(contentWords(postingText).flatMap((item) => [item, item.replace(/s$/, '')]));
   const seen = new Set<string>();
   // "Express" in "American Express" is not the framework: the matcher masks such phrases, and so does grounding.
   const groundText = maskFalseFriends(postingText);
-  const high = groundedKeywords(output.keywords.high, groundText, seen, MAX_HIGH_KEYWORDS);
-  const low = groundedKeywords(output.keywords.low, groundText, seen, MAX_LOW_KEYWORDS);
+  const model: JobKeywords = {
+    high: groundedKeywords(output.keywords.high, groundText, seen, MAX_HIGH_KEYWORDS),
+    low: groundedKeywords(output.keywords.low, groundText, seen, MAX_LOW_KEYWORDS),
+  };
+  const keywords = inPostingCase(withFallbackKeywords(model, fallback.keywords, groundText, seen), postingText);
 
-  const requirements = bullets(output.summary.requirements, postingWords);
-  const responsibilities = bullets(output.summary.responsibilities, postingWords);
-  const desired = bullets(output.summary.desiredQualifications, postingWords);
+  const evidence = postingEvidence(postingText, inventedKeywords([...output.keywords.high, ...output.keywords.low], groundText));
+  const requirements = bullets(output.summary.requirements, evidence);
+  const responsibilities = bullets(output.summary.responsibilities, evidence);
+  const desired = bullets(output.summary.desiredQualifications, evidence);
 
   const categoryId = output.category?.id && isJobCategoryId(output.category.id) ? output.category.id : null;
   const subcategoryIds = categoryId
@@ -256,7 +403,7 @@ export function finishAiAnalysis(
     requirements: requirements.length ? requirements : fallback.requirements,
     responsibilities: responsibilities.length ? responsibilities : fallback.responsibilities,
     desired: desired.length ? desired : fallback.desired,
-    keywords: { high, low },
+    keywords,
     experienceLevels: levelsOf(output.experienceLevels),
     leadership,
     minYears,
