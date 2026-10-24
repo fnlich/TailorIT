@@ -128,7 +128,8 @@ function cursorClause(spec: SortSpec, cursor: string | undefined, scope: string)
   return { sql: `(${key} ${op} ? OR (${key} = ? AND a.id ${op} ?))`, params: [k, k, id] };
 }
 
-function orderClause(spec: SortSpec): string {
+/** The ORDER BY of a sort (table alias `a`), the id breaking ties; the resume ZIP lists applications this way too. */
+export function orderClause(spec: SortSpec): string {
   const direction = spec.order === 'desc' ? 'DESC' : 'ASC';
   return `ORDER BY ${SORT_KEY_SQL[spec.sort]} ${direction}, a.id ${direction}`;
 }

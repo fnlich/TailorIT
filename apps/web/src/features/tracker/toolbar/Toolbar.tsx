@@ -9,7 +9,17 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/Menu';
 import { SearchPill } from '@/components/ui/SearchPill';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { ArchiveIcon, ArrowCounterClockwiseIcon, CaretDownIcon, ChartLineIcon, KanbanIcon, PlusIcon, RowsIcon, TrashIcon } from '@/components/ui/icons';
+import {
+  ArchiveIcon,
+  ArrowCounterClockwiseIcon,
+  CaretDownIcon,
+  ChartLineIcon,
+  FileZipIcon,
+  KanbanIcon,
+  PlusIcon,
+  RowsIcon,
+  TrashIcon,
+} from '@/components/ui/icons';
 import { filterChips, selectedLabel, withoutChip, DEFAULT_FILTERS, type FilterState } from '../state';
 import { StatusIcon } from '../status';
 
@@ -135,7 +145,10 @@ const CONFIRM: Record<'archive' | 'unarchive' | 'delete', { title: string; descr
   },
 };
 
-/** "Manage jobs": the select-mode bar with its bulk actions and Simplify's confirmations. */
+/**
+ * "Manage jobs": the select-mode bar with its bulk actions and Simplify's confirmations, and "Build resumes" (a zip of
+ * the selected applications' resumes; like every action here it needs a selection).
+ */
 export function ManageBar({
   tab,
   count,
@@ -143,6 +156,8 @@ export function ManageBar({
   allSelected,
   onSelectAll,
   onBulk,
+  onBuildResumes,
+  buildingResumes,
   onDone,
 }: {
   tab: TrackerTab;
@@ -151,6 +166,9 @@ export function ManageBar({
   allSelected: boolean;
   onSelectAll: (selected: boolean) => void;
   onBulk: (kind: BulkKind) => Promise<void>;
+  onBuildResumes: () => void;
+  /** A zip is being built (the button waits for it). */
+  buildingResumes: boolean;
   onDone: () => void;
 }) {
   const [pending, setPending] = useState<BulkKind | null>(null);
@@ -219,6 +237,15 @@ export function ManageBar({
             ))}
           </MenuContent>
         </Menu>
+        <Button
+          variant="outline"
+          size="sm"
+          icon={<FileZipIcon size={14} />}
+          disabled={none || buildingResumes}
+          onClick={onBuildResumes}
+        >
+          {buildingResumes ? 'Building resumes...' : 'Build resumes'}
+        </Button>
         <Button size="sm" onClick={onDone}>
           Done
         </Button>

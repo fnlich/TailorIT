@@ -15,6 +15,7 @@ import { ingestFeature } from './ingest/index';
 import { jobsFeature } from './jobs/index';
 import { applicationsFeature } from './applications/index';
 import { resumeMatchFeature } from './resume-match/index';
+import { resumeZipFeature } from './resume-zip/index';
 import { demoFeature } from './demo/index';
 
 /**
@@ -36,6 +37,8 @@ export const FEATURES: Feature[] = [
   jobAnalysisFeature,
   ingestFeature,
   jobsFeature,
+  // Before the tracker: its /api/applications/:id routes must never take /api/applications/resume-zip/...
+  resumeZipFeature,
   applicationsFeature,
   resumeMatchFeature,
   demoFeature,

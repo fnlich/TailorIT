@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Download, type Locator, type Page } from '@playwright/test';
 
 /*
  * Work package T (Job Tracker) user flows against the dev server (`npm run dev`, AUTH_DEV_FIXED_CODE set). Each test
@@ -35,6 +35,31 @@ async function signInFresh(page: Page, email: string): Promise<APIRequestContext
     }
   }
   return request;
+}
+
+/** A small, valid one-page PDF with these lines of text (the server reads uploads, so it must be a real one). */
+function minimalPdf(lines: string[]): Buffer {
+  const escape = (text: string) => text.replace(/[()\\]/g, (char) => `\\${char}`);
+  const shown = lines.map((line, index) => `${index === 0 ? '' : '0 -16 Td '}(${escape(line)}) Tj`);
+  const ops = ['BT', '/F1 12 Tf', '72 770 Td', ...shown, 'ET'].join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [4 0 R] /Count 1 >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 5 0 R /Resources << /Font << /F1 3 0 R >> >> >>',
+    `<< /Length ${Buffer.byteLength(ops)} >>\nstream\n${ops}\nendstream`,
+  ];
+  let body = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(body));
+    body += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(body);
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) body += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(body, 'latin1');
 }
 
 const column = (page: Page, status: number) => page.locator(`[data-column="${status}"]`);
@@ -372,6 +397,88 @@ test.describe('job tracker', () => {
     await archiveAll.getByRole('button', { name: 'Archive' }).click();
     await expect(page.getByRole('tab', { name: 'Active (0)' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Archived (3)' })).toBeVisible();
+  });
+
+  test('Build resumes: a zip of the Saved applications, then of the Manage jobs selection', async ({ page }) => {
+    test.setTimeout(120_000);
+    const request = await signInFresh(page, 'tracker-zip@tailorit.dev');
+    // signInFresh empties only the applications: this account's resumes go too, one by one (a bulk delete keeps the
+    // default resume).
+    const before = (await (await request.get('/api/resumes')).json()) as { items: Array<{ id: string }> };
+    for (const item of before.items) {
+      expect((await request.delete(`/api/resumes/${item.id}`, { headers: { Origin: ORIGIN } })).ok()).toBeTruthy();
+    }
+    expect((await request.patch('/api/me', { headers: { Origin: ORIGIN }, data: { name: 'Zip Tester' } })).ok()).toBeTruthy();
+    const pdf = minimalPdf(['Zip Tester', 'Backend Engineer, Raleigh NC', 'Experience: Go and PostgreSQL services since 2019.']);
+    const uploaded = await request.post('/api/resumes/upload', {
+      headers: { Origin: ORIGIN },
+      multipart: { file: { name: 'Zip Tester CV.pdf', mimeType: 'application/pdf', buffer: pdf } },
+    });
+    expect(uploaded.status(), await uploaded.text()).toBe(201);
+    const resumeId = ((await uploaded.json()) as { resume: { id: string } }).resume.id;
+    for (const [title, status] of [['Alpha Role', 1], ['Beta Role', 1], ['Applied Role', 2]] as const) {
+      const created = await request.post('/api/applications', {
+        headers: { Origin: ORIGIN },
+        data: { title, companyName: 'Umbrella', employmentType: 'full_time', status, resumeId },
+      });
+      expect(created.ok(), await created.text()).toBeTruthy();
+    }
+    const zipText = async (download: Promise<Download>) => {
+      const file = await download;
+      expect(file.suggestedFilename()).toMatch(/^TailorIT_Resumes_\d{4}-\d{2}-\d{2}\.zip$/);
+      const bytes = await readFile((await file.path())!);
+      // Stored entries: the upload is in the zip byte for byte.
+      expect(bytes.includes(pdf)).toBe(true);
+      return bytes.toString('latin1');
+    };
+    const notifications = page.getByRole('region', { name: 'Notifications' });
+
+    await page.goto('/tracker');
+    await expect(column(page, 1).locator('[data-application-card]')).toHaveCount(2);
+
+    // Options › Build resumes (zip): every active Saved application, while a toast says how far it is.
+    let download = page.waitForEvent('download');
+    await page.getByRole('button', { name: /^Options/ }).click();
+    await page.getByRole('menuitem', { name: 'Build resumes (zip)' }).click();
+    await expect(notifications.getByText('Building resumes for your Saved applications...')).toBeVisible();
+    const all = await zipText(download);
+    expect(all).toContain('Umbrella/Alpha Role/Zip_Tester_resume.pdf');
+    expect(all).toContain('Umbrella/Beta Role/Zip_Tester_resume.pdf');
+    expect(all).not.toContain('Applied Role');
+    expect(all).not.toContain('SKIPPED.txt');
+    await expect(notifications.getByText('Resumes ready')).toBeVisible();
+    await expect(notifications.getByText(/^2 resumes in TailorIT_Resumes_\d{4}-\d{2}-\d{2}\.zip\.$/)).toBeVisible();
+    await page.screenshot({ path: 'e2e/artifacts/tracker/zip-ready.png' });
+
+    // Manage jobs: the bar's Build resumes needs a selection, and builds only that.
+    await page.getByRole('button', { name: /^Options/ }).click();
+    await page.getByRole('menuitem', { name: 'Manage jobs' }).click();
+    const bar = page.getByRole('toolbar', { name: 'Manage jobs' });
+    await expect(bar.getByRole('button', { name: 'Build resumes' })).toBeDisabled();
+    await page.getByRole('checkbox', { name: 'Select Applied Role' }).click();
+    await expect(bar).toContainText('1 Job(s) Selected');
+    await page.screenshot({ path: 'e2e/artifacts/tracker/zip-manage-bar.png' });
+    download = page.waitForEvent('download');
+    await bar.getByRole('button', { name: 'Build resumes' }).click();
+    await expect(notifications.getByText('Building resumes for 1 application...')).toBeVisible();
+    const one = await zipText(download);
+    expect(one).toContain('Umbrella/Applied Role/Zip_Tester_resume.pdf');
+    expect(one).not.toContain('Alpha Role');
+    await expect(notifications.getByText(/^1 resume in TailorIT_Resumes_/)).toBeVisible();
+
+    // With no Saved application left, the Options entry says so instead of building.
+    await bar.getByRole('button', { name: 'Done' }).click();
+    for (const title of ['Alpha Role', 'Beta Role']) {
+      await card(page, title).getByRole('button', { name: 'Application actions' }).click();
+      await page.getByRole('menuitem', { name: 'Archive application' }).click();
+      await expect(card(page, title)).toHaveCount(0);
+    }
+    await page.getByRole('button', { name: /^Options/ }).click();
+    await page.getByRole('menuitem', { name: 'Build resumes (zip)' }).click();
+    await expect(notifications.getByText('No Saved applications')).toBeVisible();
+    await expect(notifications.getByText('Save jobs from the Jobs page, or select applications in Manage jobs.')).toBeVisible();
+
+    expect((await request.delete(`/api/resumes/${resumeId}`, { headers: { Origin: ORIGIN } })).ok()).toBeTruthy();
   });
 
   test('Import CSV wizard: map columns, review companies, map statuses and job types', async ({ page }) => {

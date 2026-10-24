@@ -23,6 +23,16 @@ export interface PrintPdfOptions {
   preferCSSPageSize?: boolean;
   /** Print background colours and images. Default true (templates rely on them). */
   printBackground?: boolean;
+  /**
+   * Stops waiting for a free page, or the render itself, when it aborts: the promise rejects with the signal's reason
+   * as it is (not wrapped), and the page and its slot are freed.
+   */
+  signal?: AbortSignal;
+  /**
+   * The longest to wait for a free page while every slot is busy. Past it the call gives up without rendering:
+   * 429 `rate_limited` (with retryAfterSeconds). Default: wait as long as it takes.
+   */
+  waitMs?: number;
 }
 
 export interface ScreenshotOptions {
@@ -64,19 +74,62 @@ export function getPdfService(deps: Pick<AppDeps, 'services'>): PdfService {
   return service;
 }
 
-/** A counting semaphore with a FIFO queue. */
+export interface AcquireOptions {
+  /** Gives up waiting when it aborts: rejects with the signal's reason, and no slot is taken. */
+  signal?: AbortSignal;
+  /** Gives up after this many ms without a free slot: rejects with SlotWaitTimeout, and no slot is taken. */
+  timeoutMs?: number;
+}
+
+/** No slot came free within `AcquireOptions.timeoutMs`. */
+export class SlotWaitTimeout extends Error {
+  constructor(readonly waitedMs: number) {
+    super(`No slot came free within ${waitedMs} ms.`);
+    this.name = 'SlotWaitTimeout';
+  }
+}
+
+/** A counting semaphore with a FIFO queue. A waiter that gives up leaves the queue, so it never holds a slot. */
 export class Semaphore {
   private active = 0;
   private readonly queue: Array<() => void> = [];
 
   constructor(private readonly size: number) {}
 
-  async acquire(): Promise<void> {
+  async acquire(options: AcquireOptions = {}): Promise<void> {
+    const { signal, timeoutMs } = options;
+    signal?.throwIfAborted();
     if (this.active < this.size) {
       this.active += 1;
       return;
     }
-    await new Promise<void>((resolve) => this.queue.push(resolve));
+    await new Promise<void>((resolve, reject) => {
+      let timer: NodeJS.Timeout | undefined;
+      // Each of these runs only after the executor has defined them all.
+      const settle = () => {
+        if (timer) clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
+      };
+      // `release` hands the slot over by calling this; from then on the slot is the caller's.
+      const granted = () => {
+        settle();
+        resolve();
+      };
+      const giveUp = (reason: unknown) => {
+        const index = this.queue.indexOf(granted);
+        if (index === -1) return; // already handed a slot
+        this.queue.splice(index, 1);
+        settle();
+        reject(reason);
+      };
+      const onAbort = () => giveUp(signal?.reason);
+      this.queue.push(granted);
+      signal?.addEventListener('abort', onAbort, { once: true });
+      if (timeoutMs !== undefined) {
+        timer = setTimeout(() => giveUp(new SlotWaitTimeout(timeoutMs)), Math.max(0, timeoutMs));
+        timer.unref?.();
+      }
+    });
   }
 
   /** Hands the slot straight to the next waiter, or frees it. */
@@ -121,14 +174,47 @@ const launchChrome: BrowserLauncher = (location, timeoutMs) =>
 
 class RenderTimeout extends Error {}
 
-/** Rejects when `ms` pass first. A late failure of `work` is swallowed rather than left unhandled. */
-function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+/**
+ * Rejects when `ms` pass first, or with the signal's reason when it aborts first. A late failure of `work` is swallowed
+ * rather than left unhandled.
+ */
+function withDeadline<T>(work: Promise<T>, ms: number, signal?: AbortSignal): Promise<T> {
   work.catch(() => undefined);
   let timer: NodeJS.Timeout | undefined;
+  let onAbort: (() => void) | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
+    // Aborted already (say, while the browser was starting): no listener would ever hear it.
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
     timer = setTimeout(() => reject(new RenderTimeout(`Rendering took longer than ${ms} ms.`)), ms);
+    if (signal) {
+      onAbort = () => reject(signal.reason);
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
   });
-  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+  return Promise.race([work, deadline]).finally(() => {
+    clearTimeout(timer);
+    if (onAbort) signal?.removeEventListener('abort', onAbort);
+  });
+}
+
+/** The wait limit of printPdf passed: every page stayed busy rendering for others. */
+function busyError(waitedMs: number): AppError {
+  const seconds = Math.max(1, Math.round(waitedMs / 1000));
+  return new AppError(
+    'rate_limited',
+    `PDF export is busy right now (no page came free within ${seconds} second${seconds === 1 ? '' : 's'}). ` +
+      'Please try again in a moment.',
+    { retryAfterSeconds: 10 },
+  );
+}
+
+/** How a render may be stopped: an abort signal, and a wait limit for a free page. */
+interface RenderControl {
+  signal?: AbortSignal;
+  waitMs?: number;
 }
 
 function renderError(error: unknown, timeoutMs: number): AppError {
@@ -206,10 +292,17 @@ export function createPdfService(deps: AppDeps, options: PdfServiceOptions = {})
     return launching;
   }
 
-  async function withPage<T>(work: (page: Page) => Promise<T>): Promise<T> {
-    await slots.acquire();
+  async function withPage<T>(work: (page: Page) => Promise<T>, control: RenderControl = {}): Promise<T> {
+    const { signal, waitMs } = control;
+    try {
+      await slots.acquire({ signal, timeoutMs: waitMs });
+    } catch (error) {
+      if (error instanceof SlotWaitTimeout) throw busyError(error.waitedMs);
+      throw error;
+    }
     const opened: { page?: Page; abandoned?: boolean } = {};
     try {
+      signal?.throwIfAborted();
       // Starting the browser has its own timeout (and its own error); the deadline covers the render itself.
       const current = await getBrowser();
       const job = (async () => {
@@ -222,8 +315,10 @@ export function createPdfService(deps: AppDeps, options: PdfServiceOptions = {})
         await lockDown(page, timeoutMs);
         return work(page);
       })();
-      return await withDeadline(job, timeoutMs);
+      return await withDeadline(job, timeoutMs, signal);
     } catch (error) {
+      // A stop asked for by the caller is passed on as it is, so the caller can tell it from a failed render.
+      if (signal?.aborted && error === signal.reason) throw error;
       throw renderError(error, timeoutMs);
     } finally {
       opened.abandoned = true;
@@ -234,17 +329,20 @@ export function createPdfService(deps: AppDeps, options: PdfServiceOptions = {})
 
   return {
     printPdf(html, printOptions = {}) {
-      return withPage(async (page) => {
-        await page.setContent(html, { waitUntil: 'load', timeout: timeoutMs });
-        const pdf = await page.pdf({
-          format: printOptions.format ?? 'A4',
-          margin: printOptions.margin,
-          preferCSSPageSize: printOptions.preferCSSPageSize ?? false,
-          printBackground: printOptions.printBackground ?? true,
-          timeout: timeoutMs,
-        });
-        return Buffer.from(pdf);
-      });
+      return withPage(
+        async (page) => {
+          await page.setContent(html, { waitUntil: 'load', timeout: timeoutMs });
+          const pdf = await page.pdf({
+            format: printOptions.format ?? 'A4',
+            margin: printOptions.margin,
+            preferCSSPageSize: printOptions.preferCSSPageSize ?? false,
+            printBackground: printOptions.printBackground ?? true,
+            timeout: timeoutMs,
+          });
+          return Buffer.from(pdf);
+        },
+        { signal: printOptions.signal, waitMs: printOptions.waitMs },
+      );
     },
 
     screenshotPng(html, shot) {

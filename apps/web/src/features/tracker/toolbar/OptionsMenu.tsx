@@ -30,7 +30,14 @@ import {
   MenuSubContent,
   MenuTrigger,
 } from '@/components/ui/Menu';
-import { ArchiveIcon, CopyIcon, DownloadSimpleIcon, SlidersHorizontalIcon, UploadSimpleIcon } from '@/components/ui/icons';
+import {
+  ArchiveIcon,
+  CopyIcon,
+  DownloadSimpleIcon,
+  FileZipIcon,
+  SlidersHorizontalIcon,
+  UploadSimpleIcon,
+} from '@/components/ui/icons';
 import { useNow } from '@/lib/useNow';
 import { activeFilterCount, hasFilters, toggleStatus, DEFAULT_FILTERS, type FilterState } from '../state';
 import { StatusIcon } from '../status';
@@ -101,6 +108,8 @@ export function OptionsMenu({
   onManage,
   onImport,
   onExport,
+  onBuildResumes,
+  buildingResumes,
   onArchiveAll,
 }: {
   view: TrackerView;
@@ -115,6 +124,10 @@ export function OptionsMenu({
   onManage: () => void;
   onImport: () => void;
   onExport: () => void;
+  /** "Build resumes (zip)": every active Saved application's resume in one zip. */
+  onBuildResumes: () => void;
+  /** A zip is being built (the entry waits for it). */
+  buildingResumes: boolean;
   onArchiveAll: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -285,6 +298,9 @@ export function OptionsMenu({
           </MenuItem>
           <MenuItem icon={<UploadSimpleIcon size={16} />} onClick={onExport}>
             Export CSV
+          </MenuItem>
+          <MenuItem icon={<FileZipIcon size={16} />} disabled={buildingResumes} onClick={onBuildResumes}>
+            {buildingResumes ? 'Building resumes...' : 'Build resumes (zip)'}
           </MenuItem>
           <MenuSeparator />
           <MenuItem icon={<ArchiveIcon size={16} />} onClick={onArchiveAll}>

@@ -2,9 +2,10 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { Suspense, useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   APPLICATION_STATUSES,
+  RESUME_ZIP_MAX_APPLICATIONS,
   hideColumn,
   showColumn,
   visibleColumns,
@@ -47,12 +48,26 @@ import { AddApplicationSheet } from './sheets/AddApplicationSheet';
 import { activeFilterCount, chooseView, effectiveView, filterKey, DEFAULT_FILTERS, type FilterState } from './state';
 import { FilterChipsRow, ManageBar, SearchRow, TabsRow, type BulkKind } from './toolbar/Toolbar';
 import { OptionsMenu } from './toolbar/OptionsMenu';
+import { buildingProgress, buildingTitle, buildResumeZip, resumeZipRun, zipOutcomeText } from './zip/resumeZip';
 
 const EMPTY_LIMITS: ColumnLimits = {};
 const EMPTY_SELECTION: ReadonlySet<string> = new Set();
 /** The API takes at most 500 ids per bulk request. */
 const BULK_CHUNK = 500;
 const PAGE_STEP = 25;
+
+/**
+ * Whether this tab is building a resume zip, and its last status. It lives outside the page: a build keeps going when
+ * the tracker is left, and the tracker shows it again when it is opened anew.
+ */
+function useResumeZipRun() {
+  return useSyncExternalStore(resumeZipRun.subscribe, resumeZipRun.get, resumeZipRun.get);
+}
+
+/** The waiting toast's line, kept current as the build reports progress. */
+function ZipProgressLine() {
+  return <>{buildingProgress(useResumeZipRun().build)}</>;
+}
 
 /**
  * The Job Tracker (Simplify's): Active / Archived, Board | List | Chart, search, the Options menu, Add application
@@ -244,6 +259,52 @@ function Tracker() {
     }
   };
 
+  const buildingResumes = useResumeZipRun().running;
+
+  /**
+   * "Build resumes": a zip of each application's resume. `ids`: the Manage jobs selection (only what is on screen, as
+   * the bulk actions do); null: every active Saved application. The waiting toast stays until the zip is saved.
+   */
+  const buildResumes = async (ids: string[] | null) => {
+    if (resumeZipRun.get().running) return;
+    if (ids === null && counts.data && (counts.data.byStatus['1'] ?? 0) === 0) {
+      toast.info('No Saved applications', 'Save jobs from the Jobs page, or select applications in Manage jobs.');
+      return;
+    }
+    if (ids !== null && ids.length === 0) return;
+    if (ids !== null && ids.length > RESUME_ZIP_MAX_APPLICATIONS) {
+      toast.error(
+        `Select at most ${RESUME_ZIP_MAX_APPLICATIONS} applications`,
+        `One zip holds up to ${RESUME_ZIP_MAX_APPLICATIONS} resumes. Select fewer and build again.`,
+      );
+      return;
+    }
+    resumeZipRun.set({ running: true, build: null });
+    const waiting = toast.toast({
+      type: 'info',
+      title: buildingTitle(ids?.length ?? null),
+      description: <ZipProgressLine />,
+      timeout: 0,
+    });
+    try {
+      const ready = await buildResumeZip({ ids, onProgress: (build) => resumeZipRun.set({ running: true, build }) });
+      toast.dismiss(waiting);
+      toast.toast({ type: 'success', title: 'Resumes ready', description: zipOutcomeText(ready), timeout: 10_000 });
+    } catch (error) {
+      toast.dismiss(waiting);
+      toast.error("We couldn't build your resumes", userMessage(error, 'Please try again.'));
+    } finally {
+      resumeZipRun.set({ running: false, build: resumeZipRun.get().build });
+      // Building first makes the selection's pending resume choices, which the detail sheets show.
+      void invalidateApplications(client);
+    }
+  };
+
+  const buildSelectedResumes = () => {
+    const onScreen = new Set(loadedIds);
+    void buildResumes([...selected].filter((id) => onScreen.has(id)));
+  };
+
   const filtered = q.trim() !== '' || activeFilterCount(filters) > 0;
   const emptyKind: ListEmptyKind = filtered ? 'no-match' : url.tab === 'archived' ? 'archived' : 'first';
 
@@ -277,6 +338,8 @@ function Tracker() {
               }}
               onImport={() => setImportOpen(true)}
               onExport={() => void exportCsv()}
+              onBuildResumes={() => void buildResumes(null)}
+              buildingResumes={buildingResumes}
               onArchiveAll={() => setArchiveAllOpen(true)}
             />
           }
@@ -289,6 +352,8 @@ function Tracker() {
             allSelected={loadedIds.length > 0 && loadedIds.every((id) => selected.has(id))}
             onSelectAll={(on) => setSelected(on ? new Set(loadedIds) : new Set())}
             onBulk={bulk}
+            onBuildResumes={buildSelectedResumes}
+            buildingResumes={buildingResumes}
             onDone={() => {
               setSelectMode(false);
               setSelected(new Set());

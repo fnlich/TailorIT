@@ -37,6 +37,7 @@ export { EnvelopeIcon } from '@phosphor-icons/react/Envelope';
 export { EyeIcon } from '@phosphor-icons/react/Eye';
 export { EyeSlashIcon } from '@phosphor-icons/react/EyeSlash';
 export { FileTextIcon } from '@phosphor-icons/react/FileText';
+export { FileZipIcon } from '@phosphor-icons/react/FileZip';
 export { FunnelIcon } from '@phosphor-icons/react/Funnel';
 export { GearSixIcon } from '@phosphor-icons/react/GearSix';
 export { HeartIcon } from '@phosphor-icons/react/Heart';
