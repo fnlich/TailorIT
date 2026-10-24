@@ -362,10 +362,12 @@ export async function seedDemo(deps: AppDeps, options: DemoSeedOptions = {}): Pr
         result.resumes.built += 1;
       }
       if (resumeUpload) {
+        // Read by the rules like any upload; Claude is not asked (the seed calls no AI).
         const id = insertResume(at(deps, clock.time(DEMO_UPLOAD.createdDaysAgo, 11)), userId, {
           kind: 'uploaded',
           fileId: resumeUpload.fileId,
           extractedText: resumeUpload.text,
+          aiRefine: false,
         });
         resumeIds.set('upload', id);
         marker.resumes.push(id);

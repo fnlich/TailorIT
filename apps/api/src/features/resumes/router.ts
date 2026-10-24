@@ -32,27 +32,34 @@ import { transaction } from '../../core/db/connection';
 import { contentDisposition, getFileStore, MIME_BY_KIND, withExtension } from '../../core/files/index';
 import { AppError, asyncHandler, notFound, validationFailed } from '../../core/http/errors';
 import { parseInput } from '../../core/http/validate';
+import { currentResumeAnalyses, resumeAnalysisBrief, resumeAnalysisView } from './analysis/store';
 import { getResumeEngine } from './engine';
 import { exportBuiltResume } from './export';
 import {
+  assertRoomForResumes,
   defaultResumeId,
   deleteResumeRow,
   documentOf,
   findResume,
   insertResume,
   listResumeRows,
+  RESUME_NOT_FOUND,
   requireResume,
   toDetail,
   toSummary,
+  updateResumeDocument,
   type ResumeWithFile,
 } from './repository';
 import { readableForImport, readUpload, UNREADABLE_TEXT } from './upload';
 
-// Resumes: CRUD, upload and import, the live preview and thumbnails, downloads, and the two AI tasks (an editable
-// copy of an upload, and Write with AI). Owned by work package R1. Every query is scoped to the signed-in account.
+// Resumes: CRUD, upload and import, the live preview and thumbnails, downloads, what TailorIT read from each resume
+// (GET /:id/analysis and the list's line), and the two AI tasks (an editable copy of an upload, and Write with AI).
+// Owned by work package R1 (the analysis parts: WP3). Every query is scoped to the signed-in account. An upload, once
+// stored, is kept: nothing here deletes or changes one except the person's own Delete (and Rename of its title).
 
 const UPLOAD_HAS_NO_DOCUMENT =
   'An uploaded resume has no editable content. Make an editable copy of it first, then edit the copy.';
+const COPY_NOT_STARTED = 'The editable copy could not be started. Try again with "Make editable copy" on the uploaded resume.';
 
 /** Parse a task's optional template choice leniently (a query string or a JSON body). */
 const ImportChoiceSchema = z.object({
@@ -87,9 +94,10 @@ function rememberThumbnail(key: string, value: Extract<ResumeThumbnail, { kind: 
   }
 }
 
-/** Starts the `resume_import` task for an upload whose text is readable. */
+/** Starts the `resume_import` task for an upload whose text is readable, when the account has room for the copy. */
 function enqueueImport(deps: AppDeps, userId: string, row: ResumeWithFile, choice: z.infer<typeof ImportChoiceSchema>) {
   if (!readableForImport(row.extracted_text)) throw validationFailed(UNREADABLE_TEXT);
+  assertRoomForResumes(deps, userId, 1);
   return requireAi(deps).enqueue({
     kind: 'resume_import',
     userId,
@@ -135,7 +143,14 @@ export function createResumesRouter(deps: AppDeps): Router {
     const { source } = parseInput(ResumeListQuerySchema, req.query, 'query');
     const userId = userOf(req).id;
     const defaultId = defaultResumeId(deps, userId);
-    const items = listResumeRows(deps, userId, source).map((row) => toSummary(deps, row, defaultId));
+    const rows = listResumeRows(deps, userId, source);
+    // What TailorIT read from each: at most READ_COMPUTE_LIMIT missing readings are made now, the backfill the rest.
+    const readings = currentResumeAnalyses(deps, userId, { resumeIds: rows.map((row) => row.id) });
+    const now = deps.now();
+    const items = rows.map((row) => {
+      const reading = readings.get(row.id);
+      return toSummary(deps, row, defaultId, reading ? resumeAnalysisBrief(reading, now) : null);
+    });
     res.json({ items, total: items.length });
   });
 
@@ -210,19 +225,18 @@ export function createResumesRouter(deps: AppDeps): Router {
       const titleField = typeof req.body?.title === 'string' ? req.body.title.trim().slice(0, 120) : '';
       const upload = req.file!;
       const store = getFileStore(deps);
+      // A full account is told so before anything is stored.
+      assertRoomForResumes(deps, userId, 1);
       // The store checks the size and what the bytes are (PDF or DOCX; a .doc is refused with a hint).
       const stored = store.save({ userId, purpose: 'resume', buffer: upload.buffer, originalName: upload.originalname });
       let reading: Awaited<ReturnType<typeof readUpload>>;
       try {
         reading = await readUpload(deps, upload.buffer, stored.kind);
       } catch (error) {
-        // The reader refused the file (too large unpacked, damaged, timed out) or is busy: keep nothing.
+        // The reader refused the file (too large unpacked, damaged, timed out) or is busy: no resume exists yet, so
+        // nothing is kept.
         store.remove(stored.id, userId);
         throw error;
-      }
-      if (parse && !readableForImport(reading.text)) {
-        store.remove(stored.id, userId);
-        throw validationFailed(UNREADABLE_TEXT);
       }
       if (reading.thumbnail) {
         try {
@@ -232,25 +246,35 @@ export function createResumesRouter(deps: AppDeps): Router {
         }
       }
       if (reading.pageCount) store.setPageCount(stored.id, reading.pageCount);
-      const id = insertResume(deps, userId, {
-        kind: 'uploaded',
-        title: titleField || null,
-        fileId: stored.id,
-        extractedText: reading.text,
-      });
+      let id: string;
+      try {
+        id = insertResume(deps, userId, {
+          kind: 'uploaded',
+          title: titleField || null,
+          fileId: stored.id,
+          extractedText: reading.text,
+        });
+      } catch (error) {
+        // Not stored as a resume (the account filled up meanwhile): its file goes too.
+        store.remove(stored.id, userId);
+        throw error;
+      }
       let taskId: string | null = null;
+      let copyError: string | null = null;
       if (parse) {
         try {
           taskId = enqueueImport(deps, userId, requireResume(deps, userId, id), choice).taskId;
         } catch (error) {
-          // All or nothing: an upload asked to be read is not kept when the reading cannot start.
-          deleteOne(deps, userId, id);
-          throw error;
+          // The upload is kept either way; only the editable copy could not start (its text cannot be read, the AI is
+          // busy or off, or the account has no room for the copy).
+          if (!(error instanceof AppError)) deps.log.error('[resumes] could not start an editable copy', error);
+          copyError = error instanceof AppError ? error.message : COPY_NOT_STARTED;
         }
       }
       const body: ResumeUploadResponse = {
         resume: toSummary(deps, requireResume(deps, userId, id), defaultResumeId(deps, userId)),
         taskId,
+        copyError,
       };
       res.status(201).json(body);
     }),
@@ -261,6 +285,7 @@ export function createResumesRouter(deps: AppDeps): Router {
     const userId = userOf(req).id;
     const read = readResumeImport(body.data);
     if (!read.ok) throw validationFailed(read.message);
+    assertRoomForResumes(deps, userId, read.resumes.length);
     const ids = transaction(deps.db, () =>
       read.resumes.map((resume) => {
         const preferred = resume.document.preferredTemplate || resume.templateId || '';
@@ -284,6 +309,13 @@ export function createResumesRouter(deps: AppDeps): Router {
     res.json(detailOf(deps, userOf(req).id, idOf(req)));
   });
 
+  /** "What TailorIT read from this resume" (ResumeAnalysisView). */
+  router.get('/:id/analysis', (req, res) => {
+    const view = resumeAnalysisView(deps, userOf(req).id, idOf(req));
+    if (!view) throw notFound(RESUME_NOT_FOUND);
+    res.json(view);
+  });
+
   router.put('/:id', (req, res) => {
     const userId = userOf(req).id;
     const id = idOf(req);
@@ -291,23 +323,7 @@ export function createResumesRouter(deps: AppDeps): Router {
     const row = requireResume(deps, userId, id);
     const stored = documentOf(row);
     if (!stored) throw validationFailed(UPLOAD_HAS_NO_DOCUMENT);
-    const document = normalizeResumeDocument(body.document, stored);
-    const now = nowIso(deps);
-    deps.db
-      .prepare(
-        `UPDATE resumes SET data = ?, template_id = ?, title = CASE WHEN ? THEN ? ELSE title END, updated_at = ?,
-           last_edited_at = ? WHERE id = ? AND user_id = ?`,
-      )
-      .run(
-        JSON.stringify(document),
-        document.preferredTemplate || null,
-        body.title !== undefined ? 1 : 0,
-        body.title ?? null,
-        now,
-        now,
-        id,
-        userId,
-      );
+    updateResumeDocument(deps, userId, id, normalizeResumeDocument(body.document, stored), body.title);
     res.json(detailOf(deps, userId, id));
   });
 
@@ -333,18 +349,26 @@ export function createResumesRouter(deps: AppDeps): Router {
     const { title } = parseInput(DuplicateResumeBodySchema, req.body ?? {});
     const label = toSummary(deps, row, null).label;
     const copyTitle = title ?? duplicateTitle(label);
+    assertRoomForResumes(deps, userId, 1);
     let id: string;
     if (row.kind === 'built') {
       id = insertResume(deps, userId, { kind: 'built', title: copyTitle, document: documentOf(row) });
     } else {
+      // A byte copy of the file and its text (the person asked for a copy); Claude's reading of the same text is
+      // copied too, so it is not asked for again.
       const store = getFileStore(deps);
       if (!row.file_id) throw notFound('That resume file');
       const { file, buffer } = store.read(row.file_id, userId);
       const copy = store.save({ userId, purpose: 'resume', buffer, originalName: file.originalName });
-      const thumbnail = store.readThumbnail(file.id, userId);
-      if (thumbnail) store.saveThumbnail(copy.id, thumbnail);
-      if (file.pageCount) store.setPageCount(copy.id, file.pageCount);
-      id = insertResume(deps, userId, { kind: 'uploaded', title: copyTitle, fileId: copy.id, extractedText: row.extracted_text });
+      try {
+        const thumbnail = store.readThumbnail(file.id, userId);
+        if (thumbnail) store.saveThumbnail(copy.id, thumbnail);
+        if (file.pageCount) store.setPageCount(copy.id, file.pageCount);
+        id = insertResume(deps, userId, { kind: 'uploaded', title: copyTitle, fileId: copy.id, extractedText: row.extracted_text });
+      } catch (error) {
+        store.remove(copy.id, userId);
+        throw error;
+      }
     }
     res.status(201).json(detailOf(deps, userId, id));
   });

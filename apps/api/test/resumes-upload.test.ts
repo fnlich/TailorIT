@@ -166,6 +166,7 @@ describe('uploading a resume', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     const body = ResumeUploadResponseSchema.parse(res.body);
     expect(body.taskId).toBeNull();
+    expect(body.copyError).toBeNull();
     expect(body.resume).toMatchObject({ kind: 'uploaded', label: 'Nadia CV', fileKind: 'pdf', isDefault: true, nameOnResume: '', templateId: null });
 
     const detail = ResumeDetailSchema.parse((await agent.get(`/api/resumes/${body.resume.id}`)).body);
@@ -307,16 +308,19 @@ describe('making an editable copy (resume_import)', () => {
     expect(again.status).toBe(400);
   });
 
-  it('refuses a file without readable text before calling the AI, and keeps nothing', async () => {
+  it('keeps an upload whose text cannot be read, says why no copy was made, and calls no AI', async () => {
     const { agent } = await setup();
     const res = await upload(agent, minimalPdf([['Too short']]), 'scan.pdf', '?parse=1');
-    expect(res.status).toBe(400);
-    expect(res.body.error.message).toMatch(/could not read enough text/);
-    expect((await agent.get('/api/resumes')).body.items).toEqual([]);
-    const stored = await upload(agent, minimalPdf([['Too short']]), 'scan.pdf');
-    expect(stored.status).toBe(201);
-    const parse = await agent.post(`/api/resumes/${stored.body.resume.id}/parse`).set('Origin', ORIGIN).send({});
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const body = ResumeUploadResponseSchema.parse(res.body);
+    expect(body.taskId).toBeNull();
+    expect(body.copyError).toMatch(/could not read enough text/);
+    const items = (await agent.get('/api/resumes')).body.items as Array<{ id: string }>;
+    expect(items.map((item) => item.id)).toEqual([body.resume.id]);
+    expect(ctx!.deps.db.prepare('SELECT count(*) AS n FROM ai_tasks').get()).toEqual({ n: 0 });
+    const parse = await agent.post(`/api/resumes/${body.resume.id}/parse`).set('Origin', ORIGIN).send({});
     expect(parse.status).toBe(400);
+    expect(parse.body.error.message).toMatch(/could not read enough text/);
   });
 
   it('reports an AI failure on the task', async () => {

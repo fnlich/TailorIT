@@ -43,6 +43,25 @@ interface ResumeRow {
   file_name: string | null;
 }
 
+/** A built resume's stored document, normalised again (an older stored shape reads as today's); null for an upload. */
+export function storedDocumentOf(row: { kind: 'built' | 'uploaded'; data: string | null }): ResumeDocument | null {
+  if (row.kind !== 'built' || !row.data) return null;
+  try {
+    return normalizeResumeDocument(JSON.parse(row.data));
+  } catch {
+    return normalizeResumeDocument({});
+  }
+}
+
+/**
+ * The text keyword matching reads for a resume: a built resume's evidence fields (`resumeEvidenceText`), an upload's
+ * extracted text. The one rule the Jobs card, Resume Score and the resume picker share.
+ */
+export function evidenceTextOf(row: { kind: 'built' | 'uploaded'; data: string | null; extracted_text: string | null }): string {
+  const document = storedDocumentOf(row);
+  return document ? resumeEvidenceText(document) : (row.extracted_text ?? '');
+}
+
 /**
  * The evidence of one of the account's resumes: `resumeId` when given (null when it is not theirs), else the default
  * resume, else the most recently updated one. Null when the account has no resume at all.
@@ -78,14 +97,7 @@ export function getResumeEvidence(
     .prepare('SELECT phone, linkedin_url, location, portfolio_url FROM user_preferences WHERE user_id = ?')
     .get(userId) as { phone: string; linkedin_url: string; location: string; portfolio_url: string } | undefined;
 
-  let document: ResumeDocument | null = null;
-  if (row.kind === 'built' && row.data) {
-    try {
-      document = normalizeResumeDocument(JSON.parse(row.data));
-    } catch {
-      document = null;
-    }
-  }
+  const document = storedDocumentOf(row);
 
   const contact = document?.contact;
   const pick = (...values: Array<string | null | undefined>) => values.find((v) => v && v.trim())?.trim() ?? '';
@@ -107,7 +119,7 @@ export function getResumeEvidence(
     label: document
       ? resumeLabel(document, row.title)
       : pick(row.title, (row.file_name ?? '').replace(/\.(pdf|docx?)$/i, ''), 'Uploaded resume'),
-    text: document ? resumeEvidenceText(document) : (row.extracted_text ?? ''),
+    text: evidenceTextOf(row),
     profile,
     document,
   };
