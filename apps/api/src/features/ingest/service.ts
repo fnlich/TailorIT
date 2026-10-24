@@ -5,7 +5,7 @@ import { ADAPTERS } from './adapters/index';
 import { createIngestHttp, IngestHttpError, type IngestHttp } from './http';
 import { readLake } from './lake';
 import { sourceHashOf } from './normalize';
-import { adminRun, getSourceRecord, listSourceRecords, type AdminRunDetail } from './sources';
+import { adminRun, getSourceRecord, kindLabelOf, listSourceRecords, type AdminRunDetail } from './sources';
 import { BATCH_SIZE, createIngestStore, emptyCounts, type BatchItem, type IngestStore, type UpsertCounts } from './store';
 import {
   IngestError,
@@ -291,6 +291,7 @@ export function createIngestService(deps: AppDeps, options: IngestServiceOptions
           id: runId,
           sourceId: source.id,
           sourceKind: source.kind,
+          sourceKindLabel: kindLabelOf(source.kind, source.config),
           sourceName: source.name,
           status: 'failed',
           trigger,

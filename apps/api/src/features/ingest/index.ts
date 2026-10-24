@@ -3,13 +3,20 @@ import { createImportRouter, createReportsRouter, createRunsRouter, createSource
 import { startIngestSchedule } from './scheduler';
 import { seedDemoJobs, seedOnStartup } from './seed';
 import { createIngestService, requireIngest } from './service';
+import { createGoogleSheetsClient } from './sheets/client';
 
-// Job ingestion: sources, runs, the daily schedule, CSV/JSON import, reports, the demo seed. Work package J1
-// (docs/ARCHITECTURE.md §8).
+// Job ingestion: sources, runs, the daily schedule, CSV/JSON import, the one-time Google Sheet import, reports, the
+// demo seed. Work package J1 (docs/ARCHITECTURE.md §8); the Sheet import is WP12.
 export const ingestFeature: Feature = {
   name: 'ingest',
   services(deps) {
     deps.services.ingest = createIngestService(deps);
+    // Reads the service account key only when an admin uses the Sheet import (nothing at startup).
+    deps.services.sheets = createGoogleSheetsClient({
+      keyFile: deps.config.ingest.googleServiceAccountKeyFile,
+      userAgent: deps.config.ingest.userAgent,
+      log: deps.log,
+    });
   },
   routes: [
     { path: '/api/admin/sources', router: createSourcesRouter },

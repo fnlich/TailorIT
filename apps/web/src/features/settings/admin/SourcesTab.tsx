@@ -8,9 +8,9 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/Dialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Field } from '@/components/ui/Field';
 import { IconButton } from '@/components/ui/IconButton';
-import { ArrowsClockwiseIcon, BriefcaseIcon, DotsThreeIcon, PlusIcon, TrashIcon } from '@/components/ui/icons';
+import { ArrowSquareOutIcon, ArrowsClockwiseIcon, BriefcaseIcon, DotsThreeIcon, PlusIcon, TrashIcon } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
-import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/Menu';
+import { Menu, MenuContent, MenuItem, MenuLinkItem, MenuTrigger } from '@/components/ui/Menu';
 import { Notice } from '@/components/ui/Notice';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Select } from '@/components/ui/Select';
@@ -18,34 +18,24 @@ import { Switch } from '@/components/ui/Switch';
 import { useToast } from '@/components/ui/Toast';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { userMessage } from '@/lib/api';
-import { formatDate, relativeTime } from '@/lib/format';
+import { relativeTime } from '@/lib/format';
 import { useNow } from '@/lib/useNow';
 import { adminKeys, createSource, deleteSource, fetchSources, runSource, testLake, testSource, updateSource } from './api';
 import { AdminTable, RunStatusBadge, runCounts, SectionHeader, TableSkeleton, type AdminColumn } from './parts';
+import { runNowHint, sheetOf, sourceDetail } from './sources';
 import type { AddableKind, AdminSource, NewSourceBody } from './types';
 
-/** What a source reads, in a few words: "Board gitlab", "Site palantir (EU)", "sheet.csv". */
-export function sourceDetail(source: Pick<AdminSource, 'kind' | 'config'>): string {
-  const text = (key: string) => (typeof source.config[key] === 'string' ? (source.config[key] as string) : '');
-  switch (source.kind) {
-    case 'greenhouse':
-      return `Board ${text('token')}`;
-    case 'lever':
-      return `Site ${text('site')}${text('region') === 'eu' ? ' (EU)' : ''}`;
-    case 'ashby':
-      return `Board ${text('board')}`;
-    case 'ft_lake':
-      return text('path') || 'Default database path';
-    case 'csv':
-    case 'json':
-      return text('fileName') || 'Uploaded file';
-    case 'seed':
-      return text('anchor') ? `Dated from ${formatDate(text('anchor'))}` : 'Demo postings';
-  }
-}
+export { sourceDetail } from './sources';
 
 /** Admin > Sources: every job source, its last run, and the controls to run, pause, add and delete them. */
-export function SourcesTab({ onShowRuns }: { onShowRuns: (sourceId: number) => void }) {
+export function SourcesTab({
+  onShowRuns,
+  onImportAgain,
+}: {
+  onShowRuns: (sourceId: number) => void;
+  /** Opens Import jobs > Google Sheet with a sheet source's tab and settings. */
+  onImportAgain?: (sourceId: number) => void;
+}) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const now = useNow();
@@ -146,28 +136,49 @@ export function SourcesTab({ onShowRuns }: { onShowRuns: (sourceId: number) => v
       key: 'actions',
       header: <span className="sr-only">Actions</span>,
       className: 'w-44 text-right',
-      cell: (source) => (
-        <div className="flex items-center justify-end gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            icon={<ArrowsClockwiseIcon size={14} />}
-            disabled={source.running || (run.isPending && run.variables?.id === source.id)}
-            onClick={() => run.mutate(source)}
-          >
-            {source.running ? 'Running' : 'Run now'}
-          </Button>
-          <Menu>
-            <MenuTrigger render={<IconButton label={`More actions for ${source.name}`} icon={<DotsThreeIcon size={18} weight="bold" />} size="sm" tooltip={false} />} />
-            <MenuContent align="end" width="w-48">
-              <MenuItem onClick={() => onShowRuns(source.id)}>See runs</MenuItem>
-              <MenuItem icon={<TrashIcon />} tone="danger" disabled={source.running} onClick={() => setDeleting(source)}>
-                Delete source
-              </MenuItem>
-            </MenuContent>
-          </Menu>
-        </div>
-      ),
+      cell: (source) => {
+        const sheet = sheetOf(source);
+        return (
+          <div className="flex items-center justify-end gap-1.5">
+            <Tooltip content={source.running ? null : runNowHint(source)}>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<ArrowsClockwiseIcon size={14} />}
+                disabled={source.running || (run.isPending && run.variables?.id === source.id)}
+                onClick={() => run.mutate(source)}
+              >
+                {source.running ? 'Running' : 'Run now'}
+              </Button>
+            </Tooltip>
+            <Menu>
+              <MenuTrigger render={<IconButton label={`More actions for ${source.name}`} icon={<DotsThreeIcon size={18} weight="bold" />} size="sm" tooltip={false} />} />
+              <MenuContent align="end" width={sheet ? 'w-60' : 'w-48'}>
+                <MenuItem onClick={() => onShowRuns(source.id)}>See runs</MenuItem>
+                {sheet && (
+                  <>
+                    <MenuLinkItem
+                      href={sheet.url}
+                      icon={<ArrowSquareOutIcon size={16} />}
+                      render={<a href={sheet.url} target="_blank" rel="noopener noreferrer" />}
+                    >
+                      Open in Google Sheets
+                    </MenuLinkItem>
+                    {onImportAgain && (
+                      <MenuItem icon={<ArrowsClockwiseIcon size={16} />} disabled={source.running} onClick={() => onImportAgain(source.id)}>
+                        Import the sheet again
+                      </MenuItem>
+                    )}
+                  </>
+                )}
+                <MenuItem icon={<TrashIcon />} tone="danger" disabled={source.running} onClick={() => setDeleting(source)}>
+                  Delete source
+                </MenuItem>
+              </MenuContent>
+            </Menu>
+          </div>
+        );
+      },
     },
   ];
 
@@ -175,7 +186,7 @@ export function SourcesTab({ onShowRuns }: { onShowRuns: (sourceId: number) => v
     <section aria-labelledby="admin-sources-title">
       <SectionHeader
         title="Job sources"
-        description="Public job boards, free_tailor's Job Data Lake, uploads and the demo set. Daily sources run on the schedule; any source can run now."
+        description="Public job boards, free_tailor's Job Data Lake, file and Google Sheet imports, and the demo set. Daily sources run on the schedule; any source can run now."
         actions={
           <Button icon={<PlusIcon size={16} />} onClick={() => setAdding(true)}>
             Add source
@@ -218,7 +229,7 @@ export function SourcesTab({ onShowRuns }: { onShowRuns: (sourceId: number) => v
         title="Delete source"
         description={
           deleting
-            ? `Delete ${deleting.name}? Jobs only this source lists are closed, and its run history is deleted. You won't be able to undo this action.`
+            ? `Delete ${deleting.name}? Jobs only this source lists are closed, and its run history is deleted. You won't be able to undo this action.${sheetOf(deleting) ? ' The Google Sheet itself is not changed.' : ''}`
             : undefined
         }
         confirmLabel="Delete"

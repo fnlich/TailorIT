@@ -55,6 +55,9 @@ describe('guards', () => {
     ['get', '/api/admin/runs/1'],
     ['post', '/api/admin/import/jobs/preview'],
     ['post', '/api/admin/import/jobs'],
+    ['get', '/api/admin/import/sheets/account'],
+    ['post', '/api/admin/import/sheets/preview'],
+    ['post', '/api/admin/import/sheets/jobs'],
     ['get', '/api/admin/reports'],
     ['patch', '/api/admin/reports/1'],
   ];

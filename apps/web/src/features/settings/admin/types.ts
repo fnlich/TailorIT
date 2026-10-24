@@ -1,9 +1,23 @@
 import type { AiHealth, Role } from '@tailorit/shared';
 
 /*
- * The admin console's view of the API. The admin endpoints have no contracts in @tailorit/shared yet, so these mirror
- * apps/api/src/features/ingest/sources.ts and router.ts (and F3's admin-users router); keep them in step.
+ * The admin console's view of the API. Most admin endpoints have no contracts in @tailorit/shared, so these mirror
+ * apps/api/src/features/ingest/sources.ts and router.ts (and F3's admin-users router); keep them in step. The import
+ * contracts (the file preview and the Google Sheet import) do live in @tailorit/shared/ingest.
  */
+
+export {
+  IMPORT_FIELDS,
+  type ImportField,
+  type ImportMapping,
+  type ImportPreview,
+  type SheetAccount,
+  type SheetImportBody,
+  type SheetPreview,
+  type SheetPreviewBody,
+  type SheetSourceConfig,
+  type SheetTab,
+} from '@tailorit/shared/ingest';
 
 export const SOURCE_KINDS = ['greenhouse', 'lever', 'ashby', 'csv', 'json', 'ft_lake', 'seed'] as const;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
@@ -63,6 +77,8 @@ export interface AdminSource {
 export interface AdminRun extends RunSummary {
   sourceId: number;
   sourceKind: SourceKind;
+  /** "Greenhouse", "CSV import", "Google Sheet"... */
+  sourceKindLabel: string;
   sourceName: string;
 }
 
@@ -101,38 +117,9 @@ export interface NewSourceBody {
   config: Record<string, string>;
 }
 
-export const IMPORT_FIELDS = [
-  'title',
-  'company',
-  'url',
-  'description',
-  'location',
-  'postedAt',
-  'salary',
-  'employmentType',
-  'workArrangement',
-  'department',
-  'id',
-] as const;
-export type ImportField = (typeof IMPORT_FIELDS)[number];
-export type ImportMapping = Record<ImportField, string | null>;
-
-export interface ImportPreview {
-  fileName: string;
-  format: 'csv' | 'json';
-  columns: string[];
-  mapping: ImportMapping;
-  fields: Array<{ field: ImportField; label: string; required: boolean }>;
-  rowCount: number;
-  jobCount: number;
-  sample: Array<Record<string, string>>;
-  missingRequired: ImportField[];
-  problems: string[];
-}
-
 export interface ImportResult {
   source: AdminSource;
-  /** Null when a large file is still importing in the background (follow `runId` under Runs). */
+  /** Null when a large file (or a slow sheet tab) is still importing in the background (follow `runId` under Runs). */
   run: AdminRunDetail | null;
   runId: number;
 }

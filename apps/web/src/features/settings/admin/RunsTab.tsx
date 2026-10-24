@@ -15,14 +15,8 @@ import { relativeTime } from '@/lib/format';
 import { useNow } from '@/lib/useNow';
 import { adminKeys, fetchRun, fetchRuns, fetchSources } from './api';
 import { AdminTable, RunStatusBadge, runCounts, runDuration, SectionHeader, TableSkeleton, type AdminColumn } from './parts';
-import { SOURCE_KIND_LABEL, type AdminRun, type RunTrigger } from './types';
-
-const TRIGGER_LABEL: Record<RunTrigger, string> = {
-  schedule: 'Schedule',
-  manual: 'Run now',
-  upload: 'Upload',
-  startup: 'Startup',
-};
+import { runTriggerLabel } from './sources';
+import { SOURCE_KIND_LABEL, type AdminRun } from './types';
 
 /** Admin > Runs: every ingest run, newest first, with its counts; a row opens to its errors and log. */
 export function RunsTab({ sourceId, onSourceChange }: { sourceId: number | null; onSourceChange: (sourceId: number | null) => void }) {
@@ -71,12 +65,12 @@ export function RunsTab({ sourceId, onSourceChange }: { sourceId: number | null;
         <div className="min-w-0">
           <p className="truncate font-semibold">{run.sourceName}</p>
           <p className="text-[13px] text-muted-foreground">
-            {SOURCE_KIND_LABEL[run.sourceKind]} · Run {run.id}
+            {run.sourceKindLabel || SOURCE_KIND_LABEL[run.sourceKind]} · Run {run.id}
           </p>
         </div>
       ),
     },
-    { key: 'trigger', header: 'Trigger', className: 'w-28', cell: (run) => TRIGGER_LABEL[run.trigger] ?? run.trigger },
+    { key: 'trigger', header: 'Trigger', className: 'w-28', cell: (run) => runTriggerLabel(run) },
     {
       key: 'started',
       header: 'Started',

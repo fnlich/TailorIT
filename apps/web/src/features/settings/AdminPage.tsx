@@ -71,13 +71,13 @@ function AdminConsole() {
   return (
     <UnderlineTabs aria-label="Admin sections" items={ADMIN_TABS} value={tab} onValueChange={(next) => go(next)} size="md" className="mt-8">
       <TabPanel value="sources" className="mt-8">
-        <SourcesTab onShowRuns={showRuns} />
+        <SourcesTab onShowRuns={showRuns} onImportAgain={(id) => go('import', id)} />
       </TabPanel>
       <TabPanel value="runs" className="mt-8">
         <RunsTab sourceId={sourceId} onSourceChange={showRuns} />
       </TabPanel>
       <TabPanel value="import" className="mt-8">
-        <ImportTab onShowRuns={showRuns} />
+        <ImportTab sourceId={tab === 'import' ? sourceId : null} onShowRuns={showRuns} />
       </TabPanel>
       <TabPanel value="reports" className="mt-8">
         <ReportsTab />

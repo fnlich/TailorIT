@@ -1,3 +1,4 @@
+import { SheetAccountSchema, SheetPreviewSchema } from '@tailorit/shared/ingest';
 import { api } from '@/lib/api';
 import type {
   AdminReport,
@@ -17,6 +18,10 @@ import type {
   ReportFilter,
   ReportsAnswer,
   ReportStatus,
+  SheetAccount,
+  SheetImportBody,
+  SheetPreview,
+  SheetPreviewBody,
   SourceTestResult,
 } from './types';
 
@@ -29,6 +34,7 @@ export const adminKeys = {
   reports: (status: ReportFilter) => ['admin', 'reports', status] as const,
   aiHealth: ['admin', 'ai', 'health'] as const,
   users: ['admin', 'users'] as const,
+  sheetAccount: ['admin', 'import', 'sheets', 'account'] as const,
 };
 
 // --------------------------------------------------------------------------------------------- sources & runs
@@ -88,6 +94,23 @@ export function previewImport(file: File, mapping?: ImportMapping) {
 
 export function importJobs(file: File, mapping: ImportMapping, name?: string) {
   return api.post<ImportResult>('/api/admin/import/jobs', importForm(file, mapping, name));
+}
+
+// ------------------------------------------------------------------------------------- Google Sheet import
+
+/** Whether the server has a service account key, and the address to share sheets with. */
+export function fetchSheetAccount(signal?: AbortSignal) {
+  return api.get<SheetAccount>('/api/admin/import/sheets/account', { signal, schema: SheetAccountSchema });
+}
+
+/** Reads a tab (or, with `refresh: false`, re-maps the last read) and answers its preview. Saves nothing. */
+export function previewSheet(body: SheetPreviewBody, signal?: AbortSignal) {
+  return api.post<SheetPreview>('/api/admin/import/sheets/preview', body, { signal, schema: SheetPreviewSchema });
+}
+
+/** Reads the tab again and imports it: 201 with the run, or 202 while it imports in the background. */
+export function importSheet(body: SheetImportBody) {
+  return api.post<ImportResult>('/api/admin/import/sheets/jobs', body);
 }
 
 // ---------------------------------------------------------------------------------------------------- reports

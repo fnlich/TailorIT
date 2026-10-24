@@ -1,26 +1,69 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Field, FieldLabel } from '@/components/ui/Field';
 import { FileTextIcon, UploadSimpleIcon } from '@/components/ui/icons';
-import { Input } from '@/components/ui/Input';
 import { Notice } from '@/components/ui/Notice';
-import { Select } from '@/components/ui/Select';
+import { SegmentedControl, TabPanel } from '@/components/ui/SegmentedControl';
 import { userMessage } from '@/lib/api';
-import { adminKeys, importJobs, previewImport } from './api';
-import { AdminTable, runCounts, SectionHeader, type AdminColumn } from './parts';
-import type { ImportField, ImportMapping, ImportPreview, ImportResult } from './types';
+import { adminKeys, fetchSources, importJobs, previewImport } from './api';
+import { ImportColumns, ImportResultNotice } from './ImportColumns';
+import { SectionHeader } from './parts';
+import { SheetImport, type SheetPrefill } from './SheetImport';
+import { sheetOf } from './sources';
+import type { AdminSource, ImportField, ImportMapping, ImportPreview, ImportResult } from './types';
 
-const NONE = '__none';
-const SAMPLE_FIELDS: readonly ImportField[] = ['title', 'company', 'url', 'location', 'postedAt'];
+type ImportMode = 'file' | 'sheet';
+
+const MODES: ReadonlyArray<{ value: ImportMode; label: string }> = [
+  { value: 'file', label: 'File' },
+  { value: 'sheet', label: 'Google Sheet' },
+];
+
+/** The settings of a Google Sheet source to read again, or null (not a sheet source, or not loaded yet). */
+function prefillOf(sourceId: number | null, sources: readonly AdminSource[] | undefined): SheetPrefill | null {
+  if (sourceId === null || !sources) return null;
+  const source = sources.find((item) => item.id === sourceId);
+  const sheet = source ? sheetOf(source) : null;
+  if (!source || !sheet) return null;
+  return { sourceId: source.id, url: sheet.url, gid: sheet.gid, headerRow: sheet.headerRow, postedAtFromTab: sheet.postedAt !== null, name: source.name };
+}
 
 /**
- * Admin > Import jobs: a CSV or JSON file of postings (free_tailor's job sheet columns are recognised: Date, Company,
- * Job Title, Job Link, Job Description). Choose the file, check which column is which, then import it as a source.
+ * Admin > Import jobs: postings from a CSV or JSON file, or from one tab of a Google Sheet (read once, never written).
+ * `sourceId` (Sources > Import the sheet again) opens the Google Sheet mode with that source's tab and settings.
  */
-export function ImportTab({ onShowRuns }: { onShowRuns: (sourceId: number) => void }) {
+export function ImportTab({ sourceId = null, onShowRuns }: { sourceId?: number | null; onShowRuns: (sourceId: number) => void }) {
+  const [chosenMode, setChosenMode] = useState<ImportMode | null>(null);
+  const sources = useQuery({ queryKey: adminKeys.sources, queryFn: ({ signal }) => fetchSources(signal), enabled: sourceId !== null });
+  const prefill = useMemo(() => prefillOf(sourceId, sources.data?.items), [sourceId, sources.data]);
+  const waiting = sourceId !== null && sources.isPending;
+  const mode = chosenMode ?? (prefill || waiting ? 'sheet' : 'file');
+
+  return (
+    <section>
+      <SectionHeader
+        title="Import jobs"
+        description="Add postings from a CSV or JSON file, or from a tab of a Google Sheet. Each file or tab becomes a source; importing it again under the same name updates it."
+      />
+      <SegmentedControl aria-label="Import from" items={MODES} value={mode} onValueChange={setChosenMode}>
+        <TabPanel value="file" keepMounted className="mt-5">
+          <FileImport onShowRuns={onShowRuns} />
+        </TabPanel>
+        <TabPanel value="sheet" keepMounted className="mt-5">
+          <SheetImport key={prefill ? `source-${prefill.sourceId}` : 'sheet'} prefill={prefill} onShowRuns={onShowRuns} />
+        </TabPanel>
+      </SegmentedControl>
+    </section>
+  );
+}
+
+/**
+ * A CSV or JSON file of postings (free_tailor's job sheet columns are recognised: Date, Company, Job Title, Job Link,
+ * Job Description). Choose the file, check which column is which, then import it as a source.
+ */
+function FileImport({ onShowRuns }: { onShowRuns: (sourceId: number) => void }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -55,28 +98,15 @@ export function ImportTab({ onShowRuns }: { onShowRuns: (sourceId: number) => vo
     if (chosen) read.mutate({ chosen });
   };
 
-  const remap = (field: ImportField, column: string) => {
+  const remap = (field: ImportField, column: string | null) => {
     if (!mapping || !file) return;
-    const next = { ...mapping, [field]: column === NONE ? null : column };
+    const next = { ...mapping, [field]: column };
     setMapping(next);
     read.mutate({ chosen: file, map: next });
   };
 
-  const missing = preview ? preview.fields.filter((field) => field.required && !mapping?.[field.field]) : [];
-  const sampleColumns: AdminColumn<Record<string, string>>[] = preview
-    ? SAMPLE_FIELDS.filter((field) => mapping?.[field]).map((field) => ({
-        key: field,
-        header: preview.fields.find((entry) => entry.field === field)?.label ?? field,
-        cell: (row: Record<string, string>) => <span className="line-clamp-2 break-all">{row[mapping![field]!] || '-'}</span>,
-      }))
-    : [];
-
   return (
-    <section>
-      <SectionHeader
-        title="Import jobs"
-        description="Add postings from a CSV or JSON file. Each file becomes a source; importing a file with the same name again updates it."
-      />
+    <div>
       <div className="rounded-surface border border-border bg-surface p-6 shadow-soft">
         <input
           ref={inputRef}
@@ -112,93 +142,26 @@ export function ImportTab({ onShowRuns }: { onShowRuns: (sourceId: number) => vo
       </div>
 
       {preview && mapping && (
-        <div className="mt-6 flex flex-col gap-6">
-          <div className="rounded-surface border border-border bg-surface p-6 shadow-soft">
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h3 className="text-base font-semibold text-foreground">Columns</h3>
-              <p className="text-sm text-muted-foreground" aria-live="polite">
-                {preview.rowCount} rows, {preview.jobCount} {preview.jobCount === 1 ? 'job' : 'jobs'} to import ({preview.format.toUpperCase()})
-              </p>
-            </div>
-            <div className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-              {preview.fields.map((field) => (
-                <div key={field.field} className="flex flex-col gap-1.5">
-                  <FieldLabel required={field.required}>{field.label}</FieldLabel>
-                  <Select
-                    aria-label={field.label}
-                    options={[{ value: NONE, label: 'Not in this file' }, ...preview.columns.map((column) => ({ value: column, label: column }))]}
-                    value={mapping[field.field] ?? NONE}
-                    onValueChange={(column) => remap(field.field, column)}
-                  />
-                </div>
-              ))}
-            </div>
-            {missing.length > 0 && (
-              <Notice tone="warning" className="mt-5">
-                Choose the column for {missing.map((field) => field.label.toLowerCase()).join(', ')}.
-              </Notice>
-            )}
-            {preview.problems.length > 0 && (
-              <Notice tone="warning" className="mt-5" title="Some rows will be skipped">
-                <ul className="list-disc pl-5">
-                  {preview.problems.slice(0, 8).map((problem) => (
-                    <li key={problem}>{problem}</li>
-                  ))}
-                </ul>
-                {preview.problems.length > 8 && <p className="mt-1">And {preview.problems.length - 8} more.</p>}
-              </Notice>
-            )}
-          </div>
-
-          {sampleColumns.length > 0 && preview.sample.length > 0 && (
-            <div>
-              <h3 className="mb-3 text-base font-semibold text-foreground">First rows</h3>
-              <AdminTable aria-label="First rows of the file" items={preview.sample} columns={sampleColumns} getKey={(row) => preview.sample.indexOf(row)} />
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-end gap-4 rounded-surface border border-border bg-surface p-6 shadow-soft">
-            <Field label="Source name" optional hint={`Defaults to ${preview.fileName}.`} className="min-w-64 flex-1">
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder={preview.fileName} />
-            </Field>
-            <Button
-              onClick={() => save.mutate()}
-              loading={save.isPending}
-              disabled={missing.length > 0 || preview.jobCount === 0 || read.isPending}
-            >
-              Import {preview.jobCount} {preview.jobCount === 1 ? 'job' : 'jobs'}
-            </Button>
-          </div>
+        <div className="mt-6">
+          <ImportColumns
+            preview={preview}
+            mapping={mapping}
+            onRemap={remap}
+            countLabel={preview.format.toUpperCase()}
+            sampleLabel="First rows of the file"
+            noneLabel="Not in this file"
+            name={name}
+            onNameChange={setName}
+            namePlaceholder={preview.fileName}
+            nameHint={`Defaults to ${preview.fileName}.`}
+            importing={save.isPending}
+            importDisabled={read.isPending}
+            onImport={() => save.mutate()}
+          />
         </div>
       )}
 
-      {save.isError && (
-        <Notice tone="error" className="mt-6">
-          {userMessage(save.error)}
-        </Notice>
-      )}
-      {result && (
-        <Notice
-          tone={!result.run ? 'info' : result.run.status === 'failed' ? 'error' : result.run.status === 'partial' ? 'warning' : 'success'}
-          className="mt-6"
-          title={
-            !result.run
-              ? `Importing into ${result.source.name}`
-              : result.run.status === 'failed'
-                ? 'The import failed'
-                : `Imported into ${result.source.name}`
-          }
-          action={
-            <Button variant="outline" size="sm" onClick={() => onShowRuns(result.source.id)}>
-              See the run
-            </Button>
-          }
-        >
-          {!result.run
-            ? 'This file is large, so it is importing in the background. Its run shows the progress.'
-            : (result.run.error ?? `${runCounts(result.run)}. ${result.source.activeJobCount} live jobs from this file.`)}
-        </Notice>
-      )}
-    </section>
+      <ImportResultNotice result={result} error={save.error} noun="file" onShowRuns={onShowRuns} />
+    </div>
   );
 }

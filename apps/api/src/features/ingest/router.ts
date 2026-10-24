@@ -1,8 +1,8 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { rmSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { Router, type Request, type RequestHandler } from 'express';
 import { z } from 'zod';
-import { JOB_REPORT_REASON_LABEL, JOB_REPORT_REASONS, IsoDateTime } from '@tailorit/shared';
+import { ImportMappingInputSchema, JOB_REPORT_REASON_LABEL, JOB_REPORT_REASONS, IsoDateTime } from '@tailorit/shared';
 import { requireAdmin, userOf } from '../../core/auth/guards';
 import { nowIso, type AppDeps } from '../../core/context';
 import { transaction } from '../../core/db/connection';
@@ -12,27 +12,28 @@ import { parseInput } from '../../core/http/validate';
 import { ashbyBoard } from './adapters/ashby';
 import { greenhouseToken } from './adapters/greenhouse';
 import { leverSite } from './adapters/lever';
-import { importFilePath, importsRoot, tablePostings } from './adapters/tabular';
+import { importFilePath, tablePostings } from './adapters/tabular';
+import { storeAndRunImport } from './imports';
 import { lakeFileInfo, readLake } from './lake';
 import { requireIngest } from './service';
-import { adminRun, adminRuns, adminSource, adminSources, findSourceRecord, getSourceRecord, insertSource } from './sources';
+import { createSheetImportRouter } from './sheets/router';
+import { adminRun, adminRuns, adminSource, adminSources, findSourceRecord, getSourceRecord, insertSource, kindLabelOf } from './sources';
 import {
-  IMPORT_FIELDS,
   IMPORT_FIELD_LABEL,
   REQUIRED_IMPORT_FIELDS,
   cleanMapping,
   guessMapping,
+  importFieldInfo,
   readTable,
   type ImportMapping,
 } from './tabular';
-import { IngestError, SOURCE_KIND_LABEL, type SourceKind } from './types';
+import { IngestError, SOURCE_KIND_LABEL } from './types';
 
 // Admin > Sources, Runs, Import jobs and Reports (docs/ARCHITECTURE.md §8). Every route is administrator-only.
 
 const Id = z.coerce.number().int().positive();
 
-/** Imports with more rows than this run in the background instead of holding the request (Next's proxy waits 120 s). */
-export const BACKGROUND_IMPORT_ROWS = 2000;
+export { BACKGROUND_IMPORT_ROWS } from './imports';
 
 const name = z.string().trim().max(100, 'Keep the name under 100 characters.').optional();
 const companyName = z.string().trim().max(200).optional();
@@ -75,7 +76,7 @@ const RunsQuery = z.object({
   cursor: Id.optional(),
 });
 
-const MappingSchema = z.partialRecord(z.enum(IMPORT_FIELDS), z.string().max(300).nullable());
+const MappingSchema = ImportMappingInputSchema;
 
 const ImportJsonBody = z.object({
   fileName: z.string().trim().min(1).max(200).default('import.csv'),
@@ -138,10 +139,6 @@ function readImport(fileName: string, text: string) {
     if (error instanceof IngestError) throw validationFailed(error.message);
     throw error;
   }
-}
-
-function safeFileName(fileName: string): string {
-  return fileName.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^\.+/, '').slice(-80) || 'import';
 }
 
 /** Mounted at /api/admin/sources. */
@@ -275,12 +272,12 @@ export function createSourcesRouter(deps: AppDeps): Router {
         parseInput(LakeConfig, merged, 'source settings');
         config = merged;
       } else {
-        throw validationFailed(`The settings of a ${SOURCE_KIND_LABEL[source.kind]} source cannot be changed here.`);
+        throw validationFailed(`The settings of a ${kindLabelOf(source.kind, source.config)} source cannot be changed here.`);
       }
     }
     const nextName = patch.name ?? source.name;
     if (nextName !== source.name && findSourceRecord(db, source.kind, nextName)) {
-      throw conflict(`A ${SOURCE_KIND_LABEL[source.kind]} source named "${nextName}" already exists.`);
+      throw conflict(`A ${kindLabelOf(source.kind, source.config)} source named "${nextName}" already exists.`);
     }
     db.prepare('UPDATE job_sources SET name = ?, enabled = ?, deactivate_missing = ?, config = ?, updated_at = ? WHERE id = ?').run(
       nextName,
@@ -353,6 +350,8 @@ export function createRunsRouter(deps: AppDeps): Router {
 export function createImportRouter(deps: AppDeps): Router {
   const router = Router();
   router.use(requireAdmin);
+  // Google Sheet imports: /api/admin/import/sheets/{account,preview,jobs}.
+  router.use('/sheets', createSheetImportRouter(deps));
   // multipart/form-data with a `file` field (the console), or JSON { fileName, content } (scripts and tests).
   const upload: RequestHandler = (req, res, next) => getFileStore(deps).uploadSingle('file', { required: false })(req, res, next);
 
@@ -368,7 +367,7 @@ export function createImportRouter(deps: AppDeps): Router {
       format: table.format,
       columns: table.columns,
       mapping: chosen,
-      fields: IMPORT_FIELDS.map((field) => ({ field, label: IMPORT_FIELD_LABEL[field], required: REQUIRED_IMPORT_FIELDS.includes(field) })),
+      fields: importFieldInfo(),
       rowCount: table.rows.length,
       jobCount: check.postings.length,
       sample: table.rows.slice(0, 5).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value.slice(0, 300)]))),
@@ -380,7 +379,8 @@ export function createImportRouter(deps: AppDeps): Router {
   /**
    * POST /api/admin/import/jobs: stores the file as a csv/json source and imports it. 201 { source, run, runId } once
    * the import finished; a file of more than BACKGROUND_IMPORT_ROWS rows answers 202 { source, run: null, runId } at
-   * once and imports in the background (the console follows it under Runs).
+   * once and imports in the background (the console follows it under Runs). A name that a Google Sheet import holds
+   * answers 409.
    */
   router.post(
     '/jobs',
@@ -393,29 +393,15 @@ export function createImportRouter(deps: AppDeps): Router {
       if (missing.length) {
         throw validationFailed(`Choose the column for ${missing.map((field) => IMPORT_FIELD_LABEL[field].toLowerCase()).join(', ')}.`);
       }
-      const kind: SourceKind = table.format;
-      const sourceName = label || fileName;
-      const now = nowIso(deps);
-      const service = requireIngest(deps);
-      let source = findSourceRecord(deps.db, kind, sourceName);
-      if (source && service.isRunning(source.id)) throw conflict('This import is running. Wait for it to finish.');
-      source ??= insertSource(deps.db, { kind, name: sourceName, config: {} }, now);
-      // One stored file per source: a new upload replaces the previous one.
-      const folder = join(importsRoot(deps), String(source.id));
-      rmSync(folder, { recursive: true, force: true });
-      mkdirSync(folder, { recursive: true });
-      const relative = `${source.id}/${now.replace(/[:.]/g, '-')}-${safeFileName(fileName)}`;
-      writeFileSync(join(importsRoot(deps), relative), text, 'utf8');
-      deps.db
-        .prepare('UPDATE job_sources SET config = ?, updated_at = ? WHERE id = ?')
-        .run(JSON.stringify({ file: relative, fileName, format: kind, mapping: chosen }), now, source.id);
-      const started = service.run(source.id, 'upload', { bypassSlots: true });
-      if (table.rows.length > BACKGROUND_IMPORT_ROWS) {
-        res.status(202).json({ source: adminSource(deps.db, source.id, true), run: null, runId: started.runId });
-        return;
-      }
-      const run = await started.done;
-      res.status(201).json({ source: adminSource(deps.db, source.id, false), run, runId: started.runId });
+      const result = await storeAndRunImport(deps, {
+        kind: table.format,
+        sourceName: label || fileName,
+        fileName,
+        text,
+        mapping: chosen,
+        rowCount: table.rows.length,
+      });
+      res.status(result.status).json(result.body);
     }),
   );
 

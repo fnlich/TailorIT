@@ -19,6 +19,8 @@ export const ERROR_CODES = [
   'ai_failed',
   'render_failed',
   'browser_unavailable',
+  /** The Google Sheet import cannot run: no usable service account key, the Sheets API is off, or Google is down. */
+  'sheets_unavailable',
   'system_template_read_only',
   'sign_in_unavailable',
   'account_disabled',
@@ -43,6 +45,7 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   ai_failed: 502,
   render_failed: 500,
   browser_unavailable: 503,
+  sheets_unavailable: 503,
   system_template_read_only: 403,
   sign_in_unavailable: 503,
   account_disabled: 403,

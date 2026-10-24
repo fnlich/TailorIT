@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // `npm run doctor`: checks what TailorIT needs on this machine and says what to do about anything missing.
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
-import { loadRootEnv, repoRoot } from './env.mjs';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { loadRootEnv, readEnvText, repoRoot } from './env.mjs';
 import { paint } from './proc.mjs';
 
 loadRootEnv();
@@ -75,6 +75,43 @@ check(
   smtp ? `${process.env.SMTP_HOST}` : 'SMTP not set: in development, codes are printed by the API',
 );
 check('Admin accounts', Boolean(process.env.ADMIN_EMAILS), process.env.ADMIN_EMAILS || 'ADMIN_EMAILS not set (no admin)');
+
+// Google Sheet import (optional): the service account key is a JSON key and git ignores it. Only the key's
+// client_email is ever printed.
+const keySetting = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE?.trim();
+const keyFile = keySetting ? resolve(repoRoot, keySetting) : join(repoRoot, 'service-account-key.json');
+if (!existsSync(keyFile)) {
+  check('Google Sheet import', true, `off (optional): no key at ${keyFile}`);
+} else {
+  let key = null;
+  try {
+    if (statSync(keyFile).size <= 64 * 1024) key = JSON.parse(readEnvText(keyFile));
+  } catch {
+    key = null;
+  }
+  const valid =
+    key !== null &&
+    typeof key === 'object' &&
+    (key.type === undefined || key.type === 'service_account') &&
+    typeof key.client_email === 'string' &&
+    key.client_email.trim() !== '' &&
+    typeof key.private_key === 'string' &&
+    key.private_key.includes('PRIVATE KEY');
+  check(
+    'Google Sheet import',
+    valid,
+    valid ? `share sheets with ${key.client_email} (Viewer)` : `${keyFile} is not a service account JSON key -> download a JSON key of the service account`,
+  );
+  const inRepo = relative(repoRoot, keyFile);
+  if (inRepo && !inRepo.startsWith('..') && !isAbsolute(inRepo)) {
+    const path = inRepo.split(sep).join('/');
+    const ignored = spawnSync('git', ['check-ignore', '-q', path], { cwd: repoRoot, windowsHide: true, timeout: 20_000 });
+    if (ignored.error) check('Key file git-ignored', true, 'git not found');
+    else if (ignored.status === 0) check('Key file git-ignored', true, path);
+    else if (ignored.status === 1) check('Key file git-ignored', false, `${path} could be committed -> add it to .gitignore`);
+    else check('Key file git-ignored', true, 'not a git checkout');
+  }
+}
 
 const width = Math.max(...results.map((r) => r.name.length));
 for (const r of results) {

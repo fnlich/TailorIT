@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { IsoDateTime } from '@tailorit/shared';
+import { IsoDateTime, SHEET_SOURCE_LABEL, SheetSourceConfigSchema } from '@tailorit/shared';
 import type { Db } from '../../core/db/connection';
 import {
   RUN_STATUSES,
@@ -32,19 +32,28 @@ interface SourceRow {
   updated_at: string | null;
 }
 
-export function toSourceRecord(row: SourceRow): SourceRecord {
-  let config: Record<string, unknown> = {};
+/** A source's config column as an object ({} when it is not one). */
+function configOf(text: string | null | undefined): Record<string, unknown> {
+  if (!text) return {};
   try {
-    const parsed = JSON.parse(row.config) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) config = parsed as Record<string, unknown>;
+    const parsed = JSON.parse(text) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
-    config = {};
+    return {};
   }
+}
+
+/** How a source's kind reads in the console: "Google Sheet" for a csv source that holds a copy of a sheet tab. */
+export function kindLabelOf(kind: SourceKind, config: Record<string, unknown>): string {
+  return kind === 'csv' && SheetSourceConfigSchema.safeParse(config.sheet).success ? SHEET_SOURCE_LABEL : SOURCE_KIND_LABEL[kind];
+}
+
+export function toSourceRecord(row: SourceRow): SourceRecord {
   return {
     id: row.id,
     kind: row.kind,
     name: row.name,
-    config,
+    config: configOf(row.config),
     companyId: row.company_id,
     enabled: row.enabled === 1,
     schedule: row.schedule,
@@ -69,6 +78,20 @@ export function findSourceRecord(db: Db, kind: SourceKind, name: string): Source
 
 export function listSourceRecords(db: Db): SourceRecord[] {
   return db.prepare<[], SourceRow>('SELECT * FROM job_sources ORDER BY created_at DESC, id DESC').all().map(toSourceRecord);
+}
+
+/**
+ * The csv source that holds a copy of this sheet tab, matched by spreadsheet and tab id rather than by name (renaming
+ * the spreadsheet or the tab changes the default name, not the tab).
+ */
+export function findSheetSource(db: Db, spreadsheetId: string, gid: number): SourceRecord | null {
+  const rows = db
+    .prepare<[string, number], SourceRow>(
+      "SELECT * FROM job_sources WHERE kind = 'csv' AND json_extract(config, '$.sheet.spreadsheetId') = ? " +
+        "AND json_extract(config, '$.sheet.gid') = ? ORDER BY id",
+    )
+    .all(spreadsheetId, gid);
+  return rows.map(toSourceRecord).find((source) => SheetSourceConfigSchema.safeParse(source.config.sheet).success) ?? null;
 }
 
 export interface NewSource {
@@ -147,6 +170,8 @@ export type AdminSource = z.infer<typeof AdminSourceSchema>;
 export const AdminRunSchema = SourceRunSummarySchema.extend({
   sourceId: z.number().int(),
   sourceKind: z.enum(SOURCE_KINDS),
+  /** "Greenhouse", "CSV import", "Google Sheet"... (kindLabelOf). */
+  sourceKindLabel: z.string(),
   sourceName: z.string(),
 });
 export type AdminRun = z.infer<typeof AdminRunSchema>;
@@ -171,6 +196,8 @@ interface RunRow {
   log: string | null;
   kind?: SourceKind;
   name?: string;
+  /** The source's config (joined in by the run queries, for its kind label). */
+  config?: string;
 }
 
 function toRunSummary(row: RunRow): SourceRunSummary {
@@ -191,7 +218,14 @@ function toRunSummary(row: RunRow): SourceRunSummary {
 }
 
 function toAdminRun(row: RunRow): AdminRun {
-  return { ...toRunSummary(row), sourceId: row.source_id, sourceKind: row.kind ?? 'seed', sourceName: row.name ?? '' };
+  const kind = row.kind ?? 'seed';
+  return {
+    ...toRunSummary(row),
+    sourceId: row.source_id,
+    sourceKind: kind,
+    sourceKindLabel: kindLabelOf(kind, configOf(row.config)),
+    sourceName: row.name ?? '',
+  };
 }
 
 /** Every source with its job counts and latest run, newest first. */
@@ -237,7 +271,7 @@ function toAdminSource(
   return {
     id: source.id,
     kind: source.kind,
-    kindLabel: SOURCE_KIND_LABEL[source.kind],
+    kindLabel: kindLabelOf(source.kind, source.config),
     name: source.name,
     config: source.config,
     enabled: source.enabled,
@@ -269,7 +303,7 @@ export function adminRuns(db: Db, options: { sourceId?: number; limit: number; b
   }
   const rows = db
     .prepare<number[], RunRow>(
-      'SELECT r.*, s.kind AS kind, s.name AS name FROM ingest_runs r JOIN job_sources s ON s.id = r.source_id ' +
+      'SELECT r.*, s.kind AS kind, s.name AS name, s.config AS config FROM ingest_runs r JOIN job_sources s ON s.id = r.source_id ' +
         `${where.length ? `WHERE ${where.join(' AND ')} ` : ''}ORDER BY r.id DESC LIMIT ?`,
     )
     .all(...params, options.limit + 1);
@@ -280,7 +314,7 @@ export function adminRuns(db: Db, options: { sourceId?: number; limit: number; b
 export function adminRun(db: Db, id: number): AdminRunDetail | null {
   const row = db
     .prepare<[number], RunRow>(
-      'SELECT r.*, s.kind AS kind, s.name AS name FROM ingest_runs r JOIN job_sources s ON s.id = r.source_id WHERE r.id = ?',
+      'SELECT r.*, s.kind AS kind, s.name AS name, s.config AS config FROM ingest_runs r JOIN job_sources s ON s.id = r.source_id WHERE r.id = ?',
     )
     .get(id);
   if (!row) return null;

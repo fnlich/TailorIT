@@ -1,45 +1,22 @@
-import { linkKey, parseFlexibleDate, tidyText } from '@tailorit/shared';
-import { sha256 } from './normalize';
+import { IMPORT_FIELDS, linkKey, parseFlexibleDate, tidyText, type ImportField, type ImportMapping } from '@tailorit/shared';
+import { cleanUrl, sha256 } from './normalize';
 import { IngestError, type RawPosting } from './types';
 
-// Jobs from a spreadsheet or a JSON file (Admin > Import jobs): parse, guess which column is which (free_tailor's
-// sheet headers included: Date, NO(DATE), Company, Job Title, Job Link, Job Description), and read each row as a posting.
+// Jobs from a spreadsheet or a JSON file (Admin > Import jobs), and from a Google Sheet tab (stored as a CSV copy):
+// parse, guess which column is which (free_tailor's sheet headers included: Date, NO(DATE), Company, Job Title,
+// Job Link, Job Description), and read each row as a posting. Row numbers are the rows a spreadsheet shows.
+
+export {
+  IMPORT_FIELDS,
+  IMPORT_FIELD_LABEL,
+  REQUIRED_IMPORT_FIELDS,
+  importFieldInfo,
+  type ImportField,
+  type ImportMapping,
+} from '@tailorit/shared';
 
 export const IMPORT_FORMATS = ['csv', 'json'] as const;
 export type ImportFormat = (typeof IMPORT_FORMATS)[number];
-
-export const IMPORT_FIELDS = [
-  'title',
-  'company',
-  'url',
-  'description',
-  'location',
-  'postedAt',
-  'salary',
-  'employmentType',
-  'workArrangement',
-  'department',
-  'id',
-] as const;
-export type ImportField = (typeof IMPORT_FIELDS)[number];
-export type ImportMapping = Record<ImportField, string | null>;
-
-export const IMPORT_FIELD_LABEL: Record<ImportField, string> = {
-  title: 'Job title',
-  company: 'Company',
-  url: 'Job link',
-  description: 'Job description',
-  location: 'Location',
-  postedAt: 'Posted date',
-  salary: 'Salary',
-  employmentType: 'Job type',
-  workArrangement: 'Work arrangement',
-  department: 'Department',
-  id: 'Job id',
-};
-
-/** Fields a row must have to become a job. */
-export const REQUIRED_IMPORT_FIELDS: readonly ImportField[] = ['title', 'company', 'url'];
 
 /** Header spellings per field, folded (lower case, letters and digits only), best first. */
 const HEADER_GUESSES: Record<ImportField, readonly string[]> = {
@@ -98,14 +75,31 @@ function delimiterOf(text: string): string {
   return best;
 }
 
-/** RFC 4180 CSV: quoted fields with "" escapes and line breaks, CRLF or LF, a BOM ignored. Blank lines dropped. */
-export function parseCsv(input: string): string[][] {
+/** One CSV record: its cells, and its 1-based position in the file counting blank records (a spreadsheet's row). */
+export interface CsvRecord {
+  cells: string[];
+  record: number;
+}
+
+/**
+ * RFC 4180 CSV: quoted fields with "" escapes and line breaks, CRLF or LF, a BOM ignored. Blank records are dropped
+ * but counted, so `record` is the row a spreadsheet shows. `delimiter` overrides the guess from the first line.
+ */
+export function parseCsvRecords(input: string, delimiter?: string): CsvRecord[] {
   const text = input.replace(/^\ufeff/, '');
-  const delimiter = delimiterOf(text);
-  const rows: string[][] = [];
+  const separator = delimiter ?? delimiterOf(text);
+  const records: CsvRecord[] = [];
   let row: string[] = [];
   let field = '';
   let quoted = false;
+  let record = 1;
+  const endRecord = () => {
+    row.push(field);
+    field = '';
+    if (row.some((cell) => cell.trim() !== '')) records.push({ cells: row, record });
+    row = [];
+    record += 1;
+  };
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index]!;
     if (quoted) {
@@ -123,28 +117,38 @@ export function parseCsv(input: string): string[][] {
     }
     if (char === '"' && field === '') {
       quoted = true;
-    } else if (char === delimiter) {
+    } else if (char === separator) {
       row.push(field);
       field = '';
     } else if (char === '\n' || char === '\r') {
       if (char === '\r' && text[index + 1] === '\n') index += 1;
-      row.push(field);
-      field = '';
-      if (row.some((cell) => cell.trim() !== '')) rows.push(row);
-      row = [];
+      endRecord();
     } else {
       field += char;
     }
   }
-  row.push(field);
-  if (row.some((cell) => cell.trim() !== '')) rows.push(row);
-  return rows;
+  endRecord();
+  return records;
+}
+
+/** RFC 4180 CSV as rows of cells (blank lines dropped). */
+export function parseCsv(input: string): string[][] {
+  return parseCsvRecords(input).map((entry) => entry.cells);
 }
 
 export interface Table {
   format: ImportFormat;
   columns: string[];
   rows: Array<Record<string, string>>;
+  /** The row number of each of `rows`, as problems name them: a spreadsheet's row (CSV), the item's place (JSON). */
+  rowNumbers: number[];
+}
+
+/** How a CSV text is read: a forced delimiter (a Google Sheet copy is always comma-separated), and the spreadsheet
+ *  row its first record is (a copy whose header row was row 3 of the sheet starts at 3). */
+export interface CsvTableOptions {
+  delimiter?: string;
+  firstRow?: number;
 }
 
 function cellText(value: unknown): string {
@@ -163,16 +167,19 @@ function cellText(value: unknown): string {
   return '';
 }
 
-/** A CSV file as a table: the first row is the header; repeated or blank headers get a number. */
-export function tableFromCsv(text: string): Table {
-  const rows = parseCsv(text);
-  if (rows.length === 0) throw new IngestError('The file is empty.');
-  const header = rows[0]!.map((cell, index) => tidyText(cell) || `Column ${index + 1}`);
+/** A CSV file as a table: the first record is the header; repeated or blank headers get a number. */
+export function tableFromCsv(text: string, options: CsvTableOptions = {}): Table {
+  const records = parseCsvRecords(text, options.delimiter);
+  if (records.length === 0) throw new IngestError('The file is empty.');
+  const offset = (options.firstRow ?? 1) - 1;
+  const header = records[0]!.cells.map((cell, index) => tidyText(cell) || `Column ${index + 1}`);
   const columns = header.map((name, index) => (header.indexOf(name) === index ? name : `${name} (${index + 1})`));
+  const body = records.slice(1);
   return {
     format: 'csv',
     columns,
-    rows: rows.slice(1).map((cells) => Object.fromEntries(columns.map((column, index) => [column, cells[index] ?? '']))),
+    rows: body.map(({ cells }) => Object.fromEntries(columns.map((column, index) => [column, cells[index] ?? '']))),
+    rowNumbers: body.map(({ record }) => record + offset),
   };
 }
 
@@ -197,11 +204,13 @@ export function tableFromJson(text: string): Table {
     format: 'json',
     columns,
     rows: objects.map((object) => Object.fromEntries(columns.map((column) => [column, cellText(object[column])]))),
+    rowNumbers: objects.map((_, index) => index + 1),
   };
 }
 
-export function readTable(fileName: string, text: string): Table {
-  return detectFormat(fileName, text) === 'json' ? tableFromJson(text) : tableFromCsv(text);
+/** A file as a table; `options` apply to CSV only. */
+export function readTable(fileName: string, text: string, options: CsvTableOptions = {}): Table {
+  return detectFormat(fileName, text) === 'json' ? tableFromJson(text) : tableFromCsv(text, options);
 }
 
 /** A mapping with every named column checked against the table; unknown columns become null. */
@@ -230,16 +239,37 @@ function postedAtOf(value: string): string | null {
   return day ? `${day}T00:00:00.000Z` : null;
 }
 
+/**
+ * A job link that leads somewhere: a web address (the scheme may be left out) whose host has a dot or is an IP
+ * address. A link's label ("Apply", "N/A"), which a sheet shows for a HYPERLINK() cell, is not one; read as an address
+ * it would merge every such row into one job at https://apply/.
+ */
+export function isWebAddress(text: string): boolean {
+  const url = cleanUrl(text);
+  if (!url) return false;
+  const host = new URL(url).hostname;
+  return host.includes('.') || host.startsWith('[');
+}
+
 /** A stable id for a row without one: its link, else a hash of company, title and description. */
 export function rowIdOf(company: string, title: string, url: string, description: string): string {
   return linkKey(url) ?? `row-${sha256(`${company}\n${title}\n${description}`).slice(0, 32)}`;
 }
 
-/** One row as a posting, or an error sentence naming the row (1-based, counting the header for CSV). */
+/** How rows are read beyond the mapping. */
+export interface RowOptions {
+  /** Every row's posted date (an ISO timestamp), whatever a posted-date column says: a sheet tab named for its day. */
+  postedAt?: string | null;
+}
+
+const quoted = (text: string) => (text.length > 60 ? `${text.slice(0, 59).trimEnd()}…` : text);
+
+/** One row as a posting, or an error sentence naming the row (as a spreadsheet numbers it). */
 export function rowToPosting(
   row: Record<string, string>,
   mapping: ImportMapping,
   rowNumber: number,
+  options: RowOptions = {},
 ): { posting: RawPosting } | { error: string } {
   const title = cell(row, mapping, 'title');
   const company = cell(row, mapping, 'company');
@@ -247,6 +277,11 @@ export function rowToPosting(
   if (!title) return { error: `Row ${rowNumber} has no job title.` };
   if (!company) return { error: `Row ${rowNumber} ("${title}") has no company.` };
   if (!url) return { error: `Row ${rowNumber} ("${title}") has no job link.` };
+  if (!isWebAddress(url)) {
+    return {
+      error: `Row ${rowNumber} ("${title}") has a job link that is not a web address ("${quoted(url)}"). Put the address itself in the column.`,
+    };
+  }
   const description = cell(row, mapping, 'description');
   const isHtml = /<\/?(?:p|div|ul|ol|li|br|h[1-6]|strong|b)\b/i.test(description);
   const location = cell(row, mapping, 'location');
@@ -269,7 +304,7 @@ export function rowToPosting(
       workArrangement: remoteAnswer ? 'remote' : null,
       arrangementText: yesNoRemote ? null : arrangement || null,
       department: cell(row, mapping, 'department') || null,
-      postedAt: postedAtOf(cell(row, mapping, 'postedAt')),
+      postedAt: options.postedAt ?? postedAtOf(cell(row, mapping, 'postedAt')),
     },
   };
 }

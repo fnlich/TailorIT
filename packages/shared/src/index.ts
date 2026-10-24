@@ -9,3 +9,4 @@ export * from './jobs/index';
 export * from './resume/index';
 export * from './letters/index';
 export * from './tracker/index';
+export * from './ingest/index';
