@@ -11,7 +11,6 @@ import { Select } from '@/components/ui/Select';
 import { Sheet, SheetContent } from '@/components/ui/Sheet';
 import { BriefcaseIcon } from '@/components/ui/icons';
 import { api, isApiError, userMessage } from '@/lib/api';
-import { useAccount } from '@/lib/auth';
 import { CompanyInput } from '../CompanyInput';
 import { localToday, trackerApi, useResumeOptions } from '../data';
 import { DEFAULT_NEW_STATUS } from '../state';
@@ -50,7 +49,6 @@ function AddApplicationForm({
   onSavingChange: (saving: boolean) => void;
   onAdded: (application: ApplicationDetail) => void;
 }) {
-  const account = useAccount();
   const resumes = useResumeOptions(true);
   const preferredType = usePreferredJobType();
   const [title, setTitle] = useState('');
@@ -58,16 +56,17 @@ function AddApplicationForm({
   const [location, setLocation] = useState('');
   const [chosenType, setChosenType] = useState<EmploymentType | null>(null);
   const [status, setStatus] = useState<ApplicationStatus>(DEFAULT_NEW_STATUS);
+  /** The person's pick (a resume id, or NO_RESUME for "None"); null until they touch the select. */
   const [chosenResume, setChosenResume] = useState<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
 
-  // Untouched fields show their defaults: the preferred job type and the default resume.
+  // An untouched job type shows the preferred one. An untouched resume shows the placeholder and is not sent: the
+  // application is added with no resume, and only a resume the person picks (or "None") counts as their choice.
   const employmentType = chosenType ?? preferredType;
   const resumeItems = resumes.data?.items ?? [];
-  const defaultResume = resumeItems.find((resume) => resume.isDefault)?.id ?? account?.defaultResumeId ?? null;
-  const resumeId =
-    chosenResume ?? (defaultResume && resumeItems.some((resume) => resume.id === defaultResume) ? defaultResume : NO_RESUME);
+  const noResumes = resumes.isSuccess && resumeItems.length === 0;
+  const resumeValue = chosenResume ?? (noResumes ? NO_RESUME : null);
 
   /** A field's error goes as soon as the field changes (submitting checks it again). */
   const clearError = (field: FieldName) =>
@@ -94,7 +93,7 @@ function AddApplicationForm({
         location: location.trim(),
         employmentType,
         status,
-        resumeId: resumeId === NO_RESUME ? null : resumeId,
+        ...(chosenResume !== null ? { resumeId: chosenResume === NO_RESUME ? null : chosenResume } : {}),
         occurredOn: localToday(),
       });
       onAdded(created);
@@ -178,7 +177,7 @@ function AddApplicationForm({
               textValue: resume.label,
             })),
           ]}
-          value={resumeId}
+          value={resumeValue}
           placeholder="Resume used for this application"
           disabled={resumeItems.length === 0}
           onValueChange={(value) => {

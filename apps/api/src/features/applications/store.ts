@@ -1,5 +1,6 @@
 import {
   APPLICATION_STATUSES,
+  STATUS,
   currentStatus,
   normalizeEvents,
   type ApplicationDetail,
@@ -7,6 +8,7 @@ import {
   type ApplicationStatus,
   type ApplicationSummary,
   type EmploymentType,
+  type ResumeOrigin,
   type StatusEvent,
   type TrackerPayPeriod,
 } from '@tailorit/shared';
@@ -15,6 +17,11 @@ import { notFound } from '../../core/http/errors';
 
 // Rows of the tracker tables and their DTOs. Every read is scoped by user_id: another account's application is
 // "not found", never "forbidden".
+//
+// The resume match flag (migration 0301). `resume_match_due = 1` asks the match worker to choose the application's
+// resume. TailorIT chooses only for an application of a job that is Saved, not archived, and whose resume TailorIT
+// chose or nobody chose yet (origin 'auto' or NULL). The writers here keep the flag to that: moving past Saved or
+// archiving clears it; moving back to Saved or restoring such an application sets it, so the choice is made again.
 
 export interface ApplicationRow {
   id: string;
@@ -35,6 +42,12 @@ export interface ApplicationRow {
   favorite: number;
   archived_at: string | null;
   resume_id: string | null;
+  /** Who chose resume_id: 'auto' (TailorIT's best match), 'user' (the person, a resume or none), NULL (nobody yet). */
+  resume_origin: ResumeOrigin | null;
+  /** When resume_id was chosen. */
+  resume_matched_at: string | null;
+  /** 1 while TailorIT is still to choose the resume (the match worker links it). */
+  resume_match_due: number;
   cover_letter_id: string | null;
   notes_html: string;
   tracked_on: string;
@@ -100,9 +113,14 @@ export function loadEventsFor(db: Db, ids: readonly string[]): Map<string, Statu
   return out;
 }
 
+/** TailorIT may choose the row's resume once it is Saved again (SQL over the row; `archived_at` as written). */
+const CHOOSABLE_WHEN_SAVED = `job_id IS NOT NULL AND (resume_origin IS NULL OR resume_origin = 'auto')`;
+
 /**
  * Writes an application's new event list: removed statuses are deleted, new ones inserted, changed dates updated;
- * the denormalized `current_status` follows. Call inside a transaction.
+ * the denormalized `current_status` follows. Past Saved, TailorIT no longer chooses the resume (the due flag is
+ * cleared; the resume linked stays). Moved back to Saved, an active application of a job whose resume TailorIT chose
+ * (or nobody chose) is marked due, so its best match is chosen again. Call inside a transaction.
  */
 export function writeEvents(
   db: Db,
@@ -125,13 +143,43 @@ export function writeEvents(
     else if (held.get(status) !== occurredOn) update.run(occurredOn, applicationId, status);
   }
   const current = currentStatus(after);
-  db.prepare('UPDATE applications SET current_status = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(
-    current,
-    now,
-    applicationId,
-    userId,
-  );
+  const lowered = current === STATUS.saved && currentStatus(before) !== STATUS.saved;
+  db.prepare(
+    `UPDATE applications
+     SET current_status = @current, updated_at = @now,
+         resume_match_due = CASE
+           WHEN @current <> ${STATUS.saved} THEN 0
+           WHEN @lowered = 1 AND archived_at IS NULL AND ${CHOOSABLE_WHEN_SAVED} THEN 1
+           ELSE resume_match_due END
+     WHERE id = @id AND user_id = @userId`,
+  ).run({ current, now, lowered: lowered ? 1 : 0, id: applicationId, userId });
   return current;
+}
+
+/**
+ * Archives an application (archiving twice keeps the first time). An archived application is not TailorIT's to
+ * choose a resume for, so it is no longer due.
+ */
+export function archiveRow(db: Db, userId: string, id: string, now: string): void {
+  db.prepare(
+    `UPDATE applications SET archived_at = COALESCE(archived_at, @now), updated_at = @now, resume_match_due = 0
+     WHERE id = @id AND user_id = @userId`,
+  ).run({ now, id, userId });
+}
+
+/**
+ * Restores an application. One that comes back Saved, of a job, with a resume TailorIT chose (or nobody chose), is
+ * marked due: what its choice depends on may have changed while it was archived. (SET reads the row as it was.)
+ */
+export function restoreRow(db: Db, userId: string, id: string, now: string): void {
+  db.prepare(
+    `UPDATE applications
+     SET archived_at = NULL, updated_at = @now,
+         resume_match_due = CASE
+           WHEN archived_at IS NOT NULL AND current_status = ${STATUS.saved} AND ${CHOOSABLE_WHEN_SAVED} THEN 1
+           ELSE resume_match_due END
+     WHERE id = @id AND user_id = @userId`,
+  ).run({ now, id, userId });
 }
 
 /**
@@ -205,6 +253,9 @@ export function toDetail(db: Db, row: ApplicationRow): ApplicationDetail {
       period: row.salary_period,
     },
     resumeId: row.resume_id,
+    resumeOrigin: row.resume_origin ?? null,
+    resumeMatchedAt: row.resume_matched_at ?? null,
+    resumeMatchPending: row.resume_match_due === 1,
     coverLetterId: row.cover_letter_id,
     notesHtml: row.notes_html,
     questions: loadQuestions(db, row.id),

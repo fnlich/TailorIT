@@ -590,7 +590,7 @@ describe('archive, counts and bulk', () => {
 });
 
 describe('review hardening', () => {
-  it('treats an empty resume or letter id as none, and floors a fractional page size', async () => {
+  it('treats an empty resume or letter id as none (the person’s choice), and floors a fractional page size', async () => {
     const c = use();
     const { agent } = await signIn(c, 'edges@example.com');
     const res = await agent
@@ -598,12 +598,13 @@ describe('review hardening', () => {
       .set('Origin', ORIGIN)
       .send({ title: 'X', companyName: 'Y', employmentType: 'full_time', resumeId: '' });
     expect(res.status).toBe(201);
-    expect(res.body.resumeId).toBeNull();
+    expect(res.body).toMatchObject({ resumeId: null, resumeOrigin: 'user', resumeMatchPending: false });
     const patched = await agent.patch(`/api/applications/${res.body.id}`).set('Origin', ORIGIN).send({ resumeId: '', coverLetterId: '' });
     expect(patched.status).toBe(200);
-    expect(patched.body).toMatchObject({ resumeId: null, coverLetterId: null });
+    expect(patched.body).toMatchObject({ resumeId: null, resumeOrigin: 'user', coverLetterId: null });
 
-    await create(agent, { title: 'Second' });
+    // Sending no resume at all is not a choice: nobody chose one yet.
+    expect(await create(agent, { title: 'Second' })).toMatchObject({ resumeId: null, resumeOrigin: null, resumeMatchedAt: null });
     const list = await agent.get('/api/applications?limit=1.5');
     expect(list.status).toBe(200);
     expect(list.body.items).toHaveLength(1);

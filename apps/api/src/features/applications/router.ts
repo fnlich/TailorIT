@@ -11,6 +11,7 @@ import {
   IdParam,
   PatchApplicationBodySchema,
   PatchQuestionBodySchema,
+  STATUS,
   StatusChangeBodySchema,
   TrackerImportBodySchema,
   booleanParam,
@@ -22,7 +23,7 @@ import {
 import { z } from 'zod';
 import { requireUser, userOf } from '../../core/auth/guards';
 import { todayIso, type AppDeps } from '../../core/context';
-import { validationFailed } from '../../core/http/errors';
+import { asyncHandler, validationFailed } from '../../core/http/errors';
 import { parseInput } from '../../core/http/validate';
 import { boardColumns, countApplications, filterClause, pageOfApplications, type ApplicationFilter } from './query';
 import {
@@ -35,8 +36,10 @@ import {
   resumeScore,
   sankeyReport,
 } from './reports';
+import { bestResumes, SINGLE_SAVE_MATCH_BUDGET_MS } from './resume-choice';
 import {
   archiveAll,
+  assertValidDate,
   bulkApplications,
   changeStatus,
   clearStatusDate,
@@ -49,10 +52,16 @@ import {
   patchQuestion,
   setArchived,
   setStatusDate,
+  wantsResumeMatch,
+  type CreateOptions,
 } from './service';
 import { emptyStatusCounts, getDetail, loadOwnedRow, loadQuestions } from './store';
 
 // Job tracker applications (/api/applications). Owned by work package T (see docs/ARCHITECTURE.md §6).
+//
+// Saving a job (POST / with a jobId and no resumeId, at Saved) links TailorIT's best resume. It is chosen first,
+// read-only and within SINGLE_SAVE_MATCH_BUDGET_MS, then written with the save. When the choice is not ready, or a
+// restore or a move back to Saved leaves an application due, the match worker is woken to choose within seconds.
 
 function idOf(req: Request, name = 'id'): string {
   return parseInput(IdParam, req.params[name], 'link');
@@ -120,6 +129,8 @@ function filterOf(query: {
 export function createApplicationsRouter(deps: AppDeps): Router {
   const router = Router();
   router.use(requireUser);
+  /** Wakes the resume match worker: an application may be due (it does nothing before the worker starts). */
+  const wakeMatcher = () => deps.services.resumeMatch?.nudge();
 
   // ---------------------------------------------------------------------------------------------- collections
 
@@ -197,7 +208,9 @@ export function createApplicationsRouter(deps: AppDeps): Router {
 
   router.post('/bulk', (req, res) => {
     const body = parseInput(BulkApplicationsBodySchema, req.body, 'request');
-    res.json({ affected: bulkApplications(deps, userOf(req).id, body) });
+    const affected = bulkApplications(deps, userOf(req).id, body);
+    if (body.action === 'unarchive' || (body.action === 'status' && body.status === STATUS.saved)) wakeMatcher();
+    res.json({ affected });
   });
 
   router.post('/archive-all', (req, res) => {
@@ -214,11 +227,24 @@ export function createApplicationsRouter(deps: AppDeps): Router {
     res.json(body);
   });
 
-  router.post('/', (req, res) => {
-    const body = parseInput(CreateApplicationBodySchema, req.body, 'application');
-    const { detail, created } = createApplication(deps, userOf(req).id, body);
-    res.status(created ? 201 : 200).json(detail);
-  });
+  router.post(
+    '/',
+    asyncHandler(async (req, res) => {
+      const user = userOf(req);
+      const body = parseInput(CreateApplicationBodySchema, req.body, 'application');
+      const options: CreateOptions = {};
+      if (body.jobId !== undefined && wantsResumeMatch(deps.db, user.id, body)) {
+        // A date the save would refuse is refused before choosing.
+        assertValidDate(deps, body.occurredOn ?? todayIso(deps));
+        const { choices, unfinished } = await bestResumes(deps, user.id, [body.jobId], SINGLE_SAVE_MATCH_BUDGET_MS);
+        options.matchedResume = choices.get(body.jobId) ?? null;
+        options.matchPending = unfinished.includes(body.jobId);
+      }
+      const { detail, created } = createApplication(deps, user.id, body, options);
+      if (detail.resumeMatchPending) wakeMatcher();
+      res.status(created ? 201 : 200).json(detail);
+    }),
+  );
 
   // ------------------------------------------------------------------------------------------- one application
 
@@ -238,7 +264,9 @@ export function createApplicationsRouter(deps: AppDeps): Router {
 
   router.put('/:id/status', (req, res) => {
     const body = parseInput(StatusChangeBodySchema, req.body, 'status');
-    res.json(changeStatus(deps, userOf(req).id, idOf(req), body.status, body.occurredOn));
+    const result = changeStatus(deps, userOf(req).id, idOf(req), body.status, body.occurredOn);
+    if (result.currentStatus === STATUS.saved) wakeMatcher();
+    res.json(result);
   });
 
   router.put('/:id/events/:status', (req, res) => {
@@ -249,7 +277,9 @@ export function createApplicationsRouter(deps: AppDeps): Router {
 
   router.delete('/:id/events/:status', (req, res) => {
     const status = parseInput(EventStatusParam, req.params.status, 'status');
-    res.json(clearStatusDate(deps, userOf(req).id, idOf(req), status));
+    const result = clearStatusDate(deps, userOf(req).id, idOf(req), status);
+    if (result.currentStatus === STATUS.saved) wakeMatcher();
+    res.json(result);
   });
 
   router.post('/:id/archive', (req, res) => {
@@ -257,7 +287,9 @@ export function createApplicationsRouter(deps: AppDeps): Router {
   });
 
   router.post('/:id/restore', (req, res) => {
-    res.json(setArchived(deps, userOf(req).id, idOf(req), false));
+    const detail = setArchived(deps, userOf(req).id, idOf(req), false);
+    if (detail.resumeMatchPending) wakeMatcher();
+    res.json(detail);
   });
 
   router.get('/:id/cover-letters', (req, res) => {
