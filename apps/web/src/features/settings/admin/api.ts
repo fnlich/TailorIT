@@ -1,3 +1,4 @@
+import { AiBackgroundWorkSchema, type AiBackgroundWork } from '@tailorit/shared/ai';
 import { SheetAccountSchema, SheetPreviewSchema } from '@tailorit/shared/ingest';
 import { api } from '@/lib/api';
 import type {
@@ -33,6 +34,7 @@ export const adminKeys = {
   run: (id: number) => ['admin', 'run', id] as const,
   reports: (status: ReportFilter) => ['admin', 'reports', status] as const,
   aiHealth: ['admin', 'ai', 'health'] as const,
+  aiBackground: ['admin', 'ai', 'background'] as const,
   users: ['admin', 'users'] as const,
   sheetAccount: ['admin', 'import', 'sheets', 'account'] as const,
 };
@@ -131,6 +133,11 @@ export function fetchAiHealth(force = false, signal?: AbortSignal) {
 
 export function runAiTest() {
   return api.post<AiTestResult>('/api/admin/ai/test', {});
+}
+
+/** What Claude still has to read in the background, the resume matches to update, and whether background work runs. */
+export function fetchAiBackground(signal?: AbortSignal) {
+  return api.get<AiBackgroundWork>('/api/admin/ai/background', { signal, schema: AiBackgroundWorkSchema });
 }
 
 export function fetchUsers(signal?: AbortSignal) {

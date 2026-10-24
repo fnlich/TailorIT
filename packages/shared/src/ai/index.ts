@@ -74,3 +74,53 @@ export const AiHealthSchema = z.object({
   checkedAt: IsoDateTime,
 });
 export type AiHealth = z.infer<typeof AiHealthSchema>;
+
+/** When Claude reads added jobs (AI_JOB_ANALYSIS): `ingest` and `saved` run the background backlog; `lazy`, `off` do not. */
+export const AI_JOB_ANALYSIS_MODES = ['ingest', 'saved', 'lazy', 'off'] as const;
+export type AiJobAnalysisMode = (typeof AI_JOB_ANALYSIS_MODES)[number];
+/** Whether Claude reads each uploaded resume in the background (AI_RESUME_ANALYSIS). */
+export const AI_RESUME_ANALYSIS_MODES = ['auto', 'off'] as const;
+export type AiResumeAnalysisMode = (typeof AI_RESUME_ANALYSIS_MODES)[number];
+
+const BacklogCount = z.number().int().nonnegative();
+
+/**
+ * Admin › AI › Background work (GET /api/admin/ai/background): what the background workers still have to do, counted
+ * from the database (no AI call, no write). A mode without a backlog (jobs `lazy` or `off`, resumes `off`) counts 0.
+ * Rows of disabled accounts are left out, as the workers skip them.
+ */
+export const AiBackgroundWorkSchema = z.object({
+  jobs: z.object({
+    mode: z.enum(AI_JOB_ANALYSIS_MODES),
+    /** Jobs the add-time backlog would still read: live, enough text, no Claude analysis of their text yet. */
+    waiting: BacklogCount,
+    /** Of the rest, jobs whose text waits out a failed reading (30 or 60 minutes) or an outage. */
+    backingOff: BacklogCount,
+    /** Jobs whose text Claude failed on three times: it is tried again once a day. */
+    gaveUp: BacklogCount,
+    /** AI_JOB_ANALYSIS_PER_HOUR: the most the backlog starts in an hour; 0 = no cap. */
+    perHourCap: BacklogCount,
+  }),
+  resumes: z.object({
+    mode: z.enum(AI_RESUME_ANALYSIS_MODES),
+    /** Uploads in line for Claude's reading (some wait out a failed one). */
+    waiting: BacklogCount,
+    /** Uploads being read now (one at a time on the server). */
+    queued: BacklogCount,
+    /** Uploads Claude failed on three times: tried again after a day. */
+    failed: BacklogCount,
+    /** AI_RESUME_ANALYSIS_PER_HOUR; 0 = no cap. */
+    perHourCap: BacklogCount,
+  }),
+  matches: z.object({
+    /** Saved applications whose best-matched resume TailorIT is to choose again (`resume_match_due`; no AI). */
+    due: BacklogCount,
+  }),
+  /** Whether background AI work may start a task now; if not, why, and until when (null: until a setting changes). */
+  gate: z.object({
+    open: z.boolean(),
+    reason: z.string().nullable(),
+    retryAt: IsoDateTime.nullable(),
+  }),
+});
+export type AiBackgroundWork = z.infer<typeof AiBackgroundWorkSchema>;

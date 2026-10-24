@@ -1094,6 +1094,22 @@ details, every new endpoint, and what was built differently from the v2 plan.
 - `npm run doctor` checks a key when one is there: a service account JSON key, git-ignored; it prints only the address
   to share sheets with.
 
+**Admin › AI › Background work**
+- A card under the CLI's health shows the backlog: the jobs waiting for Claude and those backing off or given up, the
+  uploaded resumes waiting, queued and failed, the resume matches to update, how each backlog runs (its mode and
+  hourly cap), and whether background work is running or paused: until when and why (an AI hold, a usage warning), or
+  with no end time while `AI_ENABLED=false` or `AI_CLI_BACKGROUND_SLOTS=0` keeps it off. It is read again every 30
+  seconds while the tab is open, and after a test call.
+- `GET /admin/ai/background` counts from the database with the workers' own rules (the job backlog's candidates, the
+  resume backlog's states, `resume_match_due`), leaves out disabled accounts as the workers do, and counts nothing for
+  a mode without a backlog (jobs `lazy` or `off`, resumes `off`). It never calls Claude or writes. The jobs count
+  takes `content_hash` and `active` from indexes and opens a job's row only for the length of a text Claude has not
+  read: with 50,000 jobs in a database on disk it took about 50 ms once most were read and about 150 ms with none read
+  yet, against about 350 ms when those two columns are read from the rows, which keep them after the long
+  descriptions.
+- A backlog's rests (after an outage or a run of failures) and its hourly count are kept in memory and not shown; the
+  API log has them (`[job-analysis] AI backlog`, `[resume-analysis]`).
+
 **Endpoints added in v2** (each needs a signed-in account; the Admin ones an administrator)
 
 | Group | Endpoints |
@@ -1101,7 +1117,7 @@ details, every new endpoint, and what was built differently from the v2 plan.
 | Resumes | `GET /resumes/:id/analysis` ("What TailorIT read from this resume")<br>`GET /resumes`: each item gains `analysis`, the profile line's brief<br>`POST /resumes/upload`: answers `copyError` when an editable copy asked for cannot start |
 | Jobs | `GET /jobs/save-all/preview?<list query>` → `{matched, saveable, willSave}`<br>`POST /jobs/save-all?<list query>` `{occurredOn?}` → `{items[{jobId, applicationId, resumeId, created}], alreadyTracked, remaining, pendingMatches, incomplete}`<br>`GET /jobs/:id/match` and `/insights` score a tracked job's linked resume; `/insights` names it (`resumeLabel`, `resumeBasis` `linked` or `default`)<br>The analysis view gains `softSkills`, `terms` and `requiredYears` |
 | Tracker | `GET /applications/:id/resume-matches` (every resume ranked for the application; 30 per account per minute)<br>`POST /applications/:id/resume-match` ("Let TailorIT choose"; 20 per account per minute)<br>`POST /applications/resume-zip` `{ids?, tzOffsetMinutes?}` → 202 `{buildId}`<br>`GET /applications/resume-zip/:buildId` (`building`, `ready` or `failed`; `done` of `total`; counts `{included, skipped, word, leftOut, usedDefault}`; `expiresAt`)<br>`GET /applications/resume-zip/:buildId/file`<br>`POST /applications/bulk` gains `onlySaved` (archive only); the detail gains `resumeOrigin`, `resumeMatchedAt` and `resumeMatchPending` |
-| Admin | `GET /admin/import/sheets/account` (whether a key is set up, and its `client_email`)<br>`POST /admin/import/sheets/preview`<br>`POST /admin/import/sheets/jobs` (201, or 202 for a long run) |
+| Admin | `GET /admin/import/sheets/account` (whether a key is set up, and its `client_email`)<br>`POST /admin/import/sheets/preview`<br>`POST /admin/import/sheets/jobs` (201, or 202 for a long run)<br>`GET /admin/ai/background` → `{jobs{mode, waiting, backingOff, gaveUp, perHourCap}, resumes{mode, waiting, queued, failed, perHourCap}, matches{due}, gate{open, reason, retryAt}}` (Background work; `AiBackgroundWorkSchema`) |
 
 New error code: `sheets_unavailable` (503): the Sheet import cannot run (no usable key, the Sheets API is off, Google
 is not answering).
@@ -1114,9 +1130,6 @@ is not answering).
   arrangement until those sources are run again.
 
 **Built differently from the v2 plan**
-- Admin › AI does not show the job or resume backlog, which the plan said it would. It shows the CLI's health, the
-  model of each feature (Resume analysis included) and a test call, and says that Claude reads each added job once. The
-  backlogs' pauses, caps and rests go to the API log (`[job-analysis] AI backlog`, `[resume-analysis]`).
 - The job backlog has rails the plan did not list: at most 3 job analyses pending in all, and rests after an outage or
   a run of failures (above). The hourly caps are counted in memory, so a restart starts them afresh.
 - The ZIP falls back to Word not only when Chrome is missing (the plan) but also when it is busy or failing, or the

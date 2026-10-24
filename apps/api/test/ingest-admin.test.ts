@@ -60,6 +60,7 @@ describe('guards', () => {
     ['post', '/api/admin/import/sheets/jobs'],
     ['get', '/api/admin/reports'],
     ['patch', '/api/admin/reports/1'],
+    ['get', '/api/admin/ai/background'],
   ];
 
   it('answers 401 signed out and 403 to a signed-in non-admin', async () => {

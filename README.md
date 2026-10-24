@@ -176,8 +176,11 @@ timeout (120 s) never cuts a long call short.
 - To use less: `AI_JOB_ANALYSIS_PER_HOUR` caps the job queue; `AI_JOB_ANALYSIS=saved`, `lazy` or `off` analyses fewer
   jobs; `AI_RESUME_ANALYSIS=off` keeps uploads to the rule-based reading; `AI_MODEL_JOB_ANALYSIS` can name a cheaper
   model.
-- Admin › AI shows the CLI's health and the model each feature uses, and can make a test call. The API's log says when
-  the background queues pause or reach their hourly cap.
+- Admin › AI shows the CLI's health and the model each feature uses, and can make a test call. Its **Background work**
+  card shows the backlog: the jobs and uploaded resumes still waiting for Claude (with those backing off, given up or
+  failed), the resume matches to update, and whether background work is running or paused (until when, and why). It
+  reads the database every 30 seconds while the tab is open and never calls Claude. The API's log also says when a
+  background queue rests or reaches its hourly cap.
 
 ## Upgrading from the first release
 

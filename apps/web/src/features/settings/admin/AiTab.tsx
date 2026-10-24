@@ -9,7 +9,8 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { userMessage } from '@/lib/api';
 import { relativeTime } from '@/lib/format';
 import { useNow } from '@/lib/useNow';
-import { adminKeys, fetchAiHealth, runAiTest } from './api';
+import { adminKeys, fetchAiBackground, fetchAiHealth, runAiTest } from './api';
+import { BACKGROUND_REFRESH_MS, gateLine, gateTone, jobsRow, matchesRow, resumesRow } from './background';
 import { SectionHeader } from './parts';
 import type { AiHealth } from './types';
 
@@ -22,7 +23,10 @@ const KIND_LABEL: Record<string, string> = {
   resume_analysis: 'Resume analysis',
 };
 
-/** Admin > AI: the local Claude CLI's health (version, sign-in, models) and a one-prompt connectivity test. */
+/**
+ * Admin > AI: the local Claude CLI's health (version, sign-in, models), a one-prompt connectivity test, and the
+ * background work Claude still has to do.
+ */
 export function AiTab() {
   const queryClient = useQueryClient();
   const now = useNow();
@@ -31,7 +35,14 @@ export function AiTab() {
     mutationFn: () => fetchAiHealth(true),
     onSuccess: (answer) => queryClient.setQueryData(adminKeys.aiHealth, answer),
   });
-  const test = useMutation({ mutationFn: runAiTest });
+  // A test call changes the AI holds (one that works clears them, one that fails may set one), so Background work is
+  // read again; not awaited, so the answer shows at once.
+  const test = useMutation({
+    mutationFn: runAiTest,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.aiBackground });
+    },
+  });
 
   const data: AiHealth | undefined = recheck.data ?? health.data;
 
@@ -103,7 +114,61 @@ export function AiTab() {
             : `${test.data.error?.message ?? 'No answer.'}${test.data.error?.detail ? ` (${test.data.error.detail})` : ''}`}
         </Notice>
       )}
+
+      <BackgroundWorkCard />
     </section>
+  );
+}
+
+const GATE_DOT = { running: 'bg-success', paused: 'bg-warning', off: 'bg-control-strong' } as const;
+
+/**
+ * What Claude still has to read in the background (added jobs, uploaded resumes), the resume matches to update, and
+ * whether background work runs now. Read again every 30 s while the AI tab is open (the panel unmounts when closed).
+ */
+function BackgroundWorkCard() {
+  const now = useNow();
+  const work = useQuery({
+    queryKey: adminKeys.aiBackground,
+    queryFn: ({ signal }) => fetchAiBackground(signal),
+    refetchInterval: BACKGROUND_REFRESH_MS,
+  });
+
+  if (!work.data) {
+    return work.isError ? (
+      <Notice tone="error" className="mt-5" title="Background work could not be read">
+        {userMessage(work.error)}
+      </Notice>
+    ) : (
+      <div className="mt-5 rounded-surface border border-border bg-surface p-6 shadow-soft">
+        <Skeleton className="h-6 w-1/3" />
+        <Skeleton className="mt-4 h-4 w-2/3" />
+      </div>
+    );
+  }
+
+  const { gate } = work.data;
+  const tone = gateTone(gate);
+  const rows = [jobsRow(work.data.jobs), resumesRow(work.data.resumes), matchesRow(work.data.matches)];
+  return (
+    <div className="mt-5 rounded-surface border border-border bg-surface p-6 shadow-soft" data-ai-background={tone}>
+      <div className="flex items-center gap-3">
+        <span aria-hidden="true" className={clsx('size-2.5 shrink-0 rounded-full', GATE_DOT[tone])} />
+        <h3 className="text-base font-semibold text-foreground">Background work</h3>
+      </div>
+      <p className="mt-2 text-sm leading-5 text-muted-foreground">{gateLine(gate, now)}</p>
+      <ul className="mt-5">
+        {rows.map((row) => (
+          <li key={row.key} data-ai-background-row={row.key} className="border-b border-divider-soft py-3 first:pt-0 last:border-b-0 last:pb-0">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+              <p className="text-sm font-medium text-foreground tabular-nums">{row.title}</p>
+              {row.detail && <p className="text-[13px] leading-5 text-muted-foreground tabular-nums">{row.detail}</p>}
+            </div>
+            <p className="mt-0.5 text-[13px] leading-5 text-muted-foreground">{row.note}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
