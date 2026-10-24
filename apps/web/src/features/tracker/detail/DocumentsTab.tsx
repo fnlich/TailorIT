@@ -7,39 +7,85 @@ import type { ApplicationDetail } from '@tailorit/shared';
 import { Badge } from '@/components/ui/Badge';
 import { Button, buttonClasses } from '@/components/ui/Button';
 import { Notice } from '@/components/ui/Notice';
-import { Select } from '@/components/ui/Select';
+import { Select, type SelectOption } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { FileTextIcon, PencilSimpleIcon, SparkleIcon, XIcon } from '@/components/ui/icons';
-import { userMessage } from '@/lib/api';
+import { isApiError, userMessage } from '@/lib/api';
 import {
   invalidateApplications,
+  invalidateResumeChoice,
   trackerApi,
   trackerKeys,
   useCoverLetterOptions,
   useLettersForApplication,
+  useResumeMatches,
   useResumeOptions,
 } from '../data';
+import {
+  BEST_MATCH,
+  autoMatchedText,
+  linkedResumeBadges,
+  offersAutoMatch,
+  pickerHint,
+  plainOptions,
+  rankedOptions,
+  type DocumentBadge,
+  type ResumePickerOption,
+} from './resumeMatches';
 
 interface LinkedDocument {
   id: string;
   title: string;
-  badge?: string;
+  badges?: readonly DocumentBadge[];
 }
 
 function DocumentCard({ document, actions }: { document: LinkedDocument; actions: ReactNode }) {
   return (
-    <div className="flex items-center gap-3 rounded-control border border-border bg-surface px-4 py-3">
+    <div
+      data-document-id={document.id}
+      className="flex items-center gap-3 rounded-control border border-border bg-surface px-4 py-3"
+    >
       <span className="flex size-10 shrink-0 items-center justify-center rounded-control bg-primary-container text-primary-ink">
         <FileTextIcon size={18} />
       </span>
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="truncate text-sm font-medium text-foreground">{document.title}</span>
-        {document.badge && <Badge tone="outline">{document.badge}</Badge>}
+      {/* On a narrow sheet the badges go under the name rather than squeeze it away. */}
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="max-w-full min-w-0 truncate text-sm font-medium text-foreground">{document.title}</span>
+        {document.badges?.map((badge) => (
+          <Badge key={badge.label} tone={badge.tone}>
+            {badge.label}
+          </Badge>
+        ))}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
     </div>
   );
+}
+
+/** A resume in the picker: its name, the "Best match" tag, and its numbers ("9 of 12 keywords · 75%") under them. */
+function ResumeOptionLabel({ name, option }: { name: string; option: ResumePickerOption }) {
+  return (
+    <span className="flex min-w-0 flex-col">
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="truncate">{name}</span>
+        {option.best && <Badge tone="tint">{BEST_MATCH}</Badge>}
+      </span>
+      {option.numbers && <span className="truncate text-xs leading-4 text-muted-foreground tabular-nums">{option.numbers}</span>}
+    </span>
+  );
+}
+
+function resumeSelectOptions(options: readonly ResumePickerOption[]): Array<SelectOption<string>> {
+  return options.map((option) => {
+    const name = option.isDefault ? `${option.label} (Default)` : option.label;
+    return {
+      value: option.id,
+      textValue: option.label,
+      label: option.best || option.numbers ? <ResumeOptionLabel name={name} option={option} /> : name,
+    };
+  });
 }
 
 function Picker({
@@ -51,7 +97,7 @@ function Picker({
 }: {
   label: string;
   placeholder: string;
-  options: Array<{ value: string; label: string }>;
+  options: Array<SelectOption<string>>;
   onPick: (id: string) => void;
   disabled?: boolean;
 }) {
@@ -71,15 +117,24 @@ function Picker({
 /**
  * Documents: the resume and the cover letter used for this application. Link an existing one, change or remove it,
  * or generate a cover letter for this job (the cover letter editor reads the application).
+ *
+ * The resume of a job saved at Saved is TailorIT's best match ("Best match") until the person picks or removes one
+ * ("Chosen by you"); "Let TailorIT choose" hands the choice back. The picker lists the resumes ranked for this job,
+ * each with the Jobs card's numbers; without a ranking (an older server, or it failed) it lists them as before.
  */
 export function DocumentsTab({ application }: { application: ApplicationDetail }) {
   const client = useQueryClient();
   const toast = useToast();
-  const resumes = useResumeOptions(true);
+  const matches = useResumeMatches(application.id, true);
+  const ranking = matches.data ?? null;
+  // No ranking to show (the server has none for it, or it failed): the plain list, as before resumes were ranked.
+  const unranked = ranking === null && !matches.isPending;
+  const resumes = useResumeOptions(unranked);
   const letters = useCoverLetterOptions(true);
   const forJob = useLettersForApplication(application.id, true);
   const [changingResume, setChangingResume] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [choosing, setChoosing] = useState(false);
 
   const link = async (patch: { resumeId?: string | null; coverLetterId?: string | null }, done: string) => {
     setBusy(true);
@@ -87,6 +142,7 @@ export function DocumentsTab({ application }: { application: ApplicationDetail }
       const saved = await trackerApi.patch(application.id, patch);
       client.setQueryData(trackerKeys.detail(application.id), saved);
       void invalidateApplications(client);
+      if (patch.resumeId !== undefined) void invalidateResumeChoice(client, application.id);
       toast.success(done);
       setChangingResume(false);
     } catch (error) {
@@ -96,9 +152,37 @@ export function DocumentsTab({ application }: { application: ApplicationDetail }
     }
   };
 
-  const resumeItems = resumes.data?.items ?? [];
+  const resumeOptions = ranking ? rankedOptions(ranking) : plainOptions(resumes.data?.items ?? []);
+  const resumesLoading = matches.isPending || (unranked && resumes.isPending);
+  const resumesFailed = unranked && resumes.isError;
+  const resume = resumeOptions.find((option) => option.id === application.resumeId);
+  const hint = pickerHint(ranking);
+  // The same service ranks and chooses: without a ranking there is nothing to offer.
+  const canLetTailorItChoose = ranking !== null && offersAutoMatch(application, ranking.items.length);
+
+  /** "Let TailorIT choose": the best match is linked now, and is TailorIT's again. */
+  const letTailorItChoose = async () => {
+    setBusy(true);
+    setChoosing(true);
+    try {
+      const saved = await trackerApi.autoMatchResume(application.id);
+      client.setQueryData(trackerKeys.detail(application.id), saved);
+      void invalidateResumeChoice(client, application.id);
+      const text = autoMatchedText(saved.resumeId, resumeOptions.find((option) => option.id === saved.resumeId)?.label);
+      if (saved.resumeId) toast.success(text);
+      else toast.info(text);
+      setChangingResume(false);
+    } catch (error) {
+      // 409: the application is no longer a Saved job (applied or archived meanwhile); show it as it is now.
+      if (isApiError(error) && error.status === 409) void client.invalidateQueries({ queryKey: trackerKeys.detail(application.id) });
+      toast.error(userMessage(error, "TailorIT couldn't choose a resume. Please try again."));
+    } finally {
+      setBusy(false);
+      setChoosing(false);
+    }
+  };
+
   const letterItems = letters.data?.items ?? [];
-  const resume = resumeItems.find((item) => item.id === application.resumeId);
   const letter = letterItems.find((item) => item.id === application.coverLetterId);
   // "Generate cover letter" opens the editor for this application; the letters it wrote are offered here to link.
   const writtenForJob = (forJob.data?.items ?? []).filter((item) => item.id !== application.coverLetterId);
@@ -106,22 +190,36 @@ export function DocumentsTab({ application }: { application: ApplicationDetail }
   return (
     <div className="flex flex-col gap-8">
       <section aria-labelledby="resume-docs-heading" className="flex flex-col gap-3">
-        <div>
-          <h3 id="resume-docs-heading" className="text-base font-semibold text-foreground">
-            Resume
-          </h3>
-          <p className="text-sm text-muted-foreground">The resume you used for this application.</p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 id="resume-docs-heading" className="text-base font-semibold text-foreground">
+              Resume
+            </h3>
+            <p className="text-sm text-muted-foreground">The resume you used for this application.</p>
+          </div>
+          {canLetTailorItChoose && (
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<SparkleIcon size={14} />}
+              loading={choosing}
+              disabled={busy}
+              onClick={() => void letTailorItChoose()}
+            >
+              Let TailorIT choose
+            </Button>
+          )}
         </div>
-        {resumes.isError ? (
+        {resumesFailed ? (
           <Notice tone="warning">Your resumes can&apos;t be listed right now. Please try again later.</Notice>
-        ) : resumes.isLoading ? (
+        ) : resumesLoading ? (
           <Skeleton className="h-16 w-full" rounded="control" />
         ) : application.resumeId && !changingResume ? (
           <DocumentCard
             document={{
               id: application.resumeId,
               title: resume?.label ?? 'Linked resume',
-              badge: resume?.isDefault ? 'Default' : resume?.kind === 'uploaded' ? 'Uploaded' : undefined,
+              badges: linkedResumeBadges(application.resumeOrigin, resume, ranking),
             }}
             actions={
               <>
@@ -141,26 +239,30 @@ export function DocumentsTab({ application }: { application: ApplicationDetail }
             }
           />
         ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <Picker
-              label="Link existing resume"
-              placeholder="Link existing resume"
-              disabled={busy}
-              options={resumeItems.map((item) => ({ value: item.id, label: item.isDefault ? `${item.label} (Default)` : item.label }))}
-              onPick={(id) => void link({ resumeId: id }, 'Resume linked to this application.')}
-            />
-            {changingResume && (
-              <Button variant="ghost" size="sm" onClick={() => setChangingResume(false)}>
-                Cancel
-              </Button>
-            )}
-            {resumeItems.length === 0 && (
-              <Link href="/resumes/new" className={buttonClasses({ variant: 'outline', size: 'sm' })}>
-                Create a resume
-              </Link>
-            )}
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <Picker
+                label="Link existing resume"
+                placeholder="Link existing resume"
+                disabled={busy}
+                options={resumeSelectOptions(resumeOptions)}
+                onPick={(id) => void link({ resumeId: id }, 'Resume linked to this application.')}
+              />
+              {changingResume && (
+                <Button variant="ghost" size="sm" onClick={() => setChangingResume(false)}>
+                  Cancel
+                </Button>
+              )}
+              {resumeOptions.length === 0 && (
+                <Link href="/resumes/new" className={buttonClasses({ variant: 'outline', size: 'sm' })}>
+                  Create a resume
+                </Link>
+              )}
+            </div>
+            {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
           </div>
         )}
+        {application.resumeMatchPending && <Spinner size={14} label="Matching..." className="self-start" />}
       </section>
 
       <section aria-labelledby="letter-docs-heading" className="flex flex-col gap-3">

@@ -41,11 +41,13 @@ export function markDefaultInList(client: QueryClient, id: string | null): void 
 
 /**
  * What other areas compute from the person's resumes (above all the default one): the Jobs page's insights (the
- * analysis and the keyword match read off it) and the tracker's Resume Score.
+ * analysis and the keyword match read off it), the tracker's Resume Score, and how the resumes rank for each
+ * application (the Documents tab's picker).
  */
 export const RESUME_DEPENDENT_KEYS = [
   ['jobs', 'insights'],
   ['tracker', 'score'],
+  ['tracker', 'resume-matches'],
 ] as const;
 
 /**

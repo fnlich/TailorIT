@@ -42,8 +42,10 @@ import {
   type TrackerImportResponse,
   type TrackerTab,
 } from '@tailorit/shared';
+import { useState } from 'react';
 import { z } from 'zod';
-import { api } from '@/lib/api';
+import { api, isApiError } from '@/lib/api';
+import { createMatchPendingPoll, readResumeMatches, type ResumeMatchView } from './detail/resumeMatches';
 import { filterKey, filterQuery, type FilterState } from './state';
 
 /*
@@ -66,9 +68,15 @@ export const trackerKeys = {
   scores: ['tracker', 'score'] as const,
   companies: ['tracker', 'companies'] as const,
   resumes: ['tracker', 'resumes'] as const,
+  /** How the account's resumes rank for each application (the Documents tab's picker). */
+  resumeMatches: ['tracker', 'resume-matches'] as const,
+  resumeMatchesFor: (id: string) => ['tracker', 'resume-matches', id] as const,
   letters: ['tracker', 'letters'] as const,
   lettersFor: (id: string) => ['tracker', 'letters-for', id] as const,
 };
+
+/** The Jobs page's insights: their keyword card scores the resume linked to a tracked job. */
+const JOBS_INSIGHTS_KEY = ['jobs', 'insights'] as const;
 
 /** Status moves share a key, so overlapping ones settle together (see useMoveStatus). */
 const MOVE_KEY = ['tracker', 'move'] as const;
@@ -90,6 +98,17 @@ export function invalidateApplications(client: QueryClient): Promise<void> {
     trackerKeys.scores,
     trackerKeys.companies,
   ];
+  return Promise.all(keys.map((queryKey) => client.invalidateQueries({ queryKey }))).then(() => undefined);
+}
+
+/**
+ * What an application's resume changing affects beyond the application: its ranking (which says who chose), its
+ * Resume Score, and the Jobs page's keyword card for its job. Rankings are invalidated only here (a link changed) and
+ * by a change to the resumes themselves (`invalidateResumes`), never by moves or archiving: each read scores every
+ * resume of the account.
+ */
+export function invalidateResumeChoice(client: QueryClient, id: string): Promise<void> {
+  const keys = [trackerKeys.resumeMatchesFor(id), trackerKeys.scores, JOBS_INSIGHTS_KEY];
   return Promise.all(keys.map((queryKey) => client.invalidateQueries({ queryKey }))).then(() => undefined);
 }
 
@@ -171,13 +190,30 @@ export function useApplicationList(tab: TrackerTab, filters: FilterState, q: str
   });
 }
 
-/** One application's detail. `enabled` is false while its sheet is closed (the data stays for the exit animation). */
+/**
+ * One application's detail. `enabled` is false while its sheet is closed (the data stays for the exit animation).
+ * While TailorIT is still choosing the resume of a saved job (`resumeMatchPending`) it is read again every few seconds,
+ * for up to a minute, so the choice shows once the match worker links it; then what scores the linked resume (the
+ * Resume Score, the Jobs card) is marked stale.
+ */
 export function useApplication(id: string | null, enabled = true) {
+  const client = useQueryClient();
+  const [poll] = useState(createMatchPendingPoll);
   return useQuery({
     queryKey: trackerKeys.detail(id ?? ''),
-    queryFn: ({ signal }) =>
-      api.get<ApplicationDetail>(`/api/applications/${encodeURIComponent(id!)}`, { schema: ApplicationDetailSchema, signal }),
+    queryFn: async ({ signal }) => {
+      const before = client.getQueryData<ApplicationDetail>(trackerKeys.detail(id!));
+      const detail = await api.get<ApplicationDetail>(`/api/applications/${encodeURIComponent(id!)}`, {
+        schema: ApplicationDetailSchema,
+        signal,
+      });
+      if (before?.resumeMatchPending && before.resumeId !== detail.resumeId) {
+        for (const queryKey of [trackerKeys.score(detail.id), JOBS_INSIGHTS_KEY]) void client.invalidateQueries({ queryKey });
+      }
+      return detail;
+    },
     enabled: enabled && Boolean(id),
+    refetchInterval: (query) => poll.next(id ?? '', query.state.data?.resumeMatchPending === true, Date.now()),
   });
 }
 
@@ -203,6 +239,33 @@ export function useResumeScore(id: string, enabled: boolean) {
     queryFn: ({ signal }) =>
       api.get<MatchResult>(`/api/applications/${encodeURIComponent(id)}/resume-score`, { schema: MatchResultSchema, signal }),
     enabled,
+  });
+}
+
+/** How long a ranking stays fresh: each read scores every resume of the account (see invalidateResumeChoice). */
+export const RESUME_MATCHES_STALE_MS = 30_000;
+
+/** How the account's resumes rank for one application, best first; null when the server has none for it (404). */
+export async function fetchResumeMatches(id: string, signal?: AbortSignal): Promise<ResumeMatchView | null> {
+  try {
+    return readResumeMatches(await api.get(`/api/applications/${encodeURIComponent(id)}/resume-matches`, { signal }));
+  } catch (error) {
+    if (isApiError(error) && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/**
+ * The Documents tab's ranked resume picker. No ranking (null, or a failure) sends the picker back to the plain list
+ * (`useResumeOptions`); it is not retried, so that list comes at once.
+ */
+export function useResumeMatches(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: trackerKeys.resumeMatchesFor(id),
+    queryFn: ({ signal }) => fetchResumeMatches(id, signal),
+    enabled,
+    retry: false,
+    staleTime: RESUME_MATCHES_STALE_MS,
   });
 }
 
@@ -314,6 +377,9 @@ const path = (id: string) => `/api/applications/${encodeURIComponent(id)}`;
 export const trackerApi = {
   create: (body: CreateApplicationBody) => api.post<ApplicationDetail>('/api/applications', body, { schema: ApplicationDetailSchema }),
   patch: (id: string, body: PatchApplicationBody) => api.patch<ApplicationDetail>(path(id), body, { schema: ApplicationDetailSchema }),
+  /** "Let TailorIT choose": links the best-matching resume now (origin 'auto'); 409 when the application is not a Saved job. */
+  autoMatchResume: (id: string) =>
+    api.post<ApplicationDetail>(`${path(id)}/resume-match`, {}, { schema: ApplicationDetailSchema }),
   remove: (id: string) => api.delete(path(id)),
   status: (id: string, status: ApplicationStatus, occurredOn = localToday()) =>
     api.put<StatusChangeResponse>(`${path(id)}/status`, { status, occurredOn }, { schema: StatusChangeResponseSchema }),
