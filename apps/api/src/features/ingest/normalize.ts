@@ -150,7 +150,7 @@ export function isoOrNull(value: unknown): string | null {
   return year >= 1990 && year <= 2200 ? date.toISOString() : null;
 }
 
-function cleanUrl(value: unknown): string | null {
+export function cleanUrl(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const text = value.trim();
   if (!text) return null;

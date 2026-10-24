@@ -33,7 +33,8 @@ export interface TestContext {
 
 /**
  * An app over an in-memory, migrated database, a temporary DATA_DIR, a frozen clock and the fake Claude CLI.
- * `env` overrides any .env setting (the real .env is never read).
+ * `env` overrides any .env setting (the real .env is never read). The Google service account key points at a file
+ * that does not exist, so no test ever reads the real key in the repository root.
  */
 export function createTestContext(
   options: { env?: Record<string, string>; now?: Date; features?: Feature[] } = {},
@@ -47,6 +48,7 @@ export function createTestContext(
     AUTH_DEV_LOG_CODES: 'false',
     AUTH_DEV_FIXED_CODE: '000000',
     INGEST_ENABLED: 'false',
+    GOOGLE_SERVICE_ACCOUNT_KEY_FILE: join(dataDir, 'google-service-account.json'),
     ...options.env,
   });
   const db = openMemoryDatabase();

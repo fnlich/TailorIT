@@ -4,7 +4,14 @@ import { IsoDateTime } from '../core/list';
 // AI work runs through the local Claude CLI and can take minutes, longer than Next's /api proxy waits. So every AI
 // endpoint answers `202 { taskId }` and the page polls GET /api/ai/tasks/:id until the task finishes.
 
-export const AI_TASK_KINDS = ['resume_import', 'entry_bullets', 'job_analysis', 'cover_letter', 'template_fill'] as const;
+export const AI_TASK_KINDS = [
+  'resume_import',
+  'entry_bullets',
+  'job_analysis',
+  'cover_letter',
+  'template_fill',
+  'resume_analysis',
+] as const;
 export type AiTaskKind = (typeof AI_TASK_KINDS)[number];
 
 export const AI_TASK_STATUSES = ['queued', 'running', 'succeeded', 'failed', 'cancelled'] as const;
@@ -17,6 +24,7 @@ export const AI_FEATURE_ENV: Record<AiTaskKind, string> = {
   job_analysis: 'JOB_ANALYSIS',
   cover_letter: 'COVER_LETTER',
   template_fill: 'TEMPLATE_FILL',
+  resume_analysis: 'RESUME_ANALYSIS',
 };
 
 export const AiTaskAcceptedSchema = z.object({ taskId: z.string() });
@@ -50,6 +58,7 @@ export const AI_PROGRESS_MESSAGES: Record<AiTaskKind, readonly string[]> = {
     'Extracting key skills and requirements...',
     'Generating your tailored cover letter...',
   ],
+  resume_analysis: ['Reading your resume...', 'Picking out skills, roles and dates...'],
 };
 
 export const AiHealthSchema = z.object({

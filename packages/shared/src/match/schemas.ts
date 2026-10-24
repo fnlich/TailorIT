@@ -17,6 +17,16 @@ export type JobKeywords = z.infer<typeof JobKeywordsSchema>;
 export const KEYWORD_PRIORITIES = ['high', 'low'] as const;
 export type KeywordPriority = (typeof KEYWORD_PRIORITIES)[number];
 
+/**
+ * A posting's screening terms that are neither tools nor traits: the certifications and licences it names, and the
+ * industries it is in (INDUSTRIES ids). A resume's keywords have the same groups, plus roles.
+ */
+export const JobTermsSchema = z.object({
+  certifications: z.array(z.string().min(1).max(120)).max(10),
+  domains: z.array(z.string().min(1).max(40)).max(6),
+});
+export type JobTerms = z.infer<typeof JobTermsSchema>;
+
 /** A chip of the job analysis card. */
 export const MatchedKeywordSchema = z.object({
   term: z.string(),
@@ -26,14 +36,21 @@ export type MatchedKeyword = z.infer<typeof MatchedKeywordSchema>;
 
 export const MATCH_STATES = ['no_resume', 'ok'] as const;
 
+/** Which resume a match scored: the one linked to the job's tracker application, or the default resume. */
+export const MATCH_RESUME_BASES = ['linked', 'default'] as const;
+export type MatchResumeBasis = (typeof MATCH_RESUME_BASES)[number];
+
 /**
  * GET /api/jobs/:id/match. `matched` lists the keywords the resume carries (high first, then low), `missing` the
  * rest in the same order; `percentage` = round(matchedCount / total * 100), 0 when the posting has no keywords.
  * `no_resume`: the user has no default resume (the card says "Add a resume").
+ * `resumeLabel` and `resumeBasis` name the resume scored ("Scored with {label}"), when the endpoint says.
  */
 export const MatchResultSchema = z.object({
   state: z.enum(MATCH_STATES),
   resumeId: z.string().optional(),
+  resumeLabel: z.string().optional(),
+  resumeBasis: z.enum(MATCH_RESUME_BASES).optional(),
   matched: z.array(MatchedKeywordSchema),
   missing: z.array(MatchedKeywordSchema),
   matchedCount: z.number().int().nonnegative(),

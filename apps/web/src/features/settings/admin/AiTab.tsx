@@ -19,6 +19,7 @@ const KIND_LABEL: Record<string, string> = {
   job_analysis: 'Job analysis',
   cover_letter: 'Cover letters',
   template_fill: 'Template fill',
+  resume_analysis: 'Resume analysis',
 };
 
 /** Admin > AI: the local Claude CLI's health (version, sign-in, models) and a one-prompt connectivity test. */

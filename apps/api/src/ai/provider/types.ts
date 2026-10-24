@@ -31,6 +31,18 @@ export interface ProviderHold {
   reason: string;
 }
 
+/** The seat's usage, as the last call that reported it saw it (the CLI's rate_limit_event). */
+export interface RateLimitReading {
+  /** As the CLI said it: "allowed", "allowed_warning" (the window is nearly used up), "rejected"...; '' if unsaid. */
+  status: string;
+  /** When the usage window resets (epoch ms), when the CLI said. */
+  resetsAtMs: number | null;
+  /** The seat was running on paid overage, which TailorIT never accepts. */
+  usingOverage: boolean;
+  /** When the provider read it (epoch ms, on its clock). */
+  seenAtMs: number;
+}
+
 /**
  * The AI transport. The Claude CLI is the only one today; an API-key provider could implement the same interface.
  * `complete` throws AiError (see errors.ts) for every failure.
@@ -44,4 +56,9 @@ export interface AiProvider {
   holdFor(tag: string): ProviderHold | null;
   activeHolds(): ProviderHold[];
   clearHolds(): void;
+  /**
+   * The last usage reading a call reported, or null before any; background work waits on a warning (ai/background.ts).
+   * Optional: a provider that gets no usage readings leaves it out.
+   */
+  lastRateLimit?(): RateLimitReading | null;
 }

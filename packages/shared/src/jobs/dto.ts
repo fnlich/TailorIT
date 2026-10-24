@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { IsoDate, IsoDateTime, listResponse } from '../core/list';
-import { JobKeywordsSchema, LevelMatchSchema, MatchResultSchema } from '../match/schemas';
+import { JobKeywordsSchema, JobTermsSchema, LevelMatchSchema, MatchResultSchema } from '../match/schemas';
 import { EMPLOYMENT_TYPES, EXPERIENCE_LEVELS, LEADERSHIP, SALARY_PERIODS, WORK_ARRANGEMENTS } from './enums';
 import { JobsQuerySchema } from './query';
 import { COMPANY_SIZE_IDS, JOB_REPORT_REASONS } from './taxonomy';
@@ -121,6 +121,7 @@ export type JobAnalysisSource = (typeof JOB_ANALYSIS_SOURCES)[number];
 /**
  * GET /api/jobs/:id/analysis: the "About the job" summary and the keywords the match uses. `refining` is true while an
  * AI analysis is running; the page shows this version with a quiet "Refining..." and swaps when it is ready.
+ * The last three fields are optional: answers from before they were read leave them out.
  */
 export const JobAnalysisViewSchema = z.object({
   source: z.enum(JOB_ANALYSIS_SOURCES),
@@ -132,6 +133,12 @@ export const JobAnalysisViewSchema = z.object({
   experienceLevels: z.array(z.enum(EXPERIENCE_LEVELS)),
   categoryId: z.string().nullable(),
   subcategoryIds: z.array(z.string()),
+  /** Soft skills the posting asks for, by their canonical names. */
+  softSkills: z.array(z.string()).optional(),
+  /** The certifications and industries it names (its "keywords" beside the skills). */
+  terms: JobTermsSchema.optional(),
+  /** The years of experience its requirements ask for ("Experience: N+ years"); null when it does not say. */
+  requiredYears: z.number().int().min(0).max(30).nullable().optional(),
 });
 export type JobAnalysisView = z.infer<typeof JobAnalysisViewSchema>;
 
@@ -151,6 +158,49 @@ export const JobReportBodySchema = z.object({
   details: z.string().trim().max(2000).default(''),
 });
 export type JobReportBody = z.infer<typeof JobReportBodySchema>;
+
+/** Save all (the list header): the most jobs one click saves, in the order the list shows them. */
+export const SAVE_ALL_LIMIT = 100;
+
+/** GET /api/jobs/save-all/preview?<the list's query string>: the numbers of the "Save N jobs?" confirm. */
+export const SaveAllPreviewSchema = z.object({
+  /** Every match, as "Found N jobs" counts them. */
+  matched: z.number().int().nonnegative(),
+  /** Matches Save all can save: jobs not saved yet (never tracked, or un-saved: archived while only Saved). */
+  saveable: z.number().int().nonnegative(),
+  /** What one click saves: min(saveable, SAVE_ALL_LIMIT). */
+  willSave: z.number().int().nonnegative().max(SAVE_ALL_LIMIT),
+});
+export type SaveAllPreview = z.infer<typeof SaveAllPreviewSchema>;
+
+/** POST /api/jobs/save-all?<the list's query string>. `occurredOn`: the browser's day (default today, UTC). */
+export const SaveAllBodySchema = z.object({ occurredOn: IsoDate.optional() });
+export type SaveAllBody = z.infer<typeof SaveAllBodySchema>;
+
+/** One job a Save all click saved. */
+export const SavedJobRefSchema = z.object({
+  jobId: z.number().int().positive(),
+  applicationId: z.string(),
+  /** The resume linked to it: the best match, one it already had, or null (none yet, or still being chosen). */
+  resumeId: z.string().nullable(),
+  /** False when an application archived by an earlier un-save was brought back. */
+  created: z.boolean(),
+});
+export type SavedJobRef = z.infer<typeof SavedJobRefSchema>;
+
+export const SaveAllResponseSchema = z.object({
+  /** The jobs this click saved, in the list's order. Undo archives exactly these applications. */
+  items: z.array(SavedJobRefSchema).max(SAVE_ALL_LIMIT),
+  /** Matches left as they were: saved already, or applied to (archived or not). */
+  alreadyTracked: z.number().int().nonnegative(),
+  /** Matches still saveable after this click (Save all again saves the next ones). */
+  remaining: z.number().int().nonnegative(),
+  /** Saved jobs whose best resume is still being chosen; TailorIT links it within seconds. */
+  pendingMatches: z.number().int().nonnegative(),
+  /** True when the server stopped part-way; `items` is what it saved. */
+  incomplete: z.boolean(),
+});
+export type SaveAllResponse = z.infer<typeof SaveAllResponseSchema>;
 
 export const SavedSearchSchema = z.object({
   id: z.string(),

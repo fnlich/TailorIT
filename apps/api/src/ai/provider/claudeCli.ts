@@ -6,14 +6,25 @@ import { aboutMinutes, AI_MESSAGES, AiError, holdError } from '../errors';
 import { buildClaudeArgv, isCliModelName, normalizeEffort } from './argv';
 import { interpretTurn, type HoldRequest } from './classify';
 import { buildChildEnv } from './env';
-import { billedToKey, createTurnState, reduceEvent } from './events';
+import { billedToKey, createTurnState, reduceEvent, type RateLimitInfo } from './events';
 import { probeCli, type CliStatus } from './health';
 import { defaultResolveHost, resolveCliCommand, type CliCommand, type ResolveHost } from './resolve';
 import { runCli } from './spawn';
-import type { AiProvider, CompletionRequest, CompletionResult, ProviderHold } from './types';
+import type { AiProvider, CompletionRequest, CompletionResult, ProviderHold, RateLimitReading } from './types';
 
 export const HEALTH_TIMEOUT_MS = 20_000;
 export const HEALTH_CACHE_MS = 60_000;
+
+/** The usage reading in a turn's rate_limit_event (the CLI gives `resetsAt` in epoch seconds). */
+function readingOf(info: RateLimitInfo, seenAtMs: number): RateLimitReading {
+  const resetsAt = typeof info.resetsAt === 'number' && Number.isFinite(info.resetsAt) ? info.resetsAt * 1000 : null;
+  return {
+    status: typeof info.status === 'string' ? info.status : '',
+    resetsAtMs: resetsAt,
+    usingOverage: info.isUsingOverage === true,
+    seenAtMs,
+  };
+}
 
 export interface ClaudeCliProviderOptions {
   ai: AppConfig['ai'];
@@ -37,6 +48,7 @@ export function createClaudeCliProvider(options: ClaudeCliProviderOptions): AiPr
   const parentEnv = options.parentEnv ?? (() => process.env);
   const holds = new Map<string, ProviderHold>();
   const warned = new Set<string>();
+  let lastRate: RateLimitReading | null = null;
   let workdirReady = false;
   let resolved: { key: string; cli: CliCommand } | null = null;
   let statusCache: { at: number; value: CliStatus } | null = null;
@@ -148,6 +160,8 @@ export function createClaudeCliProvider(options: ClaudeCliProviderOptions): AiPr
     } finally {
       request.signal?.removeEventListener('abort', forward);
     }
+    // Any turn that reports the seat's usage updates the reading, whether it answered or not.
+    if (state.rateLimit) lastRate = readingOf(state.rateLimit, nowMs());
 
     const verdict = interpretTurn(outcome, state, { nowMs: nowMs(), firstEventMs: ai.firstEventMs, timeoutMs });
     if (verdict.hold) setHold(verdict.hold, request.tag);
@@ -205,5 +219,6 @@ export function createClaudeCliProvider(options: ClaudeCliProviderOptions): AiPr
     holdFor,
     activeHolds: () => [...holds.values()].filter((hold) => hold.until > nowMs()),
     clearHolds: () => holds.clear(),
+    lastRateLimit: () => lastRate,
   };
 }

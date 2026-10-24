@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { z } from 'zod';
 import { AI_FEATURE_ENV, AI_TASK_KINDS, type AiTaskKind } from '@tailorit/shared';
 import { repoRoot } from '../core/paths';
@@ -97,6 +97,16 @@ function defaultLakePath(): string {
   return '/data/db/free_tailor.db';
 }
 
+/**
+ * When Claude refines job analyses (AI_JOB_ANALYSIS): `ingest` = every added job, once, through a background backlog;
+ * `saved` = only jobs someone saved; `lazy` = the first time a job is opened; `off` = never (rules only).
+ */
+export const JOB_ANALYSIS_MODES = ['ingest', 'saved', 'lazy', 'off'] as const;
+export type JobAnalysisMode = (typeof JOB_ANALYSIS_MODES)[number];
+/** Whether Claude reads each uploaded resume after its quick rule-based reading (AI_RESUME_ANALYSIS). */
+export const RESUME_ANALYSIS_MODES = ['auto', 'off'] as const;
+export type ResumeAnalysisMode = (typeof RESUME_ANALYSIS_MODES)[number];
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).optional().default('development'),
   APP_ORIGIN: z.string().optional().default('http://localhost:3100'),
@@ -126,8 +136,11 @@ const EnvSchema = z.object({
   AI_CLI_BACKGROUND_SLOTS: int(1, 0),
   AI_CLI_TIMEOUT_MS: int(300_000, 1000),
   AI_CLI_FIRST_EVENT_MS: int(30_000, 1000),
-  AI_JOB_ANALYSIS: z.enum(['lazy', 'off']).optional().default('lazy'),
+  AI_JOB_ANALYSIS: z.enum(JOB_ANALYSIS_MODES).optional().default('lazy'),
   AI_JOB_ANALYSIS_WARMUP_PER_HOUR: int(0, 0),
+  AI_JOB_ANALYSIS_PER_HOUR: int(0, 0),
+  AI_RESUME_ANALYSIS: z.enum(RESUME_ANALYSIS_MODES).optional().default('auto'),
+  AI_RESUME_ANALYSIS_PER_HOUR: int(20, 0),
 
   CHROME_PATH: optional,
   PDF_RENDER_TIMEOUT_MS: int(30_000, 1000),
@@ -145,6 +158,7 @@ const EnvSchema = z.object({
   INGEST_USER_AGENT: z.string().optional().default('TailorIT job ingest'),
   FT_LAKE_DB_PATH: optional,
   FT_LAKE_MAX_AGE_DAYS: int(45, 1),
+  GOOGLE_SERVICE_ACCOUNT_KEY_FILE: optional,
 
   SEED_DEMO: bool(false),
 });
@@ -180,8 +194,13 @@ export interface AppConfig {
     timeoutMs: number;
     firstEventMs: number;
     features: AiFeatureModels;
-    jobAnalysis: 'lazy' | 'off';
+    jobAnalysis: JobAnalysisMode;
     warmupPerHour: number;
+    /** Background job analyses started per hour; 0 = no cap. */
+    jobAnalysisPerHour: number;
+    resumeAnalysis: ResumeAnalysisMode;
+    /** Background resume readings started per hour; 0 = no cap. */
+    resumeAnalysisPerHour: number;
   };
   render: { chromePath: string | null; pdfTimeoutMs: number; pdfMaxConcurrency: number };
   uploadMaxMb: number;
@@ -193,6 +212,8 @@ export interface AppConfig {
     userAgent: string;
     ftLakeDbPath: string;
     ftLakeMaxAgeDays: number;
+    /** The Google service account's JSON key for the Sheet import (read when needed; it may not exist). */
+    googleServiceAccountKeyFile: string;
   };
   seedDemo: boolean;
 }
@@ -257,6 +278,9 @@ export function buildConfig(env: NodeJS.ProcessEnv): AppConfig {
       features,
       jobAnalysis: e.AI_JOB_ANALYSIS,
       warmupPerHour: e.AI_JOB_ANALYSIS_WARMUP_PER_HOUR,
+      jobAnalysisPerHour: e.AI_JOB_ANALYSIS_PER_HOUR,
+      resumeAnalysis: e.AI_RESUME_ANALYSIS,
+      resumeAnalysisPerHour: e.AI_RESUME_ANALYSIS_PER_HOUR,
     },
     render: {
       chromePath: e.CHROME_PATH,
@@ -272,6 +296,10 @@ export function buildConfig(env: NodeJS.ProcessEnv): AppConfig {
       userAgent: e.INGEST_USER_AGENT,
       ftLakeDbPath: e.FT_LAKE_DB_PATH ?? defaultLakePath(),
       ftLakeMaxAgeDays: e.FT_LAKE_MAX_AGE_DAYS,
+      // A relative path is read from the repository root, where .env lives.
+      googleServiceAccountKeyFile: e.GOOGLE_SERVICE_ACCOUNT_KEY_FILE
+        ? resolve(repoRoot(), e.GOOGLE_SERVICE_ACCOUNT_KEY_FILE)
+        : join(repoRoot(), 'service-account-key.json'),
     },
     seedDemo: e.SEED_DEMO,
   };

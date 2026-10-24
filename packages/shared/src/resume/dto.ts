@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IsoDateTime, listResponse } from '../core/list';
 import { queryBoolean, queryEnum } from '../format/params';
+import { ResumeAnalysisBriefSchema } from './analysis';
 import { ENTRY_BULLETS_KINDS } from './catalogue';
 import { MAX_AI_BULLETS, MAX_BULLET_LENGTH, MAX_BULLETS_NOTE_LENGTH } from './display';
 import { ResumeDocumentInputSchema, ResumeDocumentSchema, TECHNICAL_SKILLS_LAYOUTS } from './document';
@@ -21,6 +22,9 @@ export type ResumeFileKind = (typeof RESUME_FILE_KINDS)[number];
 
 /** A custom title (Rename): at most this long. */
 export const MAX_RESUME_TITLE_LENGTH = 120;
+
+/** The most resumes one account keeps, built and uploaded together; adding one more is refused. */
+export const MAX_RESUMES_PER_ACCOUNT = 500;
 
 /** GET /api/resumes?source= */
 export const ResumeListQuerySchema = z.object({
@@ -46,6 +50,8 @@ export const ResumeSummarySchema = z.object({
   updatedAt: IsoDateTime,
   /** The last content edit (null until one). */
   lastEditedAt: IsoDateTime.nullable(),
+  /** What TailorIT read from it, for the list's line (GET /api/resumes only); null when it has not been read yet. */
+  analysis: ResumeAnalysisBriefSchema.nullable().optional(),
 });
 export type ResumeSummary = z.infer<typeof ResumeSummarySchema>;
 
@@ -118,6 +124,11 @@ export const ResumeUploadResponseSchema = z.object({
   resume: ResumeSummarySchema,
   /** The import task when `parse` was asked for (poll GET /api/ai/tasks/:id). */
   taskId: z.string().nullable(),
+  /**
+   * Why the editable copy asked for could not start (AI busy or off, text that cannot be read), as a sentence to show.
+   * The upload is kept either way. Null or absent when the copy started or was not asked for.
+   */
+  copyError: z.string().nullable().optional(),
 });
 export type ResumeUploadResponse = z.infer<typeof ResumeUploadResponseSchema>;
 

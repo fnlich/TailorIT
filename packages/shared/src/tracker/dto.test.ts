@@ -1,16 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ApplicationDetailSchema,
   ApplicationListQuerySchema,
   BoardQuerySchema,
   BulkApplicationsBodySchema,
   CreateApplicationBodySchema,
   PatchApplicationBodySchema,
+  RESUME_ZIP_MAX_APPLICATIONS,
+  ResumeZipAcceptedSchema,
+  ResumeZipBodySchema,
+  ResumeZipBuildSchema,
   StatusChangeBodySchema,
   TrackerImportBodySchema,
   addedLabel,
   normalizeUrlInput,
+  resumeZipFileName,
   trackerFilterChips,
 } from './dto';
+import { ResumeMatchListSchema } from './resumeMatch';
 
 const issues = (result: { success: boolean; error?: { issues: Array<{ path: PropertyKey[]; message: string }> } }) =>
   result.error?.issues.map((issue) => [issue.path.join('.'), issue.message]) ?? [];
@@ -105,6 +112,146 @@ describe('application bodies', () => {
     expect(normalizeUrlInput('https://jobs.lever.co/acme/1')).toBe('https://jobs.lever.co/acme/1');
     expect(normalizeUrlInput('ftp://x.y')).toBeNull();
     expect(normalizeUrlInput('hello')).toBeNull();
+  });
+
+  it('keeps a left-out resumeId apart from an explicit none', () => {
+    // Left out: TailorIT may link the best match. null or '': the person chose no resume.
+    expect('resumeId' in CreateApplicationBodySchema.parse({ jobId: 7, status: 1 })).toBe(false);
+    expect(CreateApplicationBodySchema.parse({ jobId: 7, status: 1, resumeId: null }).resumeId).toBeNull();
+    expect(CreateApplicationBodySchema.parse({ jobId: 7, status: 1, resumeId: '' }).resumeId).toBe('');
+    expect(CreateApplicationBodySchema.parse({ jobId: 7, resumeId: 'r1' }).resumeId).toBe('r1');
+  });
+
+  it('limits archiving to Saved applications only on request, and only for archiving', () => {
+    expect(BulkApplicationsBodySchema.parse({ ids: ['a'], action: 'archive', onlySaved: true }).onlySaved).toBe(true);
+    expect(BulkApplicationsBodySchema.parse({ ids: ['a'], action: 'archive' }).onlySaved).toBeUndefined();
+    expect(issues(BulkApplicationsBodySchema.safeParse({ ids: ['a'], action: 'delete', onlySaved: true }))).toEqual([
+      ['onlySaved', 'Only archiving can be limited to Saved jobs'],
+    ]);
+    const unarchive = { ids: ['a'], action: 'unarchive', onlySaved: false };
+    expect(BulkApplicationsBodySchema.safeParse(unarchive).success).toBe(true);
+  });
+});
+
+describe('the matched resume', () => {
+  const detail = {
+    id: 'a1',
+    title: 'Backend Engineer',
+    companyName: 'Acme',
+    companyId: 3,
+    logoUrl: null,
+    location: 'Remote',
+    employmentType: 'full_time',
+    currentStatus: 1,
+    events: [{ status: 1, occurredOn: '2026-10-22' }],
+    favorite: false,
+    archivedAt: null,
+    trackedOn: '2026-10-22',
+    jobId: 9,
+    postingUrl: '',
+    createdAt: '2026-10-22T12:00:00.000Z',
+    updatedAt: '2026-10-22T12:00:00.000Z',
+    descriptionHtml: '',
+    salary: { min: null, max: null, currency: null, period: null },
+    resumeId: 'r1',
+    coverLetterId: null,
+    notesHtml: '',
+    questions: [],
+  };
+
+  it('says who chose an application resume, and whether TailorIT is still choosing', () => {
+    expect(ApplicationDetailSchema.parse(detail)).toEqual(detail);
+    const auto = ApplicationDetailSchema.parse({
+      ...detail,
+      resumeOrigin: 'auto',
+      resumeMatchedAt: '2026-10-22T12:00:05.000Z',
+      resumeMatchPending: false,
+    });
+    expect(auto).toMatchObject({ resumeOrigin: 'auto', resumeMatchedAt: '2026-10-22T12:00:05.000Z' });
+    expect(ApplicationDetailSchema.parse({ ...detail, resumeId: null, resumeOrigin: null, resumeMatchPending: true }))
+      .toMatchObject({ resumeOrigin: null, resumeMatchPending: true });
+    expect(ApplicationDetailSchema.safeParse({ ...detail, resumeOrigin: 'match' }).success).toBe(false);
+  });
+
+  it('ranks the resumes with the Jobs card numbers beside an unrounded fit', () => {
+    const item = {
+      resumeId: 'r1',
+      label: 'Backend',
+      kind: 'uploaded',
+      isDefault: false,
+      fit: 72.4,
+      matchedCount: 6,
+      total: 10,
+      percentage: 60,
+      softMatched: 1,
+      softTotal: 2,
+      yearsExperience: 8,
+      parts: { hard: 0.6, title: 1, years: 1, soft: 0.5, keywords: null },
+      readable: true,
+      refining: false,
+    };
+    const list = {
+      applicationId: 'a1',
+      basis: 'job',
+      scored: true,
+      requiredYears: 5,
+      refining: false,
+      chosen: { resumeId: 'r1', origin: 'auto', matchedAt: '2026-10-22T12:00:05.000Z' },
+      items: [item],
+    };
+    expect(ResumeMatchListSchema.parse(list)).toEqual(list);
+    const unchosen = { ...list, requiredYears: null, chosen: { resumeId: null, origin: null, matchedAt: null } };
+    expect(ResumeMatchListSchema.parse(unchosen)).toMatchObject({ requiredYears: null });
+    expect(ResumeMatchListSchema.safeParse({ ...list, items: [{ ...item, fit: 101 }] }).success).toBe(false);
+    expect(ResumeMatchListSchema.safeParse({ ...list, items: [{ ...item, percentage: 60.5 }] }).success).toBe(false);
+    // No stored score: the choice carries none.
+    const scored = ResumeMatchListSchema.parse({ ...list, chosen: { ...list.chosen, score: 72 } });
+    expect('score' in scored.chosen).toBe(false);
+  });
+});
+
+describe('the resume ZIP', () => {
+  it('builds the selected applications, or every Saved one', () => {
+    expect(ResumeZipBodySchema.parse({})).toEqual({});
+    expect(ResumeZipBodySchema.parse({ ids: ['a', 'b'], tzOffsetMinutes: -300 })).toEqual({
+      ids: ['a', 'b'],
+      tzOffsetMinutes: -300,
+    });
+    expect(issues(ResumeZipBodySchema.safeParse({ ids: [] }))).toEqual([
+      ['ids', 'Choose at least one application, or send no ids for every Saved application.'],
+    ]);
+    const tooMany = Array.from({ length: RESUME_ZIP_MAX_APPLICATIONS + 1 }, (_, index) => `a${index}`);
+    expect(issues(ResumeZipBodySchema.safeParse({ ids: tooMany }))).toEqual([
+      ['ids', 'Choose at most 500 applications.'],
+    ]);
+    expect(ResumeZipBodySchema.safeParse({ ids: [7] }).success).toBe(false);
+    expect(ResumeZipBodySchema.safeParse({ tzOffsetMinutes: 840 }).success).toBe(true);
+    expect(ResumeZipBodySchema.safeParse({ tzOffsetMinutes: 841 }).success).toBe(false);
+    expect(ResumeZipBodySchema.safeParse({ tzOffsetMinutes: 330.5 }).success).toBe(false);
+  });
+
+  it('reports a build as the page polls it', () => {
+    expect(ResumeZipAcceptedSchema.parse({ buildId: 'b1' })).toEqual({ buildId: 'b1' });
+    const counts = { included: 12, skipped: 2, word: 1, leftOut: 0, usedDefault: 3 };
+    const building = {
+      buildId: 'b1',
+      status: 'building',
+      done: 4,
+      total: 14,
+      counts,
+      fileName: resumeZipFileName('2026-10-24'),
+      error: null,
+      expiresAt: null,
+    };
+    expect(ResumeZipBuildSchema.parse(building)).toEqual(building);
+    expect(
+      ResumeZipBuildSchema.parse({ ...building, status: 'failed', error: { code: 'internal', message: 'Try again.' } })
+        .error,
+    ).toEqual({ code: 'internal', message: 'Try again.' });
+    expect(ResumeZipBuildSchema.safeParse({ ...building, status: 'queued' }).success).toBe(false);
+    const { usedDefault: _usedDefault, ...withoutDefault } = counts;
+    expect(ResumeZipBuildSchema.safeParse({ ...building, counts: withoutDefault }).success).toBe(false);
+    expect(resumeZipFileName('2026-10-24')).toBe('TailorIT_Resumes_2026-10-24.zip');
   });
 });
 

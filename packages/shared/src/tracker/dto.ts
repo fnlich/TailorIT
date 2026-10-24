@@ -4,6 +4,7 @@ import { formatShortDate, type DateInput } from '../format/dates';
 import { firstParam, listParam, queryBoolean, queryEnum, queryNumber, queryText } from '../format/params';
 import { EMPLOYMENT_TYPES, EMPLOYMENT_TYPE_LABEL, type EmploymentType } from '../jobs/enums';
 import { TRACKER_PAY_PERIODS } from './csv';
+import { RESUME_ORIGINS } from './resumeMatch';
 import { StatusEventSchema } from './rules';
 import { ApplicationStatusSchema, STATUS_INFO, isApplicationStatus, type ApplicationStatus } from './statuses';
 
@@ -160,6 +161,12 @@ export const ApplicationDetailSchema = ApplicationSummarySchema.extend({
   descriptionHtml: z.string(),
   salary: ApplicationSalarySchema,
   resumeId: z.string().nullable(),
+  /** Who chose `resumeId`: 'auto' = TailorIT's best match ("Best match"), 'user' = the person ("Chosen by you"). */
+  resumeOrigin: z.enum(RESUME_ORIGINS).nullable().optional(),
+  /** When the resume was chosen. */
+  resumeMatchedAt: IsoDateTime.nullable().optional(),
+  /** TailorIT is still choosing the best resume for this Saved job (it is linked within seconds). */
+  resumeMatchPending: z.boolean().optional(),
   coverLetterId: z.string().nullable(),
   notesHtml: z.string(),
   questions: z.array(ApplicationQuestionSchema),
@@ -196,6 +203,9 @@ const RequiredText = (max: number) => z.string().trim().min(1, 'Required').max(m
  * POST /api/applications. With `jobId` the title, company, location, job type and link come from the job when not
  * given; without it, Position Title, Company and Job Type are required. `status` defaults to Applied (Saved when a
  * job is saved from the Jobs page: the web sends it); the first events are dated `occurredOn` (default today).
+ * `resumeId`: left out, TailorIT links the best-matching resume, but only when a job is saved at Saved ("Best
+ * match"); null or '' means no resume and an id means that resume, both the person's choice ("Chosen by you").
+ * Applied and later statuses are never matched automatically.
  */
 export const CreateApplicationBodySchema = z
   .object({
@@ -281,17 +291,24 @@ export type StatusChangeResponse = z.infer<typeof StatusChangeResponseSchema>;
 export const BULK_ACTIONS = ['archive', 'unarchive', 'delete', 'status'] as const;
 export type BulkAction = (typeof BULK_ACTIONS)[number];
 
-/** POST /api/applications/bulk ("Manage jobs"). `status` is required for the status action. */
+/**
+ * POST /api/applications/bulk ("Manage jobs"). `status` is required for the status action. `onlySaved` (archive only)
+ * leaves alone the applications that have moved past Saved: Save all's Undo, which archives what the click saved.
+ */
 export const BulkApplicationsBodySchema = z
   .object({
     ids: z.array(z.string().min(1).max(64)).min(1).max(500),
     action: z.enum(BULK_ACTIONS),
     status: ApplicationStatusSchema.optional(),
     occurredOn: IsoDate.optional(),
+    onlySaved: z.boolean().optional(),
   })
   .superRefine((body, ctx) => {
     if (body.action === 'status' && body.status === undefined) {
       ctx.addIssue({ code: 'custom', path: ['status'], message: 'Choose a status' });
+    }
+    if (body.onlySaved && body.action !== 'archive') {
+      ctx.addIssue({ code: 'custom', path: ['onlySaved'], message: 'Only archiving can be limited to Saved jobs' });
     }
   });
 export type BulkApplicationsBody = z.infer<typeof BulkApplicationsBodySchema>;
@@ -300,6 +317,66 @@ export const BulkApplicationsResponseSchema = z.object({ affected: z.number().in
 
 /** POST /api/applications/archive-all. */
 export const ArchiveAllResponseSchema = z.object({ archived: z.number().int().nonnegative() });
+
+/** The most applications one resume ZIP holds; without ids, the Saved applications past it are counted as left out. */
+export const RESUME_ZIP_MAX_APPLICATIONS = 500;
+
+/**
+ * POST /api/applications/resume-zip ("Build resumes"): 202 { buildId }. With `ids`, those applications (the Manage jobs
+ * selection); without, every active Saved application in tracked order. `tzOffsetMinutes` is the browser's offset
+ * east of UTC (-new Date().getTimezoneOffset(): -300 in New York in winter), so the files' times read as local time.
+ */
+export const ResumeZipBodySchema = z.object({
+  ids: z
+    .array(z.string().min(1).max(64))
+    .min(1, 'Choose at least one application, or send no ids for every Saved application.')
+    .max(RESUME_ZIP_MAX_APPLICATIONS, `Choose at most ${RESUME_ZIP_MAX_APPLICATIONS} applications.`)
+    .optional(),
+  tzOffsetMinutes: z.number().int().min(-720).max(840).optional(),
+});
+export type ResumeZipBody = z.infer<typeof ResumeZipBodySchema>;
+
+export const ResumeZipAcceptedSchema = z.object({ buildId: z.string() });
+export type ResumeZipAccepted = z.infer<typeof ResumeZipAcceptedSchema>;
+
+export const RESUME_ZIP_BUILD_STATUSES = ['building', 'ready', 'failed'] as const;
+export type ResumeZipBuildStatus = (typeof RESUME_ZIP_BUILD_STATUSES)[number];
+
+/**
+ * GET /api/applications/resume-zip/:buildId: the page polls it while `building`; once `ready`, the file is
+ * GET /api/applications/resume-zip/:buildId/file until `expiresAt`. SKIPPED.txt in the zip says what was left out.
+ */
+export const ResumeZipBuildSchema = z.object({
+  buildId: z.string(),
+  status: z.enum(RESUME_ZIP_BUILD_STATUSES),
+  /** Applications handled so far, of `total`. */
+  done: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  counts: z.object({
+    /** Resumes in the zip. */
+    included: z.number().int().nonnegative(),
+    /** Applications that got no resume (SKIPPED.txt lists them). */
+    skipped: z.number().int().nonnegative(),
+    /** Built resumes added as Word files because PDFs could not be made. */
+    word: z.number().int().nonnegative(),
+    /** Saved applications past the most one zip holds. */
+    leftOut: z.number().int().nonnegative(),
+    /** Applications with no resume linked (none chosen yet, or not in time) that got the default resume. */
+    usedDefault: z.number().int().nonnegative(),
+  }),
+  /** The download's file name, e.g. "TailorIT_Resumes_2026-10-24.zip". */
+  fileName: z.string(),
+  /** Why the build failed (`message` is a sentence to show); null otherwise. */
+  error: z.object({ code: z.string(), message: z.string() }).nullable(),
+  /** When a ready file is deleted (download it before then); null until it is ready. */
+  expiresAt: IsoDateTime.nullable(),
+});
+export type ResumeZipBuild = z.infer<typeof ResumeZipBuildSchema>;
+
+/** The resume ZIP's file name for a day ("YYYY-MM-DD"). */
+export function resumeZipFileName(date: string): string {
+  return `TailorIT_Resumes_${date}.zip`;
+}
 
 /** One mapped CSV row: the raw text of each field (see `readImportRow`). */
 export const TrackerImportRowSchema = z.object({
