@@ -14,6 +14,7 @@ import { jobAnalysisFeature } from './job-analysis/index';
 import { ingestFeature } from './ingest/index';
 import { jobsFeature } from './jobs/index';
 import { applicationsFeature } from './applications/index';
+import { resumeMatchFeature } from './resume-match/index';
 import { demoFeature } from './demo/index';
 
 /**
@@ -36,5 +37,6 @@ export const FEATURES: Feature[] = [
   ingestFeature,
   jobsFeature,
   applicationsFeature,
+  resumeMatchFeature,
   demoFeature,
 ];
