@@ -580,7 +580,7 @@ A filter only appears when the data has values for it.
 | Tracker | `applications` (denormalized `current_status`, `favorite`, `archived_at`, `resume_id`, `cover_letter_id`, `notes_html`, `tracked_on`), `application_status_events` (one per status, `occurred_on`), `application_questions` |
 | AI and system | `ai_tasks`, `app_settings`, `schema_migrations` |
 
-v2 adds `resume_analyses`, `resume_analysis_backlog` and `job_ai_attempts`, three `applications` columns (`resume_origin`, `resume_matched_at`, `resume_match_due`) and three `job_analyses` columns (`soft_skills`, `terms`, `required_years`), and allows the `resume_analysis` task kind: migrations `0002` to `0402`, listed under "As built (v2, 2026-10-24)".
+v2 adds `resume_analyses`, `resume_analysis_backlog` and `job_ai_attempts`, three `applications` columns (`resume_origin`, `resume_matched_at`, `resume_match_due`) and three `job_analyses` columns (`soft_skills`, `terms`, `required_years`), and allows the `resume_analysis` task kind, plus the job AI backlog's index `idx_jobs_ai_backlog`: migrations `0002` to `0403`, listed under "As built (v2, 2026-10-24)".
 
 ## API surface (`/api`; errors `{error:{code,message,fields?,retryAfterSeconds?,requestId}}`; lists `{items,total?,nextCursor?}`)
 
@@ -852,10 +852,10 @@ Everything not listed here was built as planned.
   levels, job types, work arrangements, minimum salary). The preferences' `categories` and `locations` columns exist
   in the API but have no UI.
 - Vitest runs as projects in `vitest.config.ts` (shared, render, api, web) instead of a `vitest.workspace.ts`. No
-  package of the first release needed a migration of its own: its schema is `0001_init.sql` alone. v2 added five,
+  package of the first release needed a migration of its own: its schema is `0001_init.sql` alone. v2 added six,
   applied in this order: `0002_ai_resume_analysis_kind`, `0101_resume_analyses`, `0301_application_resume_match` (the
-  `resume_match_due` flag and the triggers that keep it current), `0401_job_analysis_facets` and `0402_job_ai_attempts`
-  (see "As built (v2, 2026-10-24)" › Data).
+  `resume_match_due` flag and the triggers that keep it current), `0401_job_analysis_facets`, `0402_job_ai_attempts`
+  and `0403_job_ai_backlog_index` (see "As built (v2, 2026-10-24)" › Data).
 - Settings the plan did not list: `LOG_LEVEL`, `AI_ENABLED`, `AI_CLI_FALLBACK_MODEL`, `INGEST_TIMEZONE`,
   `INGEST_HTTP_TIMEOUT_MS`. Next's `/api` proxy timeout is 120 s (`experimental.proxyTimeout`).
 
@@ -946,8 +946,8 @@ Everything not listed here was built as planned.
 ## As built (v2, 2026-10-24)
 
 What v2 built (Save all; a best-matched resume for each saved job, with the profile TailorIT reads from every resume
-and the resume ZIP; the Google Sheet import), as its commits (`1a02085` to `097913b`, work packages WP1 to WP12) and
-the code show. The sections above are updated where v2 changed the design (marked "v2"); this section holds the
+and the resume ZIP; the Google Sheet import), as its commits (`1a02085` to `097913b`, work packages WP1 to WP12, then
+Admin › AI › Background work and the job backlog's index) and the code show. The sections above are updated where v2 changed the design (marked "v2"); this section holds the
 details, every new endpoint, and what was built differently from the v2 plan.
 
 **Rules that hold across v2**
@@ -964,7 +964,7 @@ details, every new endpoint, and what was built differently from the v2 plan.
   (INDUSTRIES ids): the screening terms that are neither tools nor traits.
 
 **Data** (each migration depends only on lower numbers; a fresh database applies `0001`, `0002`, `0101`, `0301`,
-`0401`, `0402`)
+`0401`, `0402`, `0403`)
 - `0002_ai_resume_analysis_kind`: rebuilds `ai_tasks` to allow the `resume_analysis` kind (SQLite cannot change a
   CHECK in place). Rows are copied in `rowid` order, those of accounts that no longer exist are dropped, and
   `idx_ai_queue`, `idx_ai_user` and `idx_ai_dedupe` are recreated.
@@ -986,7 +986,12 @@ details, every new endpoint, and what was built differently from the v2 plan.
 - `0401_job_analysis_facets`: `job_analyses.soft_skills`, `terms` (`{certifications, domains}`) and `required_years`
   (0 to 30); NULL on older rows until the posting is next ingested or read.
 - `0402_job_ai_attempts`: the job AI backlog's memory of failures and backoff, per posting text and prompt version (no
-  foreign key, like `job_analyses`).
+  foreign key, like `job_analyses`). A text long enough in bytes but too short for Claude once trimmed (a short CJK
+  text) is set aside there for good (`next_attempt_at` 9999-12-31), so a run of them never holds the backlog up; Admin ›
+  AI counts such texts nowhere.
+- `0403_job_ai_backlog_index`: `idx_jobs_ai_backlog` on `jobs(active, first_seen_at DESC, id DESC, content_hash)`, so
+  a job AI backlog step walks live jobs in its order and checks their texts without opening the rows (50,000 jobs of
+  10 KB: under 1 ms with work near the top, about 25 ms with none, where one sorted query took 350 ms).
 - `job_sources` is not rebuilt: a sheet import is a `csv` source with `config.sheet`. Resume ZIP builds are kept in
   memory, their files under `<DATA_DIR>/resume-zips/`.
 
@@ -1132,6 +1137,9 @@ is not answering).
 **Built differently from the v2 plan**
 - The job backlog has rails the plan did not list: at most 3 job analyses pending in all, and rests after an outage or
   a run of failures (above). The hourly caps are counted in memory, so a restart starts them afresh.
+- Two job backlog changes came after the plan: migration `0403` (with 50,000 jobs, one sorted query took 350 ms a
+  step), and texts too short for Claude once trimmed are set aside for good (a run of more than a step's 25
+  candidates kept it from every older job).
 - The ZIP falls back to Word not only when Chrome is missing (the plan) but also when it is busy or failing, or the
   deadline is near; with no default resume, an application with none linked gets the newest resume; and its files are
   also removed at shutdown.

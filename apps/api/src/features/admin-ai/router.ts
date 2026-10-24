@@ -9,7 +9,7 @@ import { asyncHandler } from '../../core/http/errors';
 import { parseInput } from '../../core/http/validate';
 import { JOB_ANALYSIS_PROMPT_VERSION } from '../job-analysis/prompt';
 import { MIN_TEXT_FOR_AI } from '../job-analysis/service';
-import { AI_FAILURES_BEFORE_GIVING_UP } from '../job-analysis/store';
+import { AI_FAILURES_BEFORE_GIVING_UP, AI_SET_ASIDE_UNTIL } from '../job-analysis/store';
 
 // Administrator: Claude CLI health, a test prompt, and the background AI work still to do. Owned by work package F4
 // (see docs/ARCHITECTURE.md §9).
@@ -26,18 +26,21 @@ const TestBody = z.object({
  * The jobs the add-time backlog (job-analysis/backlog.ts, its `candidates`) has left, counted with its rules: a live job
  * with at least MIN_TEXT_FOR_AI bytes of text (octet_length reads no text) whose text has no Claude analysis of the
  * current prompt version and, in `saved` mode, that someone has saved. It is `waiting` unless its text rests in
- * job_ai_attempts: `backingOff`, or `gaveUp` from the third failure on. Jobs are counted, not texts (jobs that share a
- * text count each). Exported so a test can check its query plan.
+ * job_ai_attempts: `backingOff`, or `gaveUp` from the third failure on. A text the backlog has set aside for good
+ * (AI_SET_ASIDE_UNTIL: too short once trimmed) counts nowhere. Jobs are counted, not texts (jobs that share a text
+ * count each). Exported so a test can check its query plan.
  *
  * Shaped to stay fast with 50,000 jobs. A job row keeps `content_hash` and `active` after its two description
- * columns, so reading them from the row walks the posting's overflow pages (the backlog's own query does). Here
- * `content_hash` comes from idx_jobs_hash (a covering scan), `active` from an index on it (the IN list), and a row is
- * opened only for the length of a text Claude has not read, which its record header holds.
+ * columns, so reading them from the row walks the posting's overflow pages (the backlog's own query reads them from
+ * idx_jobs_ai_backlog instead). Here `content_hash` comes from idx_jobs_hash (a covering scan), `active` from an index
+ * on it (the IN list), and a row is opened only for the length of a text Claude has not read, which its record header
+ * holds.
  */
 export function jobBacklogSql(savedOnly: boolean): string {
+  const resting = `t.next_attempt_at < '${AI_SET_ASIDE_UNTIL}'`;
   return (
-    'SELECT coalesce(sum(t.content_hash IS NULL), 0) AS waiting, coalesce(sum(t.attempts < @givenUpAt), 0) AS backingOff, ' +
-    'coalesce(sum(t.attempts >= @givenUpAt), 0) AS gaveUp ' +
+    `SELECT coalesce(sum(t.content_hash IS NULL), 0) AS waiting, coalesce(sum(${resting} AND t.attempts < @givenUpAt), 0) AS backingOff, ` +
+    `coalesce(sum(${resting} AND t.attempts >= @givenUpAt), 0) AS gaveUp ` +
     'FROM jobs j INDEXED BY idx_jobs_hash ' +
     'LEFT JOIN job_ai_attempts t ON t.content_hash = j.content_hash AND t.version = @version AND t.next_attempt_at > @now ' +
     'WHERE j.id IN (SELECT id FROM jobs WHERE active = 1) ' +

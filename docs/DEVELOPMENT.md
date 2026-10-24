@@ -53,9 +53,10 @@ background work (return a stop function), `commands` adds CLI commands. The cent
 - Schema: `migrations/0001_init.sql` holds the first release's schema. Avoid new migrations; if one is unavoidable, use
   your package's range (R1 01xx, C 02xx, T 03xx, J1 04xx, J2 05xx, I 06xx), make it depend only on lower numbers, and
   write it once, correctly: an applied migration that changes later refuses startup.
-- v2 added five, each in the range of the area it changes: `0002` (00xx, the foundation: rebuilds `ai_tasks` for the
+- v2 added six, each in the range of the area it changes: `0002` (00xx, the foundation: rebuilds `ai_tasks` for the
   `resume_analysis` kind), `0101` (R1's 01xx: `resume_analyses` and Claude's backlog of uploads), `0301` (T's 03xx: the
-  resume match columns) and `0401`, `0402` (J1's 04xx: the posting's facets, and the job AI backlog's attempts).
+  resume match columns) and `0401` to `0403` (J1's 04xx: the posting's facets, the job AI backlog's attempts and its
+  index).
   `applications.resume_match_due = 1` asks the resume match worker to choose an application's resume again. Triggers
   in `0301` keep it current in the same transaction as the change that calls for it (a resume deleted, a resume
   reading written or changed, the default resume changed, a posting's text changed, a Claude or lake job analysis

@@ -451,6 +451,31 @@ export function deferAiAttempt(
   });
 }
 
+/**
+ * The next try of a text the backlog has set aside for good (`setAsideAiTexts`): never reached. Admin › AI counts such
+ * texts nowhere, as it counts no text under MIN_TEXT_FOR_AI bytes.
+ */
+export const AI_SET_ASIDE_UNTIL = '9999-12-31T23:59:59.999Z';
+
+/**
+ * Sets texts aside for good, keeping any failures on record: texts the backlog does not ask Claude about (too short
+ * once trimmed), so they leave its candidates and it reaches the jobs after them. One transaction for them all. A new
+ * prompt version reads them again; a change to readableForAi's rule alone would have to delete these rows.
+ */
+export function setAsideAiTexts(
+  db: Db,
+  input: { contentHashes: readonly string[]; version: number; message: string; now: Date },
+): void {
+  if (input.contentHashes.length === 0) return;
+  const sql = statements(db);
+  transaction(db, () => {
+    for (const contentHash of new Set(input.contentHashes)) {
+      const attempts = sql.attempt.get(contentHash, input.version)?.attempts ?? 0;
+      sql.upsertAttempt.run(contentHash, input.version, attempts, AI_SET_ASIDE_UNTIL, input.message.slice(0, 500), input.now.toISOString());
+    }
+  });
+}
+
 /** Forgets a text's failures (its AI analysis landed). */
 export function clearAiAttempts(db: Db, contentHash: string, version: number): void {
   statements(db).clearAttempt.run(contentHash, version);

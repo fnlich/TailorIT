@@ -3,7 +3,7 @@ import { createBackgroundGate, createHourlyBudget } from '../../ai/background';
 import { nowIso, type AppDeps } from '../../core/context';
 import { JOB_ANALYSIS_PROMPT_VERSION } from './prompt';
 import { MAX_PENDING_ANALYSES, MIN_TEXT_FOR_AI, readableForAi, type JobAnalysisServiceInternals } from './service';
-import { AI_OUTAGE_WAIT_MS } from './store';
+import { AI_OUTAGE_WAIT_MS, setAsideAiTexts } from './store';
 
 // The add-time job AI backlog (AI_JOB_ANALYSIS=ingest, the default): every added job gets the rule-based analysis at
 // once (ingest), then Claude reads it, once per posting text, through this durable queue. `saved` mode runs the same
@@ -12,9 +12,15 @@ import { AI_OUTAGE_WAIT_MS } from './store';
 //
 // - Candidates: live jobs with enough text whose text has no Claude analysis of the current prompt version (a
 //   free_tailor lake analysis does not count) and is not backing off in job_ai_attempts. Each text once: jobs that
-//   share a text share its analysis, and the task is deduplicated by it.
+//   share a text share its analysis, and the task is deduplicated by it. A text long enough in bytes but too short
+//   once trimmed and counted in characters (a short CJK text, say) is set aside there for good when a step meets it,
+//   so a run of them never keeps the backlog from the jobs after them.
 // - Order: newest first_seen_at first; jobs first seen before this release (app_settings job_ai_backlog_since,
 //   recorded on first start) after every newer one. Opening, saving or "Save all" never queue a job or move it up.
+// - Cost: a step walks idx_jobs_ai_backlog (migration 0403) in that order and stops at CANDIDATES_PER_STEP, so it
+//   reads a few index entries while there is work near the top, and every live job's entry only when there is none;
+//   it opens a job row only for the length of a text Claude still has to read. After a step that found nothing, the
+//   next steps read no jobs until something is written to the database or a backoff ends.
 // - At most one task of its own in flight (system-owned, background priority, charged to no one), and never more
 //   than MAX_PENDING_ANALYSES job analyses pending in all.
 // - It yields to resume readings (resume refines go first) while one is queued or running, or one is due (read from
@@ -41,8 +47,15 @@ const REFUSED_WAIT_MS = 60_000;
 /** Its tasks failing on this many texts in a row (ai_failed) rest the backlog for FAILURE_STREAK_WAIT_MS. */
 export const FAILURE_STREAK = 5;
 const FAILURE_STREAK_WAIT_MS = 30 * 60_000;
-/** Candidates read per step: a few spare for a text that turns out too short once trimmed. */
-const CANDIDATES_PER_STEP = 25;
+/** Candidates a round of a step reads: a few spare for a text that turns out too short once trimmed. */
+export const CANDIDATES_PER_STEP = 25;
+/**
+ * Rounds a step reads at most while every candidate of a round turns out too short (each round sets those aside and
+ * the next reads past them): 200 texts, a few milliseconds. The step after carries on from there.
+ */
+export const SET_ASIDE_ROUNDS = 8;
+/** last_error of a text set aside. */
+const TOO_SHORT = `Fewer than ${MIN_TEXT_FOR_AI} characters once trimmed: too short for Claude to read.`;
 const HOUR_MS = 60 * 60_000;
 
 /** Why a step started nothing. */
@@ -80,6 +93,44 @@ export interface JobAnalysisBacklog {
   tick(): BacklogStep;
   /** Ends the timers (an async stop, as features' `start` returns). */
   stop(): Promise<void>;
+}
+
+/** What backlogCandidatesSql binds. */
+interface CandidateParams {
+  minText: number;
+  version: number;
+  now: string;
+  since: string;
+  limit: number;
+}
+
+/**
+ * The candidates first seen since the release (`newer`) or before it (`older`), in the backlog's order: newest
+ * first_seen_at first, the highest id first among jobs seen at the same time. Live jobs with at least MIN_TEXT_FOR_AI
+ * bytes of text whose text has no Claude analysis of the current prompt version and is not backing off in
+ * job_ai_attempts; in `saved` mode, only jobs someone has saved. Exported so a test can check its query plan (the
+ * admin count, admin-ai/router.ts jobBacklogSql, counts the same jobs).
+ *
+ * Shaped to stay fast with 50,000 jobs: it walks idx_jobs_ai_backlog in this order (named, so a schema without it
+ * fails at start-up instead of slowing every step) and stops at @limit; the index holds `content_hash`, so the lookups
+ * read indexes only. SQLite runs the subqueries in the order written: the saved check (LIMIT 1 keeps it a subquery;
+ * made a join, it would run after the others), the two lookups, and last the text's length, the only one that opens a
+ * job row (octet_length reads its record header, not the text; a text has at least as many bytes as characters, and
+ * readableForAi decides).
+ */
+export function backlogCandidatesSql(part: 'newer' | 'older', savedOnly: boolean): string {
+  return (
+    'SELECT j.id FROM jobs j INDEXED BY idx_jobs_ai_backlog ' +
+    `WHERE j.active = 1 AND j.first_seen_at ${part === 'newer' ? '>=' : '<'} @since ` +
+    (savedOnly
+      ? 'AND EXISTS (SELECT 1 FROM applications p WHERE p.job_id = j.id AND p.current_status = 1 AND p.archived_at IS NULL LIMIT 1) '
+      : '') +
+    "AND NOT EXISTS (SELECT 1 FROM job_analyses a WHERE a.content_hash = j.content_hash AND a.source = 'ai' AND a.version = @version) " +
+    'AND NOT EXISTS (SELECT 1 FROM job_ai_attempts t WHERE t.content_hash = j.content_hash AND t.version = @version ' +
+    'AND t.next_attempt_at > @now) ' +
+    'AND (SELECT octet_length(d.description_text) FROM jobs d WHERE d.id = j.id) >= @minText ' +
+    'ORDER BY j.first_seen_at DESC, j.id DESC LIMIT @limit'
+  );
 }
 
 /** The release time, recorded the first time this release starts and kept from then on. */
@@ -139,6 +190,8 @@ function backlog(deps: AppDeps, service: Pick<JobAnalysisServiceInternals, 'enqu
   let failuresInARow = 0;
   let stopped = false;
   let lastState = '';
+  /** After a step that found nothing: the write mark it saw (`writes`), and when the first backoff then running ends. */
+  let emptyScan: { writes: string; untilMs: number } | null = null;
 
   const sql = {
     tasks: db.prepare<[], { pending: number; own: number }>(
@@ -163,21 +216,24 @@ function backlog(deps: AppDeps, service: Pick<JobAnalysisServiceInternals, 'enqu
     resumeStarted: db.prepare<[string], { n: number }>(
       "SELECT count(*) AS n FROM ai_tasks WHERE kind = 'resume_analysis' AND created_at > ?",
     ),
-    // octet_length reads no text (and a text has at least as many bytes as characters); readableForAi decides.
-    candidates: db.prepare<
-      { minText: number; version: number; now: string; since: string; limit: number },
-      { id: number }
-    >(
-      'SELECT j.id FROM jobs j WHERE j.active = 1 AND octet_length(j.description_text) >= @minText ' +
-        "AND NOT EXISTS (SELECT 1 FROM job_analyses a WHERE a.content_hash = j.content_hash AND a.source = 'ai' AND a.version = @version) " +
-        'AND NOT EXISTS (SELECT 1 FROM job_ai_attempts t WHERE t.content_hash = j.content_hash AND t.version = @version ' +
-        'AND t.next_attempt_at > @now) ' +
-        (mode === 'saved'
-          ? 'AND EXISTS (SELECT 1 FROM applications p WHERE p.job_id = j.id AND p.current_status = 1 AND p.archived_at IS NULL) '
-          : '') +
-        'ORDER BY (j.first_seen_at >= @since) DESC, j.first_seen_at DESC, j.id DESC LIMIT @limit',
+    candidates: {
+      newer: db.prepare<CandidateParams, { id: number }>(backlogCandidatesSql('newer', mode === 'saved')),
+      older: db.prepare<CandidateParams, { id: number }>(backlogCandidatesSql('older', mode === 'saved')),
+    },
+    text: db.prepare<[number], { description_text: string; content_hash: string }>(
+      'SELECT description_text, content_hash FROM jobs WHERE id = ?',
     ),
-    text: db.prepare<[number], { description_text: string }>('SELECT description_text FROM jobs WHERE id = ?'),
+    // The database's write mark: this connection's changes (total_changes) and every other connection's commits
+    // (data_version). Any insert, update or delete moves it: ingest adding, rewriting or reopening a job, a save, a
+    // reading or a failure stored. Free to read, where no jobs column tells every such change cheaply
+    // (max(updated_at) has no index, and a reopened job keeps its id).
+    writes: db.prepare<[], { mark: string }>(
+      "SELECT total_changes() || ':' || (SELECT data_version FROM pragma_data_version) AS mark",
+    ),
+    // When the first backoff ends: its text may be a candidate again.
+    backoffEnd: db.prepare<[number, string], { at: string | null }>(
+      'SELECT min(next_attempt_at) AS at FROM job_ai_attempts WHERE version = ? AND next_attempt_at > ?',
+    ),
   };
 
   const waiting = (reason: BacklogWait, retryAtMs?: number, detail?: string): BacklogStep => ({
@@ -230,6 +286,33 @@ function backlog(deps: AppDeps, service: Pick<JobAnalysisServiceInternals, 'enqu
     }
   }
 
+  /**
+   * The candidates in the backlog's order, CANDIDATES_PER_STEP at most: the jobs first seen since the release, then
+   * older ones in the room left (what one query over both would answer). The older ones are read only when the newer
+   * ones leave the step without a task.
+   */
+  function* candidates(now: string): Generator<number> {
+    let room = CANDIDATES_PER_STEP;
+    for (const query of [sql.candidates.newer, sql.candidates.older]) {
+      if (room <= 0) return;
+      const rows = query.all({ minText: MIN_TEXT_FOR_AI, version: JOB_ANALYSIS_PROMPT_VERSION, now, since, limit: room });
+      room -= rows.length;
+      for (const row of rows) yield row.id;
+    }
+  }
+
+  /** The first candidate Claude can read, and the texts before it too short for that once trimmed. */
+  function firstReadable(now: string): { jobId: number | null; tooShort: string[] } {
+    const tooShort: string[] = [];
+    for (const id of candidates(now)) {
+      const job = sql.text.get(id);
+      if (!job) continue;
+      if (readableForAi(job.description_text)) return { jobId: id, tooShort };
+      tooShort.push(job.content_hash);
+    }
+    return { jobId: null, tooShort };
+  }
+
   function step(): BacklogStep {
     const nowMs = deps.now().getTime();
     const tasks = sql.tasks.get() ?? { pending: 0, own: 0 };
@@ -244,23 +327,32 @@ function backlog(deps: AppDeps, service: Pick<JobAnalysisServiceInternals, 'enqu
     if (refusedUntil > nowMs) return waiting('refused', refusedUntil);
     if (resumeReadingFirst(nowMs)) return waiting('resume_first');
 
-    const candidates = sql.candidates.all({
-      minText: MIN_TEXT_FOR_AI,
-      version: JOB_ANALYSIS_PROMPT_VERSION,
-      now: new Date(nowMs).toISOString(),
-      since,
-      limit: CANDIDATES_PER_STEP,
-    });
-    for (const { id } of candidates) {
-      if (!readableForAi(sql.text.get(id)?.description_text ?? '')) continue;
-      const accepted = service.enqueueTask(id, 'background');
-      if (!accepted) {
-        refusedUntil = nowMs + REFUSED_WAIT_MS;
-        return waiting('refused', refusedUntil);
+    // Nothing written since a step found nothing, and no backoff over since: this one would find nothing either. The
+    // mark is read before the candidates, so a write that lands meanwhile makes the next step look again.
+    const writes = sql.writes.get()?.mark ?? null;
+    if (emptyScan && emptyScan.writes === writes && nowMs < emptyScan.untilMs) return waiting('none');
+    emptyScan = null;
+    const now = new Date(nowMs).toISOString();
+    // Texts too short for Claude leave the candidates as a round meets them, so the next round reads past them. Setting
+    // them aside moves the write mark: a step that stops at SET_ASIDE_ROUNDS leaves the next one to look again.
+    for (let round = 0; round < SET_ASIDE_ROUNDS; round += 1) {
+      const { jobId, tooShort } = firstReadable(now);
+      setAsideAiTexts(db, { contentHashes: tooShort, version: JOB_ANALYSIS_PROMPT_VERSION, message: TOO_SHORT, now: new Date(nowMs) });
+      if (jobId !== null) {
+        const accepted = service.enqueueTask(jobId, 'background');
+        if (!accepted) {
+          refusedUntil = nowMs + REFUSED_WAIT_MS;
+          return waiting('refused', refusedUntil);
+        }
+        if (!accepted.deduped) budget.take();
+        lastTaskId = accepted.taskId;
+        return { status: 'queued', jobId, ...accepted };
       }
-      if (!accepted.deduped) budget.take();
-      lastTaskId = accepted.taskId;
-      return { status: 'queued', jobId: id, ...accepted };
+      if (tooShort.length === 0) break;
+    }
+    if (writes !== null) {
+      const backoffEnd = sql.backoffEnd.get(JOB_ANALYSIS_PROMPT_VERSION, now)?.at;
+      emptyScan = { writes, untilMs: backoffEnd ? Date.parse(backoffEnd) : Number.POSITIVE_INFINITY };
     }
     return waiting('none');
   }

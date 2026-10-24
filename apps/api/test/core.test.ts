@@ -104,7 +104,7 @@ describe('migrations', () => {
   });
 });
 
-// ---------------------------------------------------------------------------------- v2 migrations (0002-0402)
+// ---------------------------------------------------------------------------------- v2 migrations (0002-0403)
 
 const V2_MIGRATIONS = [
   '0002_ai_resume_analysis_kind',
@@ -112,6 +112,7 @@ const V2_MIGRATIONS = [
   '0301_application_resume_match',
   '0401_job_analysis_facets',
   '0402_job_ai_attempts',
+  '0403_job_ai_backlog_index',
 ];
 
 const DUE_TRIGGERS = [
@@ -167,7 +168,7 @@ const matchOf = (db: Db, id: string) =>
 const UNLINKED = { resume_id: null, resume_origin: null, resume_matched_at: null };
 
 describe('v2 migrations', () => {
-  it('applies 0002 to 0402 after 0001, in order', () => {
+  it('applies 0002 to 0403 after 0001, in order', () => {
     const db = openMemoryDatabase();
     const { applied } = migrate(db);
     expect(applied[0]).toBe('0001_init');

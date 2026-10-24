@@ -6,7 +6,7 @@ import type { AiProvider, ProviderHold } from '../src/ai/provider/types';
 import { jobBacklogSql } from '../src/features/admin-ai/router';
 import { JOB_ANALYSIS_PROMPT_VERSION } from '../src/features/job-analysis/prompt';
 import { MIN_TEXT_FOR_AI } from '../src/features/job-analysis/service';
-import { AI_FAILURES_BEFORE_GIVING_UP, saveAnalysis } from '../src/features/job-analysis/store';
+import { AI_FAILURES_BEFORE_GIVING_UP, AI_SET_ASIDE_UNTIL, saveAnalysis } from '../src/features/job-analysis/store';
 import { signIn } from './auth-helpers';
 import { createTestContext, TEST_NOW, type TestContext } from './helpers';
 import { insertApplication, insertCompany, insertJob, insertResume } from './job-fixtures';
@@ -141,10 +141,12 @@ describe('jobs', () => {
     rest(db, addJob(db, 'Waits out an outage'), 0, at(5));
     // Given up: three failures, tried again a day later.
     rest(db, addJob(db, 'Given up'), AI_FAILURES_BEFORE_GIVING_UP, at(24 * 60));
-    // Not counted: closed, too short for Claude, or read by Claude already.
+    // Not counted: closed, too short for Claude (in bytes, or set aside by the backlog once trimmed), or read already.
     addJob(db, 'Closed', { active: false });
     rest(db, addJob(db, 'Closed and resting', { active: false }), 1, at(30));
     addJob(db, 'Short', { description: '<p>Go.</p>' });
+    rest(db, addJob(db, 'Set aside'), 0, AI_SET_ASIDE_UNTIL);
+    rest(db, addJob(db, 'Set aside, with failures on record'), AI_FAILURES_BEFORE_GIVING_UP, AI_SET_ASIDE_UNTIL);
     analyse(db, addJob(db, 'Read by Claude'), 'ai', JOB_ANALYSIS_PROMPT_VERSION);
     const readAfterFailing = addJob(db, 'Read by Claude, with a failure on record');
     analyse(db, readAfterFailing, 'ai', JOB_ANALYSIS_PROMPT_VERSION);
