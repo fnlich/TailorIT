@@ -10,6 +10,7 @@ import {
   resumeLabel,
   type BulletsRequest,
   type PageBox,
+  type ResumeAnalysisBrief,
   type ResumeDocument,
   type ResumeFileKind,
   type ResumeSummary,
@@ -31,6 +32,8 @@ export const resumeKeys = {
   all: ['resumes'] as const,
   list: () => ['resumes', 'list'] as const,
   detail: (id: string) => ['resumes', 'detail', id] as const,
+  /** What TailorIT read from one resume (under `all`, so `invalidateResumes` reads it again). */
+  analysis: (id: string) => ['resumes', 'analysis', id] as const,
   templates: () => ['resume-templates'] as const,
   skills: (type: SkillType) => ['skills', type] as const,
 };
@@ -52,7 +55,7 @@ const strings = (value: unknown): string[] =>
 const reported = new Set<string>();
 
 /** Says once per answer kind that the API's answer differs from the shared contract (the integration report reads it). */
-function noteMismatch(where: string, detail: unknown): void {
+export function noteMismatch(where: string, detail: unknown): void {
   if (reported.has(where)) return;
   reported.add(where);
   console.warn(`[resumes] The answer of ${where} differs from the shared contract; reading it leniently.`, detail);
@@ -78,6 +81,26 @@ function readFileKind(value: unknown): ResumeFileKind | null {
   return (RESUME_FILE_KINDS as readonly unknown[]).includes(value) ? (value as ResumeFileKind) : null;
 }
 
+/** Years read off a resume (0 to 80), or null. */
+export function readYears(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 80 ? value : null;
+}
+
+/** A list row's reading by hand: undefined when the answer has none, null when it says "not read yet". */
+function leniBrief(value: unknown): ResumeAnalysisBrief | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const r = rec(value);
+  const softSkillCount = Number(r.softSkillCount);
+  return {
+    yearsExperience: readYears(r.yearsExperience),
+    hardSkills: strings(r.hardSkills),
+    softSkillCount: Number.isInteger(softSkillCount) && softSkillCount >= 0 ? softSkillCount : 0,
+    refining: bool(r.refining),
+    aiWaiting: bool(r.aiWaiting),
+  };
+}
+
 function leniSummary(raw: unknown): ResumeSummary | null {
   const r = rec(raw);
   const id = str(r.id);
@@ -86,6 +109,7 @@ function leniSummary(raw: unknown): ResumeSummary | null {
   const document = rec(r.document);
   const title = strOrNull(r.title);
   const createdAt = str(r.createdAt);
+  const analysis = leniBrief(r.analysis);
   return {
     id,
     kind,
@@ -99,6 +123,7 @@ function leniSummary(raw: unknown): ResumeSummary | null {
     createdAt,
     updatedAt: str(r.updatedAt) || createdAt,
     lastEditedAt: strOrNull(r.lastEditedAt),
+    ...(analysis !== undefined ? { analysis } : {}),
   };
 }
 
@@ -325,12 +350,13 @@ export async function setDefaultResume(resumeId: string | null): Promise<Account
 
 /**
  * POST /api/resumes/upload (multipart `file`, optional `title`). `parse` also starts the AI import (an editable copy),
- * made on `templateId` and `layout` when they are given.
+ * made on `templateId` and `layout` when they are given. The upload is kept even when that copy cannot start:
+ * `copyError` then says why.
  */
 export async function uploadResume(
   file: File,
   options: { title?: string; parse?: boolean; templateId?: string; layout?: TechnicalSkillsLayout } = {},
-): Promise<{ resume: ResumeSummary | null; taskId: string | null }> {
+): Promise<{ resume: ResumeSummary | null; taskId: string | null; copyError: string | null }> {
   const form = new FormData();
   form.append('file', file, file.name);
   if (options.title?.trim()) form.append('title', options.title.trim());
@@ -340,7 +366,11 @@ export async function uploadResume(
     layout: options.parse && options.layout ? options.layout : undefined,
   };
   const answer = rec(await api.post('/api/resumes/upload', form, { query }));
-  return { resume: readResumeSummary(answer.resume ?? answer), taskId: strOrNull(answer.taskId) };
+  return {
+    resume: readResumeSummary(answer.resume ?? answer),
+    taskId: strOrNull(answer.taskId),
+    copyError: strOrNull(answer.copyError),
+  };
 }
 
 /** POST /api/resumes/import-json with a file the browser already parsed. */

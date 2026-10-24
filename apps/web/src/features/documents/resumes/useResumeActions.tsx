@@ -9,7 +9,16 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type ReactNode } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { CopyIcon, DownloadSimpleIcon, EyeIcon, PencilSimpleIcon, SparkleIcon, StarIcon, TrashIcon } from '@/components/ui/icons';
+import {
+  CopyIcon,
+  DownloadSimpleIcon,
+  EyeIcon,
+  ListBulletsIcon,
+  PencilSimpleIcon,
+  SparkleIcon,
+  StarIcon,
+  TrashIcon,
+} from '@/components/ui/icons';
 import { useToast } from '@/components/ui/Toast';
 import { userMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -20,23 +29,30 @@ import {
   resumeEditorHref,
   resumeExportHref,
   resumeFileHref,
+  resumeKeys,
   setDefaultResume,
   startEditableCopy,
 } from '../../resume-editor/api';
 import { dropResumesFromList, invalidateResumes, markDefaultInList, putResumeInList } from '../../resume-editor/cache';
 import { downloadFrom } from '../../resume-editor/files';
 import { RenameDialog, focusDocument, neighbourOf, type ActionMenuItem } from '../core';
-import { menuKeysFor, type ResumeMenuKey } from './list';
+import { menuKeysFor, withKnownReading, type ResumeMenuKey } from './list';
 
 /** Opens an uploaded resume's file in a new tab (a PDF shows in the browser; a Word file downloads). */
 export function openResumeFile(id: string): void {
   window.open(resumeFileHref(id, true), '_blank', 'noopener');
 }
 
+/** An uploaded resume's page at "What TailorIT read from this resume". */
+export function resumeDetailsHref(id: string): string {
+  return `${resumeEditorHref(id)}#profile`;
+}
+
 /**
- * What a resume's ⋮ does (free_tailor's menu, for TailorIT): Edit or View, Rename ("Change resume name"), Duplicate,
- * Set as default, the downloads, Make editable copy and Delete (a styled confirmation). `itemsFor(resume)` is the
- * menu; `dialogs` is drawn once by the tab. After a delete, focus moves to the neighbouring card or row.
+ * What a resume's ⋮ does (free_tailor's menu, for TailorIT): Edit or View, Skills and details (an upload's reading),
+ * Rename ("Change resume name"), Duplicate, Set as default, the downloads, Make editable copy and Delete (a styled
+ * confirmation). `itemsFor(resume)` is the menu; `dialogs` is drawn once by the tab. After a delete, focus moves to
+ * the neighbouring card or row.
  */
 export function useResumeActions({
   visibleIds,
@@ -118,6 +134,13 @@ export function useResumeActions({
   const build: Record<ResumeMenuKey, (resume: ResumeSummary) => ActionMenuItem> = {
     edit: (resume) => ({ key: 'edit', label: 'Edit', icon: <PencilSimpleIcon size={16} />, onSelect: () => router.push(resumeEditorHref(resume.id)) }),
     view: (resume) => ({ key: 'view', label: 'View', icon: <EyeIcon size={16} />, onSelect: () => openResumeFile(resume.id) }),
+    details: (resume) => ({
+      key: 'details',
+      label: 'Skills and details',
+      title: 'What TailorIT read from this resume',
+      icon: <ListBulletsIcon size={16} />,
+      onSelect: () => router.push(resumeDetailsHref(resume.id)),
+    }),
     rename: (resume) => ({ key: 'rename', label: 'Rename', icon: <PencilLineIcon size={16} />, onSelect: () => setRenaming(resume) }),
     duplicate: (resume) => ({ key: 'duplicate', label: 'Duplicate', icon: <CopyIcon size={16} />, onSelect: () => void duplicate(resume) }),
     default: (resume) => ({
@@ -178,7 +201,8 @@ export function useResumeActions({
         onSubmit={async (name) => {
           if (!renaming) return;
           const saved = await renameResume(renaming.id, name);
-          putResumeInList(queryClient, saved.summary);
+          // A rename reads nothing again: the line keeps the reading the list holds.
+          putResumeInList(queryClient, withKnownReading(saved.summary, queryClient.getQueryData<ResumeSummary[]>(resumeKeys.list())));
           void refresh();
           toast.success('Resume renamed');
         }}

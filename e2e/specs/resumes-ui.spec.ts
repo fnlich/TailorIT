@@ -70,6 +70,39 @@ interface Summary {
   createdAt: string;
   updatedAt: string;
   lastEditedAt: string | null;
+  /** The list's reading ("8 yrs · React, ..."); null while not read yet. */
+  analysis?: Json | null;
+}
+
+interface FakeOptions {
+  empty?: boolean;
+  /** Readings on the list's resumes and GET /api/resumes/:id/analysis for the upload. */
+  readings?: boolean;
+  /** Every upload answers this long after it arrives (ms). */
+  uploadDelayMs?: number;
+  /** Files (by name) whose first upload is answered "server busy" (429, retry in 1 s). */
+  busyOnce?: string[];
+  /** An upload asking for an editable copy is kept, but the copy cannot start: this sentence. */
+  copyError?: string;
+}
+
+const UPLOAD_SKILLS = ['React', 'TypeScript', 'Node.js', 'GraphQL', 'Redux', 'Jest', 'Webpack', 'CSS', 'HTML', 'Git', 'Docker', 'AWS'];
+
+/** GET /api/resumes/r-upload/analysis: the quick reading while the AI reads it, then the AI's reading. */
+function uploadReading(done: boolean): Json {
+  return {
+    resumeId: 'r-upload',
+    source: done ? 'ai' : 'deterministic',
+    refining: !done,
+    aiWaiting: false,
+    aiFailed: false,
+    hardSkills: done ? UPLOAD_SKILLS : UPLOAD_SKILLS.slice(0, 5),
+    softSkills: done ? ['Communication', 'Mentoring', 'Problem Solving'] : ['Communication'],
+    keywords: { roles: ['Senior Frontend Engineer', 'Frontend Engineer'], certifications: done ? ['AWS Certified Developer'] : [], domains: ['finance'] },
+    yearsExperience: 8.2,
+    yearsBasis: 'dates',
+    analyzedAt: new Date().toISOString(),
+  };
 }
 
 class FakeApi {
@@ -77,11 +110,19 @@ class FakeApi {
   readonly documents = new Map<string, Json>();
   readonly calls: Array<{ method: string; path: string; body: unknown }> = [];
   readonly tasks = new Map<string, { kind: string; result: unknown; polls: number }>();
+  /** Every upload as it arrived: the file's name, the name typed (title) and whether a copy was asked for. */
+  readonly uploads: Array<{ fileName: string; title: string | null; parse: boolean }> = [];
+  /** Readings the AI has finished (GET …/analysis answers the AI's reading from then on). */
+  readonly readingsDone = new Set<string>();
+  maxUploadsInFlight = 0;
+  private uploadsInFlight = 0;
+  private readonly busyOnce: Set<string>;
   private sequence = 0;
 
-  constructor(options: { empty?: boolean } = {}) {
+  constructor(private readonly options: FakeOptions = {}) {
     const now = Date.now();
     const at = (ago: number) => new Date(now - ago).toISOString();
+    this.busyOnce = new Set(options.busyOnce ?? []);
     this.resumes = options.empty
       ? []
       : [
@@ -89,6 +130,11 @@ class FakeApi {
           { id: 'r-built', kind: 'built', label: 'Backend Engineer', title: null, templateId: 'classic-serif', templateName: 'Classic Serif', isDefault: false, fileKind: null, nameOnResume: 'David Jack', createdAt: at(30 * HOUR), updatedAt: at(3 * HOUR), lastEditedAt: at(3 * HOUR) },
           { id: 'r-upload', kind: 'uploaded', label: 'David_Jack_resume', title: 'David_Jack_resume', templateId: null, templateName: null, isDefault: false, fileKind: 'pdf', nameOnResume: '', createdAt: at(50 * HOUR), updatedAt: at(50 * HOUR), lastEditedAt: null },
         ];
+    if (options.readings && !options.empty) {
+      this.resumes[0]!.analysis = { yearsExperience: 6.4, hardSkills: ['Go', 'Kubernetes', 'PostgreSQL'], softSkillCount: 2, refining: false, aiWaiting: false };
+      this.resumes[1]!.analysis = null;
+      this.resumes[2]!.analysis = { yearsExperience: 8.2, hardSkills: UPLOAD_SKILLS, softSkillCount: 3, refining: true, aiWaiting: false };
+    }
     this.documents.set('r-default', {
       name: 'David Jack',
       title: 'Senior Platform Engineer',
@@ -199,13 +245,36 @@ class FakeApi {
       if (path === '/api/resumes/upload') {
         const parse = url.searchParams.get('parse') === '1';
         const raw = request.postData() ?? '';
-        if (/filename="[^"]+\.doc"/.test(raw)) {
-          return json(route, 415, { error: { code: 'unsupported_file', message: 'Old Word files (.doc) cannot be read. Save it as .docx or PDF and upload that.' } });
+        const fileName = /filename="([^"]+)"/.exec(raw)?.[1] ?? 'resume.pdf';
+        const title = /name="title"\r\n\r\n([^\r\n]*)/.exec(raw)?.[1] ?? null;
+        this.uploads.push({ fileName, title, parse });
+        this.uploadsInFlight += 1;
+        this.maxUploadsInFlight = Math.max(this.maxUploadsInFlight, this.uploadsInFlight);
+        try {
+          if (this.options.uploadDelayMs) await new Promise((resolve) => setTimeout(resolve, this.options.uploadDelayMs));
+          if (this.busyOnce.delete(fileName)) {
+            return await json(route, 429, {
+              error: { code: 'rate_limited', message: 'The server is busy reading other files. Please wait a few seconds and try again.', retryAfterSeconds: 1 },
+            });
+          }
+          if (/\.doc$/.test(fileName)) {
+            return await json(route, 415, { error: { code: 'unsupported_file', message: 'Old Word files (.doc) cannot be read. Save it as .docx or PDF and upload that.' } });
+          }
+          const stamp = new Date().toISOString();
+          const label = title || fileName.replace(/\.(pdf|docx?)$/i, '');
+          this.sequence += 1;
+          const resume: Summary = { id: `r-up-${this.sequence}`, kind: 'uploaded', label, title, templateId: null, templateName: null, isDefault: false, fileKind: 'pdf', nameOnResume: '', createdAt: stamp, updatedAt: stamp, lastEditedAt: null };
+          this.resumes.unshift(resume);
+          if (parse && this.options.copyError) return await json(route, 201, { resume, taskId: null, copyError: this.options.copyError });
+          return await json(route, 201, { resume, taskId: parse ? this.task('resume_import', { resumeId: 'r-default' }) : null, copyError: null });
+        } finally {
+          this.uploadsInFlight -= 1;
         }
-        const stamp = new Date().toISOString();
-        const resume: Summary = { id: `r-up-${Date.now()}`, kind: 'uploaded', label: 'John_Doe_Finance', title: 'John_Doe_Finance', templateId: null, templateName: null, isDefault: false, fileKind: 'pdf', nameOnResume: '', createdAt: stamp, updatedAt: stamp, lastEditedAt: null };
-        this.resumes.unshift(resume);
-        return json(route, 201, { resume, taskId: parse ? this.task('resume_import', { resumeId: 'r-default' }) : null });
+      }
+      const reading = /^\/api\/resumes\/([^/]+)\/analysis$/.exec(path);
+      if (reading) {
+        if (!this.options.readings || reading[1] !== 'r-upload') return json(route, 404, { error: { code: 'not_found', message: 'That resume was not found.' } });
+        return json(route, 200, uploadReading(this.readingsDone.has('r-upload')));
       }
       if (path === '/api/resumes/bulk-delete') {
         const ids = (body as { ids: string[] }).ids;
@@ -258,7 +327,7 @@ async function signIn(page: Page) {
   await page.context().addCookies([{ name: 'ti_session', value: 'resumes-ui-spec', url: ORIGIN }]);
 }
 
-async function setup(page: Page, options: { empty?: boolean } = {}) {
+async function setup(page: Page, options: FakeOptions = {}) {
   await signIn(page);
   const api = new FakeApi(options);
   await api.install(page);
@@ -564,7 +633,16 @@ test.describe('Documents › Resumes', () => {
     ]);
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Actions for David_Jack_resume' }).first().click();
-    await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText(['View', 'Rename', 'Duplicate', 'Set as default', 'Download PDF', 'Make editable copy', 'Delete']);
+    await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText([
+      'View',
+      'Skills and details',
+      'Rename',
+      'Duplicate',
+      'Set as default',
+      'Download PDF',
+      'Make editable copy',
+      'Delete',
+    ]);
     await page.keyboard.press('Escape');
 
     await page.getByRole('button', { name: 'List' }).click();
@@ -619,13 +697,15 @@ test.describe('Documents › Resumes', () => {
   });
 
   test('upload: the server refuses a .doc with its own sentence; an editable copy is offered when ready', async ({ page }) => {
-    await setup(page);
+    const api = await setup(page);
     await page.goto('/documents?tab=resumes');
     await page.getByRole('button', { name: 'Upload', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Upload Resume' });
     await expect(dialog.getByPlaceholder('Ex. John_Doe_Finance')).toBeVisible();
     await expect(dialog).toContainText('PDF, DOC, DOCX up to 5 MB');
-    await expect(dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' })).toBeChecked();
+    // The AI copy is asked for only when the box is ticked.
+    const copy = dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' });
+    await expect(copy).not.toBeChecked();
 
     await dialog.getByLabel('Resume file').setInputFiles({ name: 'old.doc', mimeType: 'application/msword', buffer: Buffer.from('doc') });
     await dialog.getByRole('button', { name: 'Upload', exact: true }).click();
@@ -633,10 +713,135 @@ test.describe('Documents › Resumes', () => {
 
     await dialog.getByRole('button', { name: 'Remove the file' }).click();
     await dialog.getByLabel('Resume file').setInputFiles({ name: 'John_Doe_Finance.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+    await copy.click();
+    await expect(copy).toBeChecked();
     await dialog.getByRole('button', { name: 'Upload', exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText('Your editable copy is ready')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('link', { name: 'Open the resume' })).toHaveAttribute('href', '/resumes/r-default');
+    expect(api.uploads.map((upload) => [upload.fileName, upload.title, upload.parse])).toEqual([
+      ['old.doc', 'old', false],
+      ['John_Doe_Finance.pdf', 'John_Doe_Finance', true],
+    ]);
+  });
+
+  test('upload several files', async ({ page }) => {
+    const api = await setup(page, { uploadDelayMs: 400, busyOnce: ['Busy_Resume.pdf'] });
+    await page.goto('/documents?tab=resumes');
+    await page.getByRole('button', { name: 'Upload', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Upload Resume' });
+    const pdf = (name: string) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+    await dialog
+      .getByLabel('Resume file')
+      .setInputFiles([pdf('Alice_Resume.pdf'), pdf('Busy_Resume.pdf'), pdf('Carol_Resume.pdf'), { name: 'old.doc', mimeType: 'application/msword', buffer: Buffer.from('doc') }]);
+
+    // Several files: each is named after its file, and no AI copy is offered.
+    const rows = dialog.getByRole('list', { name: 'Files to upload' }).getByRole('listitem');
+    await expect(rows).toHaveCount(4);
+    await expect(dialog.getByPlaceholder('Ex. John_Doe_Finance')).toHaveCount(0);
+    await expect(dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' })).toHaveCount(0);
+    await expect(dialog).toContainText('Each resume is named after its file. You can rename it later.');
+    await expect(rows.first()).toContainText('Ready');
+
+    await dialog.getByRole('button', { name: 'Upload 4 files' }).click();
+    // While files are sent the dialog stays open: Stop instead of Cancel, no ✕, Escape does nothing.
+    await expect(dialog.getByRole('button', { name: 'Stop' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Close' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+
+    const row = (name: string) => dialog.locator(`[data-upload-row="${name}"]`);
+    for (const name of ['Alice_Resume.pdf', 'Busy_Resume.pdf', 'Carol_Resume.pdf']) {
+      await expect(row(name)).toHaveAttribute('data-upload-status', 'done', { timeout: 15_000 });
+      await expect(row(name)).toContainText('Uploaded');
+    }
+    // The .doc gets the server's own sentence and is not offered again.
+    await expect(row('old.doc')).toHaveAttribute('data-upload-status', 'failed');
+    await expect(row('old.doc')).toContainText('Old Word files (.doc) cannot be read.');
+    await expect(dialog.getByRole('status').filter({ hasText: 'not uploaded' })).toHaveText('3 uploaded, 1 not uploaded.');
+    await expect(dialog.getByRole('button', { name: /^Try again/ })).toHaveCount(0);
+    // One toast for the whole upload.
+    await expect(page.getByText('3 resumes uploaded')).toBeVisible();
+    await expect(page.getByText('1 file was not uploaded.')).toBeVisible();
+
+    // Two in flight at most; the busy file went again after the wait; no name and no AI copy were asked for.
+    expect(api.maxUploadsInFlight).toBe(2);
+    expect(api.uploads.filter((upload) => upload.fileName === 'Busy_Resume.pdf')).toHaveLength(2);
+    expect(api.uploads.every((upload) => upload.title === null && !upload.parse)).toBe(true);
+
+    await dialog.getByRole('button', { name: 'Done' }).click();
+    await expect(dialog).toBeHidden();
+    await page.getByRole('button', { name: 'List' }).click();
+    for (const label of ['Alice_Resume', 'Busy_Resume', 'Carol_Resume']) {
+      await expect(page.locator('[data-resume-row]').filter({ hasText: label })).toHaveCount(1);
+    }
+  });
+
+  test("an upload's skills", async ({ page }) => {
+    const api = await setup(page, { readings: true });
+    await page.goto('/documents?tab=resumes');
+    await page.getByRole('button', { name: 'Grid' }).click();
+    // The card line: years, then three main skills and how many more (a spinner first while the AI reads it).
+    const upload = page.locator('[data-resume-card="r-upload"] [data-profile-line]');
+    await expect(upload).toContainText('8 yrs · React, TypeScript, Node.js +9');
+    await expect(upload).toHaveAttribute('href', '/resumes/r-upload#profile');
+    await expect(page.locator('[data-resume-card="r-default"] [data-profile-line]')).toHaveText('6 yrs · Go, Kubernetes, PostgreSQL');
+    await expect(page.locator('[data-resume-card="r-built"] [data-profile-line]')).toHaveText('Finding skills...');
+
+    // The list: the same line inside the Resume cell, and no new column.
+    await page.getByRole('button', { name: 'List' }).click();
+    await expect(page.getByRole('table', { name: 'Resumes' }).getByRole('columnheader')).toHaveText(['', 'Resume', 'Name on resume', 'Template', 'Edited', 'Actions']);
+    await expect(page.locator('[data-resume-row="r-upload"]')).toContainText('8 yrs · React, TypeScript, Node.js +9');
+
+    // Search reads the main skills too.
+    const search = page.getByRole('searchbox', { name: 'Search resumes' });
+    await search.fill('graphql');
+    await expect(page.getByRole('status').filter({ hasText: 'match.' })).toHaveText('1 of 3 resumes match.');
+    await expect(page.locator('[data-resume-row]')).toHaveCount(1);
+    await search.fill('');
+
+    // Skills and details: the file page at "What TailorIT read from this resume".
+    await page.getByRole('button', { name: 'Actions for David_Jack_resume' }).click();
+    await page.getByRole('menuitem', { name: 'Skills and details' }).click();
+    await expect(page).toHaveURL(/\/resumes\/r-upload#profile$/);
+    const panel = page.getByRole('region', { name: 'What TailorIT read from this resume' });
+    await expect(panel).toContainText('Reading it with AI for a closer look...');
+    await expect(panel).toBeFocused();
+    await expect(panel.getByRole('list', { name: 'Main skills' }).getByRole('listitem')).toHaveCount(5);
+
+    // The AI finishes; the panel reads it again by itself (10 s later) and shows its reading.
+    api.readingsDone.add('r-upload');
+    await expect(panel).toContainText('Read with AI. Everything shown here appears in your file.', { timeout: 20_000 });
+    await expect(panel).not.toContainText('Reading it with AI');
+    await expect(panel.getByRole('list', { name: 'Main skills' }).getByRole('listitem')).toHaveCount(12);
+    await expect(panel.getByRole('list', { name: 'Soft skills' })).toContainText('Mentoring');
+    await expect(panel.getByRole('list', { name: 'Roles' })).toContainText('Senior Frontend Engineer');
+    await expect(panel.getByRole('list', { name: 'Certifications' })).toHaveText('AWS Certified Developer');
+    await expect(panel.getByRole('list', { name: 'Industries' })).toHaveText('Finance');
+    await expect(panel).toContainText('About 8 years');
+    await expect(panel).toContainText('Added up from the dates of your roles.');
+  });
+
+  test('a copy that cannot start keeps the upload', async ({ page }) => {
+    const busy = 'An AI request of this kind is already running for your account. Wait for it to finish, then try again.';
+    const api = await setup(page, { copyError: busy });
+    await page.goto('/documents?tab=resumes');
+    await page.getByRole('button', { name: 'Upload', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Upload Resume' });
+    await dialog.getByLabel('Resume file').setInputFiles({ name: 'Jane_Doe.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+    await dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' }).click();
+    await dialog.getByRole('button', { name: 'Upload', exact: true }).click();
+
+    // The upload is kept and listed; why the copy could not start stays on the tab until dismissed.
+    await expect(dialog).toBeHidden();
+    const notice = page.getByRole('alert').filter({ hasText: 'The editable copy of Jane_Doe could not start' });
+    await expect(notice).toContainText(busy);
+    await expect(notice).toContainText('Your upload is kept as it is.');
+    await page.getByRole('button', { name: 'List' }).click();
+    await expect(page.locator('[data-resume-row]').filter({ hasText: 'Jane_Doe' })).toHaveCount(1);
+    expect(api.uploads).toEqual([{ fileName: 'Jane_Doe.pdf', title: 'Jane_Doe', parse: true }]);
+    await notice.getByRole('button', { name: 'Dismiss' }).click();
+    await expect(notice).toHaveCount(0);
   });
 
   test('an empty tab invites a first resume', async ({ page }) => {

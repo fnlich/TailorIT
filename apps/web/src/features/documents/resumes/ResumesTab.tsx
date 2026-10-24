@@ -9,6 +9,7 @@ import { Button, buttonClasses } from '@/components/ui/Button';
 import { PlusIcon, StarIcon, UploadSimpleIcon } from '@/components/ui/icons';
 import { Notice } from '@/components/ui/Notice';
 import { Select } from '@/components/ui/Select';
+import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { userMessage } from '@/lib/api';
 import { useNow } from '@/lib/useNow';
@@ -20,6 +21,7 @@ import {
   matchesQuery,
   type DocumentColumn,
 } from '../core';
+import { createPollClock } from '../../resume-editor/analysis';
 import { NEW_RESUME_HREF, bulkDeleteResumes, fetchResumes, fetchTemplates, resumeEditorHref, resumeKeys } from '../../resume-editor/api';
 import { dropResumesFromList, invalidateResumes, putResumeInList } from '../../resume-editor/cache';
 import { ImportTaskNotices, type ImportTask } from './ImportTaskNotices';
@@ -34,21 +36,28 @@ import {
   emptySourceCopy,
   fileBadge,
   filterBySource,
+  notUploadedText,
+  profileLine,
+  readingsPending,
   searchFieldsOf,
   sortResumes,
   templateNameOf,
+  uploadedTitle,
 } from './list';
 import { ResumeThumb } from './ResumeThumb';
-import { UploadResumeDialog, type UploadedResume } from './UploadResumeDialog';
-import { openResumeFile, useResumeActions } from './useResumeActions';
+import { UploadResumeDialog, type RunOutcome, type UploadedResume } from './UploadResumeDialog';
+import { openResumeFile, resumeDetailsHref, useResumeActions } from './useResumeActions';
 
 const NOUN = { one: 'resume', many: 'resumes' };
 
 /**
  * Documents › Resumes: free_tailor's two views of a person's resumes in Simplify's look. Grid: a dashed "New resume"
  * tile, then each resume's first page with its label, the ★ Default / Uploaded / PDF badges under it, "Edited … ·
- * {template}" and ⋮. List: rows of Resume | Name on resume | Template | Edited | ⋮ with checkboxes for bulk delete.
- * Search with the "1 of 3 resumes match." line, the All / Created / Uploaded filter and Upload; the view is remembered.
+ * {template}", what TailorIT read from it ("8 yrs · React, TypeScript, Node.js +9") and ⋮. List: rows of Resume (the
+ * label, its badges and the same reading under it) | Name on resume | Template | Edited | ⋮ with checkboxes for bulk
+ * delete. Search (labels, names, templates and main skills) with the "1 of 3 resumes match." line, the All / Created /
+ * Uploaded filter and Upload (one file or many); the view is remembered. While a reading is still to come the list is
+ * read again, less and less often, for up to ten minutes.
  */
 export function ResumesTab() {
   const toast = useToast();
@@ -58,8 +67,13 @@ export function ResumesTab() {
   const [query, setQuery] = useState('');
   const [uploading, setUploading] = useState(false);
   const [tasks, setTasks] = useState<ImportTask[]>([]);
+  const [readingPoll] = useState(createPollClock);
 
-  const listQuery = useQuery({ queryKey: resumeKeys.list(), queryFn: ({ signal }) => fetchResumes(signal) });
+  const listQuery = useQuery({
+    queryKey: resumeKeys.list(),
+    queryFn: ({ signal }) => fetchResumes(signal),
+    refetchInterval: (current) => readingPoll.next(readingsPending(current.state.data), Date.now()),
+  });
   const templatesQuery = useQuery({
     queryKey: resumeKeys.templates(),
     queryFn: ({ signal }) => fetchTemplates(signal),
@@ -69,17 +83,38 @@ export function ResumesTab() {
   const all = useMemo(() => sortResumes(listQuery.data ?? []), [listQuery.data]);
   const items = useMemo(() => filterBySource(all, source), [all, source]);
   const templateName = (resume: ResumeSummary) => templateNameOf(resume, templates);
-  const searchFields = (resume: ResumeSummary) => searchFieldsOf(resume, templateNameOf(resume, templates));
+  const searchFields = (resume: ResumeSummary) =>
+    searchFieldsOf(resume, templateNameOf(resume, templates), resume.analysis?.hardSkills);
   const visibleIds = items.filter((item) => matchesQuery(query, searchFields(item))).map((item) => item.id);
 
-  const addTask = (task: ImportTask) => setTasks((current) => [...current.filter((item) => item.taskId !== task.taskId), task]);
-  const actions = useResumeActions({ visibleIds, onTaskStarted: addTask });
+  const addTask = (task: ImportTask) => setTasks((current) => [...current.filter((item) => item.key !== task.key), task]);
+  const actions = useResumeActions({
+    visibleIds,
+    onTaskStarted: ({ taskId, label }) => addTask({ key: taskId, taskId, label }),
+  });
 
+  // Each stored upload shows at once; an editable copy that started (one file) is followed, one that could not start
+  // is said, and the upload stays either way.
   const onUploaded = (result: UploadedResume) => {
     putResumeInList(queryClient, result.summary);
+    if (result.taskId) addTask({ key: result.taskId, taskId: result.taskId, label: result.label });
+    else if (result.copyError) {
+      addTask({ key: `copy:${result.id ?? result.label}`, taskId: null, label: result.label, error: result.copyError });
+    }
+  };
+
+  // The end of an upload run: the list is read once (with what TailorIT read from each) and one toast sums it up.
+  const onUploadsFinished = (outcome: RunOutcome) => {
+    readingPoll.reset();
     void invalidateResumes(queryClient);
-    toast.success('Resume uploaded', result.taskId ? 'An editable copy is being made from it.' : result.label);
-    if (result.taskId) addTask({ taskId: result.taskId, label: result.label });
+    const [first] = outcome.uploaded;
+    if (!first) return;
+    if (outcome.mode === 'single') {
+      toast.success('Resume uploaded', first.taskId ? 'An editable copy is being made from it.' : first.label);
+      return;
+    }
+    const count = outcome.uploaded.length;
+    toast.success(uploadedTitle(count), outcome.notUploaded > 0 ? notUploadedText(outcome.notUploaded) : 'Their skills show on each resume.');
   };
 
   const uploadButton = (
@@ -119,7 +154,7 @@ export function ResumesTab() {
 
   return (
     <>
-      <ImportTaskNotices tasks={tasks} onDismiss={(taskId) => setTasks((current) => current.filter((task) => task.taskId !== taskId))} />
+      <ImportTaskNotices tasks={tasks} onDismiss={(key) => setTasks((current) => current.filter((task) => task.key !== key))} />
       <DocumentCollection<ResumeSummary>
         kind="resume"
         variant="cards"
@@ -160,7 +195,7 @@ export function ResumesTab() {
                   </>
                 ) : undefined
               }
-              meta={[cardMeta(editedText(resume, now), templateName(resume))]}
+              meta={[cardMeta(editedText(resume, now), templateName(resume)), <ProfileLine key="profile" resume={resume} />]}
               menuItems={actions.itemsFor(resume)}
               selectable={selection.selectable}
               selected={selection.selected}
@@ -232,33 +267,82 @@ export function ResumesTab() {
         }
       />
       {actions.dialogs}
-      <UploadResumeDialog open={uploading} onOpenChange={setUploading} onUploaded={onUploaded} />
+      <UploadResumeDialog open={uploading} onOpenChange={setUploading} onUploaded={onUploaded} onFinished={onUploadsFinished} />
     </>
   );
 }
 
-/** The list's main cell: the label (a link to the editor, or the file for an upload) and its badges. */
+/**
+ * What TailorIT read from a resume, on one line: "8 yrs · React, TypeScript, Node.js +9" (a small spinner first while
+ * the AI reads it), "Finding skills...", "Waiting for the AI reading" or "No skills found". An upload's line opens its
+ * page at that reading. Nothing known yet: an empty line that keeps its place.
+ */
+function ProfileLine({ resume }: { resume: ResumeSummary }) {
+  const line = profileLine(resume.analysis);
+  if (!line.text) {
+    return (
+      <span aria-hidden="true" data-profile-line="">
+        &nbsp;
+      </span>
+    );
+  }
+  const content = (
+    <>
+      {line.refining && (
+        <>
+          <Spinner size={12} className="mr-1.5 inline-block align-[-1px]" />
+          <span className="sr-only">Reading it with AI. </span>
+        </>
+      )}
+      {line.text}
+    </>
+  );
+  if (resume.kind === 'uploaded' && line.hasReading) {
+    return (
+      <Link
+        href={resumeDetailsHref(resume.id)}
+        data-profile-line=""
+        title={line.text}
+        className="hover:text-foreground hover:underline hover:underline-offset-2"
+      >
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <span data-profile-line="" title={line.text}>
+      {content}
+    </span>
+  );
+}
+
+/** The list's main cell: the label (a link to the editor, or the file for an upload), its badges and its reading. */
 function ResumeNameCell({ resume }: { resume: ResumeSummary }) {
   const badge = fileBadge(resume);
   const nameClasses = 'min-w-0 truncate text-left text-sm font-semibold text-foreground hover:underline hover:underline-offset-2';
   return (
-    <span className="flex min-w-0 items-center gap-2">
-      {resume.kind === 'built' ? (
-        <Link href={resumeEditorHref(resume.id)} className={nameClasses} title={resume.label}>
-          {resume.label}
-        </Link>
-      ) : (
-        <button type="button" onClick={() => openResumeFile(resume.id)} className={nameClasses} title={resume.label}>
-          {resume.label}
-        </button>
-      )}
-      {resume.isDefault && (
-        <Badge tone="primary" icon={<StarIcon size={12} weight="fill" />} data-default-resume>
-          Default
-        </Badge>
-      )}
-      {resume.kind === 'uploaded' && <Badge>Uploaded</Badge>}
-      {badge && <Badge>{badge}</Badge>}
+    <span className="flex min-w-0 flex-col">
+      <span className="flex min-w-0 items-center gap-2">
+        {resume.kind === 'built' ? (
+          <Link href={resumeEditorHref(resume.id)} className={nameClasses} title={resume.label}>
+            {resume.label}
+          </Link>
+        ) : (
+          <button type="button" onClick={() => openResumeFile(resume.id)} className={nameClasses} title={resume.label}>
+            {resume.label}
+          </button>
+        )}
+        {resume.isDefault && (
+          <Badge tone="primary" icon={<StarIcon size={12} weight="fill" />} data-default-resume>
+            Default
+          </Badge>
+        )}
+        {resume.kind === 'uploaded' && <Badge>Uploaded</Badge>}
+        {badge && <Badge>{badge}</Badge>}
+      </span>
+      <span className="mt-0.5 block min-h-5 truncate text-[13px] leading-5 text-muted-foreground">
+        <ProfileLine resume={resume} />
+      </span>
     </span>
   );
 }

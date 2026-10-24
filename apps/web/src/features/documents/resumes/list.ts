@@ -1,10 +1,15 @@
 import { editedAgo } from '@tailorit/shared/format';
-import { RESUME_SOURCE_LABEL, type ResumeSource, type ResumeSummary } from '@tailorit/shared/resume';
+import {
+  RESUME_SOURCE_LABEL,
+  type ResumeAnalysisBrief,
+  type ResumeSource,
+  type ResumeSummary,
+} from '@tailorit/shared/resume';
 import { newestFirst } from '../core/gallery';
 
 /*
  * The Resumes tab's decisions, free of React: the source filter, the order, what search matches, the lines under a
- * card and the words of its badges and confirmations.
+ * card (when it was edited, and what TailorIT read from it) and the words of its badges and confirmations.
  */
 
 export const RESUME_SOURCES_SHOWN: readonly ResumeSource[] = ['all', 'built', 'uploaded'];
@@ -55,9 +60,64 @@ export function cardMeta(edited: string, templateName: string): string {
   return templateName ? `${edited} · ${templateName}` : edited;
 }
 
-/** What search matches: the label, the name printed on the resume and the template. */
-export function searchFieldsOf(item: ResumeSummary, templateName: string): string[] {
-  return [item.label, item.nameOnResume, templateName].filter(Boolean);
+/** What search matches: the label, the name printed on the resume, the template and (when given) its main skills. */
+export function searchFieldsOf(item: ResumeSummary, templateName: string, hardSkills: readonly string[] = []): string[] {
+  return [item.label, item.nameOnResume, templateName, ...hardSkills].filter(Boolean);
+}
+
+/** Years of experience, short: "Under 1 yr", "1 yr", "8 yrs"; null when none were found. */
+export function yearsLabel(years: number | null | undefined): string | null {
+  if (years === null || years === undefined || !Number.isFinite(years) || years < 0) return null;
+  if (years < 1) return 'Under 1 yr';
+  const rounded = Math.round(years);
+  return rounded === 1 ? '1 yr' : `${rounded} yrs`;
+}
+
+/** The first main skills and how many more: "React, TypeScript, Node.js +9". */
+export function skillsSummary(skills: readonly string[], shown = 3): string {
+  const first = skills.slice(0, shown).join(', ');
+  const more = skills.length - shown;
+  return more > 0 ? `${first} +${more}` : first;
+}
+
+/** The card's second line: what TailorIT read from a resume. */
+export interface ProfileLineView {
+  /** "8 yrs · React, TypeScript, Node.js +9", "Finding skills..."; '' keeps the line's place while nothing is known. */
+  text: string;
+  /** The AI is reading the resume now: a small spinner leads the line. */
+  refining: boolean;
+  /** There is a reading to look at (an upload's line opens its page there). */
+  hasReading: boolean;
+}
+
+/**
+ * The line from the list's reading: years, then the first three main skills. Not read yet: "Finding skills...".
+ * Nothing found yet while the AI reads it: "Finding skills..."; while it waits its turn: "Waiting for the AI reading";
+ * else "No skills found". No reading in the answer at all (a change's own answer): nothing, until the list is read.
+ */
+export function profileLine(analysis: ResumeAnalysisBrief | null | undefined): ProfileLineView {
+  if (analysis === undefined) return { text: '', refining: false, hasReading: false };
+  if (analysis === null) return { text: 'Finding skills...', refining: false, hasReading: false };
+  const parts = [yearsLabel(analysis.yearsExperience), skillsSummary(analysis.hardSkills)].filter(Boolean);
+  if (parts.length > 0) return { text: parts.join(' · '), refining: analysis.refining, hasReading: true };
+  if (analysis.refining) return { text: 'Finding skills...', refining: true, hasReading: true };
+  if (analysis.aiWaiting) return { text: 'Waiting for the AI reading', refining: false, hasReading: true };
+  return { text: 'No skills found', refining: false, hasReading: true };
+}
+
+/** Some reading is still to come (not read yet, or the AI is reading or about to): the list is read again. */
+export function readingsPending(items: readonly ResumeSummary[] | undefined): boolean {
+  return (items ?? []).some((item) => item.analysis === null || item.analysis?.refining === true || item.analysis?.aiWaiting === true);
+}
+
+/**
+ * A change's answer (rename, set as default) carries no reading: the one the list already holds is kept, so the line
+ * does not blink while the list is read again.
+ */
+export function withKnownReading(summary: ResumeSummary | null, list: readonly ResumeSummary[] | undefined): ResumeSummary | null {
+  if (!summary || summary.analysis !== undefined) return summary;
+  const known = list?.find((item) => item.id === summary.id)?.analysis;
+  return known === undefined ? summary : { ...summary, analysis: known };
 }
 
 /** "PDF" / "DOCX" for an upload, else null. */
@@ -91,6 +151,7 @@ export function emptySourceCopy(source: ResumeSource): { title: string; descript
 export type ResumeMenuKey =
   | 'edit'
   | 'view'
+  | 'details'
   | 'rename'
   | 'duplicate'
   | 'default'
@@ -104,7 +165,7 @@ export type ResumeMenuKey =
 export function menuKeysFor(item: Pick<ResumeSummary, 'kind'>): ResumeMenuKey[] {
   return item.kind === 'built'
     ? ['edit', 'rename', 'duplicate', 'default', 'pdf', 'docx', 'json', 'delete']
-    : ['view', 'rename', 'duplicate', 'default', 'file', 'copy', 'delete'];
+    : ['view', 'details', 'rename', 'duplicate', 'default', 'file', 'copy', 'delete'];
 }
 
 /** The upload dialog's title: what the person typed, else the file's own name without its extension. */
@@ -112,4 +173,14 @@ export function uploadTitle(typed: string, fileName: string): string {
   const own = typed.trim();
   if (own) return own;
   return fileName.replace(/\.[^.]+$/, '').trim();
+}
+
+/** The toast after several uploads: "7 resumes uploaded". */
+export function uploadedTitle(count: number): string {
+  return `${count} ${count === 1 ? 'resume' : 'resumes'} uploaded`;
+}
+
+/** Its line when some files were not uploaded: "2 files were not uploaded." */
+export function notUploadedText(count: number): string {
+  return `${count} ${count === 1 ? 'file was' : 'files were'} not uploaded.`;
 }

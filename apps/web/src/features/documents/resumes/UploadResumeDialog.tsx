@@ -2,183 +2,432 @@
 
 import { FileArrowUpIcon } from '@phosphor-icons/react/FileArrowUp';
 import type { ResumeSummary } from '@tailorit/shared/resume';
+import { useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { useRef, useState, type DragEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/Dialog';
 import { Field } from '@/components/ui/Field';
-import { FileTextIcon, XIcon } from '@/components/ui/icons';
+import { CheckCircleIcon, ClockIcon, FileTextIcon, WarningCircleIcon, XIcon } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { Notice } from '@/components/ui/Notice';
-import { userMessage } from '@/lib/api';
-import { uploadResume } from '../../resume-editor/api';
-import { RESUME_FILE_ACCEPT, UPLOAD_MAX_MB, fileSizeRefusal } from '../../resume-editor/files';
+import { Spinner } from '@/components/ui/Spinner';
+import { fetchResumes, resumeKeys, uploadResume } from '../../resume-editor/api';
+import { RESUME_FILE_ACCEPT, UPLOAD_MAX_MB } from '../../resume-editor/files';
 import { uploadTitle } from './list';
+import {
+  MAX_FILES_PER_UPLOAD,
+  browserRefusal,
+  haltText,
+  leftOutText,
+  queueCounts,
+  queueStatusText,
+  retryButtonText,
+  rowStatusText,
+  uploadButtonText,
+  type UploadRow,
+} from './uploadQueue';
+import { useUploadQueue, type RunOutcome, type UploadedResume } from './useUploadQueue';
 
-export interface UploadedResume {
-  id: string | null;
-  label: string;
-  /** The stored upload as the list shows it. */
-  summary: ResumeSummary | null;
-  /** The AI import when "Make an editable copy with AI" was ticked. */
-  taskId: string | null;
-}
+export type { RunOutcome, UploadedResume } from './useUploadQueue';
 
 function sizeText(bytes: number): string {
   return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 /**
- * Simplify's "Upload Resume": a name for the documents list, the file (PDF, DOC or DOCX up to 5 MB; dropped or
- * chosen) and "Make an editable copy with AI", which also has the AI read the file into a resume this editor writes.
- * The server's own sentence is shown when it refuses a file (a .doc it cannot read, a file too large).
+ * Simplify's "Upload Resume", for one resume or many (PDF, DOC or DOCX up to 5 MB each; dropped or chosen, up to 50
+ * at a time). One file works as before: a name for the documents list, and "Make an editable copy with AI" (unticked
+ * unless the person ticks it). Several files are each named after their file and never get an AI copy; they go two at
+ * a time with a status per file, and the dialog stays open while they are sent. Uploads are kept exactly as they are.
+ * `onUploaded` hears of each stored upload; `onFinished` of the end of each run (Upload, Try again).
  */
 export function UploadResumeDialog({
   open,
   onOpenChange,
   onUploaded,
+  onFinished,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUploaded: (result: UploadedResume) => void;
+  onFinished: (outcome: RunOutcome) => void;
 }) {
+  // True while files are being sent: Escape, the backdrop and the corner ✕ do not close the dialog then.
+  const busyRef = useRef(false);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {open && <UploadForm onClose={() => onOpenChange(false)} onUploaded={onUploaded} />}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && busyRef.current) return;
+        onOpenChange(next);
+      }}
+    >
+      {open && <UploadForm busyRef={busyRef} onClose={() => onOpenChange(false)} onUploaded={onUploaded} onFinished={onFinished} />}
     </Dialog>
   );
 }
 
-function UploadForm({ onClose, onUploaded }: { onClose: () => void; onUploaded: (result: UploadedResume) => void }) {
+function UploadForm({
+  busyRef,
+  onClose,
+  onUploaded,
+  onFinished,
+}: {
+  busyRef: { current: boolean };
+  onClose: () => void;
+  onUploaded: (result: UploadedResume) => void;
+  onFinished: (outcome: RunOutcome) => void;
+}) {
+  const queryClient = useQueryClient();
   const [name, setName] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [parse, setParse] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [parse, setParse] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
+  const [leftOut, setLeftOut] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const rowList = useRef<HTMLUListElement>(null);
 
-  const choose = (picked: File | null | undefined) => {
-    setError(null);
-    if (!picked) return;
-    const refusal = fileSizeRefusal(picked);
-    if (refusal) {
-      setError(refusal);
-      return;
+  const upload = useUploadQueue({
+    send: (file, options) => uploadResume(file, options.mode === 'single' ? { title: options.title, parse: options.parse } : {}),
+    list: () => fetchResumes(),
+    knownIds: () => {
+      const items = queryClient.getQueryData<ResumeSummary[]>(resumeKeys.list());
+      return items ? new Set(items.map((item) => item.id)) : null;
+    },
+    onUploaded,
+    onRunEnd: (outcome) => {
+      onFinished(outcome);
+      if (outcome.allDone) onClose();
+    },
+  });
+
+  const { queue, now } = upload;
+  const { rows } = queue;
+  const counts = queueCounts(queue);
+  const running = queue.phase === 'running';
+  // Several files, or what is left of a run of several: the list of rows. One file: the dialog as it always was.
+  const several = rows.length > 1 || counts.done > 0;
+  const only = several ? null : (rows[0] ?? null);
+
+  useEffect(() => {
+    busyRef.current = running;
+    return () => {
+      busyRef.current = false;
+    };
+  }, [busyRef, running]);
+
+  // A run that ends with files not uploaded: the first of them comes into view (the list may be scrolled past it).
+  useEffect(() => {
+    if (queue.phase !== 'finished') return;
+    rowList.current
+      ?.querySelector('[data-upload-status="failed"], [data-upload-status="stopped"]')
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [queue.phase, queue.run]);
+
+  // Closing or reloading the tab while files are being sent: the browser asks first.
+  useEffect(() => {
+    if (!running) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      // Older browsers need a value to show their prompt.
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [running]);
+
+  const take = (picked: FileList | null | undefined) => {
+    const files = picked ? Array.from(picked) : [];
+    if (files.length === 0 || running) return;
+    setPickError(null);
+    setLeftOut(null);
+    // One file into an empty dialog that cannot be sent: said as before, and nothing is added.
+    const first = files[0];
+    if (files.length === 1 && rows.length === 0 && first) {
+      const refusal = browserRefusal(first);
+      if (refusal) {
+        setPickError(refusal);
+        return;
+      }
     }
-    setFile(picked);
+    const outcome = upload.add(files);
+    if (outcome.leftOut > 0) setLeftOut(leftOutText(outcome.leftOut));
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(false);
-    if (!busy) choose(event.dataTransfer.files?.[0]);
+    take(event.dataTransfer.files);
   };
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!file || busy) {
-      if (!file) setError('Choose a file to upload.');
+  const begin = () => {
+    if (running) return;
+    if (counts.sendable === 0) {
+      if (rows.length === 0) setPickError('Choose a file to upload.');
       return;
     }
-    setBusy(true);
-    setError(null);
-    const label = uploadTitle(name, file.name);
-    try {
-      const answer = await uploadResume(file, { title: label, parse });
-      onUploaded({ id: answer.resume?.id ?? null, label: answer.resume?.label ?? label, summary: answer.resume, taskId: answer.taskId });
-      onClose();
-    } catch (caught) {
-      setError(userMessage(caught, 'Upload failed. Please try again.'));
-      setBusy(false);
-    }
+    setPickError(null);
+    upload.start(only ? { mode: 'single', title: uploadTitle(name, only.file.name), parse } : { mode: 'multi' });
   };
 
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    begin();
+  };
+
+  const remove = (row: UploadRow<File>) => {
+    setPickError(null);
+    setLeftOut(null);
+    upload.remove(row.key);
+  };
+
+  const chooseLink = (text: string) => (
+    <button
+      type="button"
+      disabled={running}
+      className="font-semibold text-primary-ink hover:underline disabled:pointer-events-none disabled:opacity-50"
+      onClick={() => input.current?.click()}
+    >
+      {text}
+    </button>
+  );
+
+  const limits = `PDF, DOC, DOCX up to ${UPLOAD_MAX_MB} MB each. Up to ${MAX_FILES_PER_UPLOAD} files at a time.`;
+  let zone: ReactNode;
+  if (only) {
+    zone = (
+      <>
+        <div className="flex w-full max-w-sm items-center gap-3 rounded-control border border-border bg-surface px-3 py-2.5 text-left shadow-soft">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-primary-container text-primary-ink">
+            <FileTextIcon size={18} />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm font-semibold text-foreground">{only.file.name}</span>
+            <span className={clsx('text-[13px]', only.status.kind === 'waiting' ? 'text-amber-foreground' : 'text-muted-foreground')}>
+              {sizeText(only.file.size)}
+              {only.status.kind === 'waiting' ? ` · ${rowStatusText(only, now)}` : ''}
+            </span>
+          </span>
+          <button
+            type="button"
+            aria-label="Remove the file"
+            disabled={running}
+            onClick={() => remove(only)}
+            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-hover hover:text-foreground disabled:opacity-50"
+          >
+            <XIcon size={14} />
+          </button>
+        </div>
+        <p className="text-[13px] text-muted-foreground">Several resumes? Drag them here too, or {chooseLink('add more files')}.</p>
+      </>
+    );
+  } else if (several) {
+    zone = <p className="text-sm text-foreground">Drag more files here, or {chooseLink('choose files')}</p>;
+  } else {
+    zone = (
+      <>
+        <span className="flex size-11 items-center justify-center rounded-full bg-primary-container text-primary-ink">
+          <FileArrowUpIcon size={22} />
+        </span>
+        <p className="text-sm text-foreground">Drag files here, or {chooseLink('choose files')}</p>
+      </>
+    );
+  }
+
+  const failure = pickError ?? (only?.status.kind === 'failed' ? only.status.message : null);
+  const stopNote = several ? haltText(queue.halt) : null;
+  const statusLine = several ? queueStatusText(queue, now) : '';
+  const allStopped = rows.filter((row) => row.status.kind === 'stopped').length === counts.sendable;
+
+  let footer: ReactNode;
+  if (!several) {
+    const inFlight = counts.uploading > 0;
+    footer = (
+      <>
+        <Button
+          variant="outline"
+          disabled={inFlight}
+          onClick={() => {
+            // Waiting to try again (nothing in flight): Cancel stops that too.
+            if (running) upload.stop();
+            onClose();
+          }}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" loading={running} disabled={counts.sendable === 0}>
+          {running ? 'Uploading...' : 'Upload'}
+        </Button>
+      </>
+    );
+  } else if (running) {
+    footer = (
+      <>
+        <Button variant="outline" disabled={queue.halt !== null} onClick={upload.stop}>
+          {queue.halt ? 'Stopping...' : 'Stop'}
+        </Button>
+        <Button loading>Uploading...</Button>
+      </>
+    );
+  } else if (queue.phase === 'finished') {
+    footer = (
+      <>
+        <Button variant={counts.sendable > 0 ? 'outline' : 'primary'} onClick={onClose}>
+          Done
+        </Button>
+        {counts.sendable > 0 && (
+          <Button onClick={begin}>{allStopped ? uploadButtonText(counts.sendable) : retryButtonText(counts.sendable)}</Button>
+        )}
+      </>
+    );
+  } else {
+    footer = (
+      <>
+        <Button variant="outline" onClick={onClose}>
+          {counts.done > 0 ? 'Close' : 'Cancel'}
+        </Button>
+        <Button type="submit" disabled={counts.sendable === 0}>
+          {uploadButtonText(counts.sendable)}
+        </Button>
+      </>
+    );
+  }
+
   return (
-    <DialogContent title="Upload Resume" description="Keep a resume you already have with your documents." size="lg">
-      <form onSubmit={(event) => void submit(event)} className="mt-5 flex flex-col gap-5">
-        <Field label="File name" hint="Shown in your documents list. Leave it empty to use the file's own name." optional>
-          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex. John_Doe_Finance" maxLength={120} disabled={busy} />
-        </Field>
+    <DialogContent
+      title="Upload Resume"
+      description="Keep the resumes you already have with your documents."
+      size="lg"
+      showClose={!running}
+    >
+      <form onSubmit={submit} className="mt-5 flex min-h-0 flex-col gap-5">
+        {several ? (
+          <p className="text-sm leading-5 text-muted-foreground">Each resume is named after its file. You can rename it later.</p>
+        ) : (
+          <Field label="File name" hint="Shown in your documents list. Leave it empty to use the file's own name." optional>
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Ex. John_Doe_Finance"
+              maxLength={120}
+              disabled={running}
+            />
+          </Field>
+        )}
 
         <div
           onDragOver={(event) => {
             event.preventDefault();
-            if (!busy) setDragging(true);
+            if (!running) setDragging(true);
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
           className={clsx(
-            'flex flex-col items-center justify-center gap-2 rounded-[12px] border-2 border-dashed px-4 py-7 text-center transition-colors duration-150',
+            'flex flex-col items-center justify-center gap-2 rounded-[12px] border-2 border-dashed px-4 text-center transition-colors duration-150',
+            several ? 'py-4' : 'py-7',
             dragging ? 'border-primary bg-primary-50' : 'border-control-strong bg-surface-low',
           )}
         >
-          {file ? (
-            <div className="flex w-full max-w-sm items-center gap-3 rounded-control border border-border bg-surface px-3 py-2.5 text-left shadow-soft">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-primary-container text-primary-ink">
-                <FileTextIcon size={18} />
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-semibold text-foreground">{file.name}</span>
-                <span className="text-[13px] text-muted-foreground">{sizeText(file.size)}</span>
-              </span>
-              <button
-                type="button"
-                aria-label="Remove the file"
-                disabled={busy}
-                onClick={() => setFile(null)}
-                className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-hover hover:text-foreground"
-              >
-                <XIcon size={14} />
-              </button>
-            </div>
-          ) : (
-            <>
-              <span className="flex size-11 items-center justify-center rounded-full bg-primary-container text-primary-ink">
-                <FileArrowUpIcon size={22} />
-              </span>
-              <p className="text-sm text-foreground">
-                Drag a file here, or{' '}
-                <button type="button" className="font-semibold text-primary-ink hover:underline" onClick={() => input.current?.click()}>
-                  choose a file
-                </button>
-              </p>
-            </>
-          )}
-          <p className="text-[13px] text-muted-foreground">PDF, DOC, DOCX up to {UPLOAD_MAX_MB} MB</p>
+          {zone}
+          <p className="text-[13px] text-muted-foreground">{limits}</p>
           <input
             ref={input}
             type="file"
+            multiple
             accept={RESUME_FILE_ACCEPT}
             className="sr-only"
             tabIndex={-1}
             aria-label="Resume file"
             onChange={(event) => {
-              choose(event.target.files?.[0]);
+              take(event.target.files);
               event.target.value = '';
             }}
           />
         </div>
 
-        <div className="flex flex-col gap-1">
-          <Checkbox checked={parse} onCheckedChange={(checked) => setParse(checked)} disabled={busy} label="Make an editable copy with AI" />
-          <p className="pl-[28px] text-[13px] leading-5 text-muted-foreground">
-            An AI reads the file into a resume you can edit here, on any template. The file itself is kept as uploaded.
-          </p>
-        </div>
+        {several && (
+          <div className="flex min-h-0 flex-col gap-2">
+            {statusLine && (
+              <p role="status" className="text-[13px] leading-5 font-medium text-foreground">
+                {statusLine}
+              </p>
+            )}
+            <ul ref={rowList} aria-label="Files to upload" className="-mr-1 flex max-h-[min(18rem,40vh)] flex-col gap-2 overflow-y-auto pr-1">
+              {rows.map((row) => (
+                <FileRow key={row.key} row={row} now={now} onRemove={() => remove(row)} />
+              ))}
+            </ul>
+          </div>
+        )}
 
-        {error && <Notice tone="error">{error}</Notice>}
+        {!several && (
+          <div className="flex flex-col gap-1">
+            <Checkbox checked={parse} onCheckedChange={(checked) => setParse(checked)} disabled={running} label="Make an editable copy with AI" />
+            <p className="pl-[28px] text-[13px] leading-5 text-muted-foreground">
+              An AI reads the file into a resume you can edit here, on any template. The file itself is kept as uploaded.
+            </p>
+          </div>
+        )}
+
+        {leftOut && <Notice tone="warning">{leftOut}</Notice>}
+        {stopNote && <Notice tone="warning">{stopNote}</Notice>}
+        {failure && <Notice tone="error">{failure}</Notice>}
 
         <DialogFooter flush className="pt-1">
-          <Button variant="outline" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={busy} disabled={!file}>
-            {busy ? 'Uploading...' : 'Upload'}
-          </Button>
+          {footer}
         </DialogFooter>
       </form>
     </DialogContent>
+  );
+}
+
+/** One file of several: its name, size and status, and ✕ to take it out (not while it is sent, nor once stored). */
+function FileRow({ row, now, onRemove }: { row: UploadRow<File>; now: number; onRemove: () => void }) {
+  const { status } = row;
+  const tone =
+    status.kind === 'failed'
+      ? 'text-[#b42625]'
+      : status.kind === 'done'
+        ? 'text-[#02703c]'
+        : status.kind === 'waiting'
+          ? 'text-amber-foreground'
+          : 'text-muted-foreground';
+  let mark: ReactNode = null;
+  if (status.kind === 'uploading') mark = <Spinner size={16} className="text-primary-ink" />;
+  else if (status.kind === 'done') mark = <CheckCircleIcon size={18} weight="fill" className="text-success" />;
+  else if (status.kind === 'failed') mark = <WarningCircleIcon size={18} weight="fill" className="text-destructive" />;
+  else if (status.kind === 'waiting') mark = <ClockIcon size={18} className="text-amber-foreground" />;
+  return (
+    <li
+      data-upload-row={row.file.name}
+      data-upload-status={status.kind}
+      className="flex items-center gap-3 rounded-control border border-border bg-surface px-3 py-2"
+    >
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-primary-container text-primary-ink">
+        <FileTextIcon size={16} />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm leading-5 font-semibold text-foreground" title={row.file.name}>
+          {row.file.name}
+        </span>
+        <span className={clsx('text-[13px] leading-5 [overflow-wrap:anywhere]', tone)}>
+          {sizeText(row.file.size)} · {rowStatusText(row, now)}
+        </span>
+      </span>
+      {mark && <span className="flex shrink-0">{mark}</span>}
+      {status.kind !== 'done' && (
+        <button
+          type="button"
+          aria-label={`Remove ${row.file.name}`}
+          disabled={status.kind === 'uploading'}
+          onClick={onRemove}
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        >
+          <XIcon size={14} />
+        </button>
+      )}
+    </li>
   );
 }

@@ -27,6 +27,7 @@ import {
 } from './api';
 import { invalidateResumes, putResumeInList } from './cache';
 import { downloadFrom } from './files';
+import { ResumeAnalysisPanel } from './ResumeAnalysisPanel';
 
 function sizeText(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -36,6 +37,7 @@ function sizeText(bytes: number): string {
 /**
  * An uploaded resume opened at /resumes/[id]: it is a file, not a document this editor writes, so the page shows its
  * first page and offers to open or download it, or to make an editable copy (the AI reads it into a new resume).
+ * Under it, "What TailorIT read from this resume" (#profile): its skills, keywords and years of experience.
  */
 export function UploadedResumeView({ resume }: { resume: ResumeView }) {
   const router = useRouter();
@@ -133,6 +135,7 @@ export function UploadedResumeView({ resume }: { resume: ResumeView }) {
             )}
           </div>
         </div>
+        <ResumeAnalysisPanel resumeId={resume.id} />
       </main>
     </>
   );
