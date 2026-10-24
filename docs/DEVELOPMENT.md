@@ -50,9 +50,20 @@ background work (return a stop function), `commands` adds CLI commands. The cent
 - Times: ISO UTC strings from `deps.now()` (`nowIso(deps)`; calendar dates `todayIso(deps)`). Never `new Date()` directly
   in logic: tests freeze the clock.
 - IDs: `crypto.randomUUID()` for TEXT keys; INTEGER autoincrement for jobs/companies.
-- Schema: `migrations/0001_init.sql` is complete. Avoid new migrations; if one is unavoidable, use your package's range
-  (R1 01xx, C 02xx, T 03xx, J1 04xx, J2 05xx, I 06xx), write it once, correctly — an applied migration that changes
-  later refuses startup.
+- Schema: `migrations/0001_init.sql` holds the first release's schema. Avoid new migrations; if one is unavoidable, use
+  your package's range (R1 01xx, C 02xx, T 03xx, J1 04xx, J2 05xx, I 06xx), make it depend only on lower numbers, and
+  write it once, correctly: an applied migration that changes later refuses startup.
+- v2 added five, each in the range of the area it changes: `0002` (00xx, the foundation: rebuilds `ai_tasks` for the
+  `resume_analysis` kind), `0101` (R1's 01xx: `resume_analyses` and Claude's backlog of uploads), `0301` (T's 03xx: the
+  resume match columns) and `0401`, `0402` (J1's 04xx: the posting's facets, and the job AI backlog's attempts).
+  `applications.resume_match_due = 1` asks the resume match worker to choose an application's resume again. Triggers
+  in `0301` keep it current in the same transaction as the change that calls for it (a resume deleted, a resume
+  reading written or changed, the default resume changed, a posting's text changed, a Claude or lake job analysis
+  landed), and mark only applications TailorIT may choose for: of a job, Saved, not archived, origin `auto` or NULL.
+  Writers that create or restore Saved applications set the flag themselves (a save whose choice is not ready,
+  restoring, moving back to Saved; archiving or moving past Saved clears it): a new write path that does either must
+  too. Spell out a partial index's condition in queries (`current_status = 1 AND archived_at IS NULL`), or SQLite does
+  not use the index.
 
 ### Shared services (`deps.services`, all optional at the type level)
 - **AI** (`src/ai/index.ts`): `requireAi(deps)` → `AiService`. Register a handler for your kind in your feature's

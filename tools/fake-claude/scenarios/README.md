@@ -6,8 +6,8 @@
 
 ## Files
 
-One file per prompt kind (`resume_import`, `entry_bullets`, `job_analysis`, `cover_letter`, `template_fill`, and
-`echo` for the admin AI test). Each work package adds the files for its own kinds.
+One file per prompt kind (`resume_import`, `entry_bullets`, `job_analysis`, `cover_letter`, `template_fill`,
+`resume_analysis`, and `echo` for the admin AI test). Each work package adds the files for its own kinds.
 
 - **`<kind>.json`**: the JSON value the fake model answers with. Make it pass your prompt module's `output` schema.
   The fake wraps it as the real model is told to:
@@ -26,6 +26,26 @@ One file per prompt kind (`resume_import`, `entry_bullets`, `job_analysis`, `cov
 - No file for the kind: the answer is `{"ok":true}`.
 
 `FAKE_CLAUDE_SCENARIOS=<dir>` reads scenarios from another directory (tests use a temporary one).
+
+## The two readings
+
+`job_analysis.mjs` and `resume_analysis.mjs` read their answer off the input in the prompt, so each job and each
+upload gets its own. Like a real model now and then, both also slip in things the input never says, every time: the
+tests check that TailorIT's grounding drops them.
+
+- **`job_analysis.mjs`**: the posting's own bullets under its Requirements / Responsibilities / Nice-to-have
+  headings, and the keywords of a small list the posting names. Since v2 it also answers `softSkills` (listed phrases
+  that the requirement, duty and nice-to-have lines name), `terms` (the certifications and industries of small lists
+  the posting names) and `requiredYears` (the first "N years of ... experience" line). Made up: a requirement, a
+  keyword, a pay figure, one keyword twice, and the soft skill "Diplomacy" (a real entry of the soft-skill list that the
+  posting never names). The grounding is `apps/api/src/features/job-analysis/ai.ts`.
+- **`resume_analysis.mjs`** (v2): the resume text between the prompt's `<<<RESUME` and `RESUME>>>` markers: the name
+  (the first line, when it reads as one), the roles (the headline, then the title on or above each date range), hard
+  and soft skills, certifications and industries from small lists, each dated role, and an "N+ years of experience"
+  the text states. Made up (exported as `INVENTED`): a hard skill, a soft skill, a role, a certification, an industry
+  (plus "Gaming", a real industry, kept only when the text names it), a role with years the text does not have, and a
+  total of 37 years when the text states none. The grounding is `finishResumeAnalysis` in
+  `apps/api/src/features/resumes/analysis/prompt.ts`.
 
 ## Fault modes
 

@@ -33,7 +33,7 @@ The **Login page** and the **"new resume" logic** (create and edit a resume from
 
 **Out of scope:**
 - Simplify's Matches, Services, Refer, Partners, Question Response, Simplify+ upsells, referrals and dark mode.
-- free_tailor's profiles (persons), subscriptions, credits, reporters, Google Sheets, bid assistant, calendar and orders.
+- free_tailor's profiles (persons), subscriptions, credits, reporters, bid assistant, calendar and orders. Its Google Sheets work is in scope only as a one-time, read-only admin import of one sheet tab at a time (Admin › Import jobs › Google Sheet, added in v2): TailorIT never writes to a sheet, schedules one or keeps one in sync.
 
 ## Issues to know before building (you asked to be told)
 
@@ -44,9 +44,9 @@ The **Login page** and the **"new resume" logic** (create and edit a resume from
      - Calls stop the moment the CLI reports API-key billing.
      - The provider sits behind an interface, so an API-key provider can be added later.
 2. **Job-analysis volume.** A daily ATS poll can add thousands of postings, but the CLI handles roughly 100–180 analyses an hour on its background slot.
-   - Every job gets a **free deterministic analysis** at ingest (requirements bullets and keywords from the skills vocabulary).
-   - **AI analysis runs lazily**, the first time anyone opens the job. Warm-up is off by default.
-   - `AI_MODEL_JOB_ANALYSIS` can point at a cheaper model.
+   - Every job gets a **free deterministic analysis** at ingest (requirements bullets and keywords from the skills vocabulary; since v2 also its soft skills, certifications, industries and required years).
+   - **Then Claude analyses every added job once** (v2; `AI_JOB_ANALYSIS=ingest`, the default), through a durable background queue: newest first, jobs from before the upgrade last. A large daily intake leaves a backlog of older jobs that drains as the slot allows. Opening or saving a job never calls Claude.
+   - `AI_JOB_ANALYSIS_PER_HOUR` caps it; `saved` (saved jobs only), `lazy` (the first release's policy: on the first view) and `off` do less. `AI_MODEL_JOB_ANALYSIS` can point at a cheaper model.
 3. **Simplify's font, "Circular Std", is commercial** (Lineto). **Figtree** (OFL) ships instead. A licensed Circular is a one-line swap.
 4. **Brand and trade dress.**
    - We reproduce Simplify's layout, colours and generic UI copy.
@@ -126,9 +126,10 @@ TailorIT/
 - **`.env` groups:**
   - Core: `APP_ORIGIN=http://localhost:3100`, `WEB_PORT=3100`, `API_PORT=4100`, `API_INTERNAL_URL`, `DATA_DIR`.
   - Auth: `SESSION_TTL_DAYS`, `ADMIN_EMAILS`, `GOOGLE_CLIENT_ID`, `SMTP_*`, `CONTACT_EMAIL`, `AUTH_DEV_LOG_CODES`, `AUTH_DEV_FIXED_CODE`.
-  - AI: `AI_CLI_BIN`, `AI_CLI_MODEL=claude-sonnet-5-5`, `AI_CLI_EFFORT=low`, `AI_CLI_CONCURRENCY=4`, `AI_CLI_BACKGROUND_SLOTS=1`, `AI_CLI_TIMEOUT_MS=300000`, `AI_CLI_FIRST_EVENT_MS=30000`, `AI_MODEL_{RESUME_IMPORT,BULLETS,JOB_ANALYSIS,COVER_LETTER,TEMPLATE_FILL}`, `AI_EFFORT_<FEATURE>`, `AI_JOB_ANALYSIS=lazy`, `AI_JOB_ANALYSIS_WARMUP_PER_HOUR=0`.
+  - AI: `AI_CLI_BIN`, `AI_CLI_MODEL=claude-sonnet-5-5`, `AI_CLI_EFFORT=low`, `AI_CLI_CONCURRENCY=4`, `AI_CLI_BACKGROUND_SLOTS=1`, `AI_CLI_TIMEOUT_MS=300000`, `AI_CLI_FIRST_EVENT_MS=30000`, `AI_MODEL_{RESUME_IMPORT,BULLETS,JOB_ANALYSIS,COVER_LETTER,TEMPLATE_FILL,RESUME_ANALYSIS}`, `AI_EFFORT_<FEATURE>`.
+  - Background AI (v2): `AI_JOB_ANALYSIS=ingest` (`ingest` every added job once, `saved` saved jobs only, `lazy` on the first view, `off` rules only), `AI_JOB_ANALYSIS_PER_HOUR=0` (0 = no cap), `AI_JOB_ANALYSIS_WARMUP_PER_HOUR=0` (`lazy` only), `AI_RESUME_ANALYSIS=auto` (`auto` or `off`: Claude's reading of uploads), `AI_RESUME_ANALYSIS_PER_HOUR=20`.
   - Render: `CHROME_PATH`, `PDF_RENDER_TIMEOUT_MS`, `PDF_MAX_CONCURRENCY=2`, `UPLOAD_MAX_MB=5`.
-  - Ingest: `INGEST_ENABLED`, `INGEST_DAILY_AT=03:30`, `INGEST_USER_AGENT`, `FT_LAKE_DB_PATH`, `FT_LAKE_MAX_AGE_DAYS=45`.
+  - Ingest: `INGEST_ENABLED`, `INGEST_DAILY_AT=03:30`, `INGEST_USER_AGENT`, `FT_LAKE_DB_PATH`, `FT_LAKE_MAX_AGE_DAYS=45`, `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` (v2; blank = `service-account-key.json` in the repository root, git-ignored).
   - Dev: `SEED_DEMO`.
 
 **Libraries** (exact versions confirmed at install)
@@ -244,7 +245,7 @@ TailorIT/
 
 | Tab | Views | Toolbar | Row/card content | Menu |
 |---|---|---|---|---|
-| **Resumes** (free_tailor's views, restyled) | **Thumbnail grid**: `repeat(auto-fill,minmax(13.75rem,1fr))`, 2-up at 640 px or narrower, a dashed "New resume" tile first. **List**: free_tailor columns **Resume (+badges) \| Name on resume \| Template \| Edited \| ⋮**, plus checkboxes for bulk delete | Search ("1 of 3 resumes match."), source filter **All / Created / Uploaded**, **Upload** (PDF/DOC/DOCX ≤5 MB, optional "Make an editable copy" via AI import), view toggle | First-page thumbnail; label (custom title, else free_tailor's label rule); "Edited 6 hours ago · {template}"; badges ★ **Default**, **Uploaded**, **PDF/DOCX** | Edit (View for uploads), Rename ("Change resume name": Keep it / Change), Duplicate, Set as default, Download PDF, Download Word, Download JSON, Make editable copy (uploads), Delete (styled confirm) |
+| **Resumes** (free_tailor's views, restyled) | **Thumbnail grid**: `repeat(auto-fill,minmax(13.75rem,1fr))`, 2-up at 640 px or narrower, a dashed "New resume" tile first. **List**: free_tailor columns **Resume (+badges) \| Name on resume \| Template \| Edited \| ⋮**, plus checkboxes for bulk delete | Search ("1 of 3 resumes match."), source filter **All / Created / Uploaded**, **Upload** (PDF/DOC/DOCX ≤5 MB each, up to 50 files at once; for a single file, an optional "Make an editable copy with AI", unticked), view toggle | First-page thumbnail; label (custom title, else free_tailor's label rule); "Edited 6 hours ago · {template}"; badges ★ **Default**, **Uploaded**, **PDF/DOCX**; the profile line TailorIT read ("8 yrs · React, TypeScript, Node.js +9") | Edit (View for uploads), Rename ("Change resume name": Keep it / Change), Duplicate, Set as default, Download PDF, Download Word, Download JSON, Skills and details and Make editable copy (uploads), Delete (styled confirm) |
 | **Cover Letters** (Simplify style + thumbnails) | **Table** (Simplify): checkbox, Name + badge **Generated/Uploaded**, Created, Last Edited ("-" until a content edit), Actions = ✎ Edit + More ⌄. **Thumbnail grid**: letter first-page cards | "{n} selected" (bulk Delete: "Delete Cover Letters" / "Delete Bulk"), **Upload** (.pdf/.docx → text → editor), Search | — | View (preview dialog), Rename, Download PDF, Download Word, Delete |
 | **Templates** (Simplify, list only) | Table: Name + **System Default** badge + an 80-character text preview, Created, Last Edited, Actions | "{n} selected" (system rows can't be selected), Upload, Search | — | Duplicate ("{name} (Copy)"), Delete (disabled for system templates) |
 
@@ -391,9 +392,10 @@ Archived is the `archived_at` field, not a status.
   - **Filters**: Applied from/until (calendar), Job type, Status (picking a status switches to List).
   - **View options**: Show only favorites, Visible columns (N), Sort by (Tracked Date / Created Date / Title, ascending or descending).
   - **Actions**:
-    - Manage jobs: select mode with bulk Archive / Unarchive / Delete / Update Status.
+    - Manage jobs: select mode with bulk Archive / Unarchive / Delete / Update Status, and (v2) Build resumes for the selection.
     - Import CSV wizard: file → header row → map columns (Position Title*, Company*; optional Location, Job Type, Status, Notes, Job Posting Link, Application Date; Custom value) → preview → map status values → import.
     - Export CSV.
+    - Build resumes (zip) (v2): every active Saved application's resume, as `{Company}/{Role}/{First_Last}_resume.{ext}`.
     - Archive all applications.
 - Active-filter chips with "Clear all filters".
 
@@ -424,14 +426,14 @@ Archived is the `archived_at` field, not a status.
 - Empty: "No applications to chart yet" / "Track an application to see its path from applied to offer."
 
 **Add Application** is a right-side Sheet (`max-w-3xl`) headed "Add Application":
-- Fields: Position Title*, Company* (creatable), Location, Job Type* (Internship/Full-Time/Part-Time), Job Status (default Applied), Resume used (default resume).
+- Fields: Position Title*, Company* (creatable), Location, Job Type* (Internship/Full-Time/Part-Time), Job Status (default Applied), Resume used (empty until the person picks one; since v2 the form sends a resume, or None, only when the person picks it, and that pick is theirs: "Chosen by you").
 - Buttons: Cancel / Add. Saving opens the detail view in edit mode.
 
 **Detail** is a right-side Sheet (`max-w-7xl`):
 - Header: logo, title with a pencil, company. Buttons: Apply (when Saved and there is a URL), Favorite, Archive, Delete. The delete confirm uses Simplify's copy.
 - Tabs:
   - **Overview**: location, salary range + period, job type, "View Job Posting ↗", description. The edit form has currency, min, max, pay period, URL and a rich-text description.
-  - **Documents**: link a resume or cover letter; **Generate cover letter** goes to `/cover-letter/new?applicationId=`.
+  - **Documents**: link a resume or cover letter; **Generate cover letter** goes to `/cover-letter/new?applicationId=`. Since v2 a saved job's resume is TailorIT's best match (badge **Best match**) until the person picks one (**Chosen by you**); the Change picker ranks the resumes by fit with the Jobs card's numbers ("9 of 12 keywords · 75%"), and **Let TailorIT choose** hands the choice back.
   - **Resume Score**: keyword match against the description.
   - **Questions**: "Application Questions" with Add Question.
   - **Email**: static follow-up templates (P2).
@@ -458,7 +460,7 @@ Archived is the `archived_at` field, not a status.
 A filter only appears when the data has values for it.
 
 **List panel.**
-- Header: "Found N jobs"; sort **Most relevant / Recently posted / Recently updated / Highest salary**.
+- Header: "Found N jobs"; sort **Most relevant / Recently posted / Recently updated / Highest salary**; and (v2) **Save all**: after a "Save N jobs?" confirm it saves up to 100 of the matching jobs you haven't saved, in the order the list shows them, with Undo.
 - 21 jobs per page with infinite scroll. The first job is auto-selected and the URL keeps the state.
 - Card: logo, title, company, "City, ST, Country (+N more) · Hybrid|In Person|Remote", salary ("$120k - $150k/yr"), relative date, bookmark. The selected card is `#ccf6ff`.
 - Empty: "No matching jobs found".
@@ -470,9 +472,9 @@ A filter only appears when the data has values for it.
   - "Posted on {date}" when inactive or posted within 7 days;
   - otherwise "Updated on {date}" when updated within 7 days;
   - otherwise "Confirmed live in the last 24 hours".
-- **Facts grid**: salary ("No salary listed"), experience level, location (+N), work arrangement, category / subcategory.
+- **Facts grid**: salary ("No salary listed"), experience level, the experience the posting asks for ("Experience: 7+ years", v2), location (+N), work arrangement (hidden when unknown), category / subcategory.
   - The experience level carries a **match icon**: a green check "Your experience level matches…" against your Settings preferences, or amber info "This job asks for… / You're looking for…", or nothing when no preferences are set.
-- **About the job**: **Summary | Full posting**. Summary shows Requirements / Responsibilities / Desired Qualifications; Full posting shows sanitized HTML.
+- **About the job**: **Summary | Full posting**. Summary shows Requirements / Responsibilities / Desired Qualifications, then (v2) **Skills and keywords**: the posting's soft skills, certifications and industries; Full posting shows sanitized HTML.
 - **Company** section: about plus whatever stats exist.
 
 **Job analysis card** (right rail, **"Improve your resume"**):
@@ -480,11 +482,12 @@ A filter only appears when the data has values for it.
 - **"X out of Y required keywords found"**.
 - Chips: matched first (check-circle, tint), then missing (plain). They collapse to 2 rows, with "Show N more" / "Show less".
 - With no default resume: "Add a resume" / "Upload or create a resume and we'll score it against this job's keywords.".
+- Under the score (v2): "Scored with {resume}", plus "(linked to this saved job)" when a tracked job scores its linked resume.
 - **No Tailor button.**
 
 **Matching** (pure, in shared; free_tailor `termPattern` semantics):
 - Job keywords are `high` + `low` groups of alternative spellings.
-- The resume evidence text comes from the default resume, or from the extracted text of an uploaded file.
+- The resume scored is the default one (since v2, for a tracked job: the resume linked to its application, else the default one). Its evidence text is the built resume's text, or the extracted text of an uploaded file.
 - A group is matched when any spelling hits under the boundary rules (handles C++, Node.js, CI/CD); terms of two characters or fewer are case-sensitive.
 
 **Saved and applied state** comes from the tracker:
@@ -500,6 +503,7 @@ A filter only appears when the data has values for it.
 | lever | `api.lever.co/v0/postings/{site}?mode=json&skip&limit=100`; EU host `api.eu.lever.co` (verified: text, categories{commitment, location, team, allLocations}, workplaceType, country, createdAt, hostedUrl, applyUrl, description, `lists[]`, additional) | `lists[]` sections become Requirements/Responsibilities with no AI needed. Salary when present. |
 | ashby | `api.ashbyhq.com/posting-api/job-board/{name}?includeCompensation=true` (verified: id, title, department, team, employmentType, location, secondaryLocations, publishedAt, isListed, isRemote, workplaceType, address, jobUrl, applyUrl, descriptionHtml, compensation.compensationTiers[].components) | Skip `isListed=false`. Salary from the Salary component (min, max, currency, interval). |
 | csv/json | Admin upload → preview → column mapping | Auto-detects free_tailor's sheet headers (Date, NO(DATE), Company, Job Title, Job Link, Job Description) |
+| csv, from a Google Sheet (v2) | One tab of a Google Sheet, read once by an admin through a service account with `spreadsheets.readonly`; nothing is written to Google and nothing is scheduled | The tab is stored as a CSV copy (a `csv` source with `config.sheet`) and mapped as a CSV file is; free_tailor's day tabs ("10/22/2026") can give every row the tab's date |
 | ft_lake | better-sqlite3 `{readonly, fileMustExist}` + `query_only`, short read transaction | `job_lake` LEFT JOIN `job_analyses`:<br>• `job_type` → arrangement<br>• `job_field_id` → category (via `taxonomy/ft-job-fields.json`)<br>• seniority → levels<br>• salary as-is<br>• location derived from the analysis filter's region/state<br>• the stored analysis becomes `source='ft_lake'` (mustInclude → high keywords) |
 | seed | `static/seed/*.json` | About 15 fictional companies and about 120 postings with clear sections |
 
@@ -516,7 +520,7 @@ A filter only appears when the data has values for it.
 - croner runs it daily; there is also a manual "Run now".
 - Only a **successful, complete** fetch marks missing postings: `missing_since` is set, and a job whose links are all missing becomes inactive. A failed fetch deactivates nothing.
 
-**Admin** (`/settings/admin/sources`): sources (add a board token or site/name, the lake path), Run now, run history and errors, a jobs CSV/JSON import, reports, and AI health.
+**Admin** (`/settings/admin/sources`): sources (add a board token or site/name, the lake path), Run now, run history and errors, a jobs CSV/JSON import (since v2 also one tab of a Google Sheet), reports, and AI health.
 
 ### 9. AI layer (`apps/api/src/ai`)
 
@@ -547,15 +551,24 @@ A filter only appears when the data has values for it.
 |---|---|
 | `resume_import` | A Resume document. Rules: "copy, never infer". Text from pdf-parse/mammoth, ≤60k characters; under 50 characters is refused. |
 | `entry_bullets` | `{bullets: 1–8 × ≤300 chars}`, Write or Improve; banned words; no em dashes |
-| `job_analysis` | `{summary{requirements[],responsibilities[],desiredQualifications[]}, keywords{high,low:[{term,synonyms[]}]}, experienceLevels[], leadership, minYears, category, workArrangement, employmentType, salary, sponsorsH1b, requiresClearance, degree}`. Only keywords present in the posting are kept; capped at 15 + 15. |
+| `job_analysis` | `{summary{requirements[],responsibilities[],desiredQualifications[]}, keywords{high,low:[{term,synonyms[]}]}, experienceLevels[], leadership, minYears, category, workArrangement, employmentType, salary, sponsorsH1b, requiresClearance, degree}`. Only keywords present in the posting are kept; capped at 15 + 15. v2 adds `softSkills[]`, `terms{certifications[],domains[]}` and `requiredYears` (same prompt version 1), each kept only when the posting states it. |
 | `cover_letter` | `{paragraphs: 3–4}` from resume evidence, job (including the description), template prompt and custom prompt |
 | `template_fill` | `{values: Record<VAR,string>}` for the AI variables in the template |
+| `resume_analysis` (v2) | `{personName, roles[], hardSkills[], softSkills[], certifications[], industries[], experience[{title,company,startDate,endDate}], totalYearsExperience}` from an upload's extracted text only. Rules: "copy, never infer", the headline first, education left out. Every item is grounded in the text (what it does not say is dropped); hard skills take the skill library's spelling, industries become INDUSTRIES ids. |
 
-**Job-analysis policy.**
-1. **At ingest, always deterministic**: headings and lists, the vocabulary scan, levels and category rules.
-2. **AI lazily, on the first detail view**, de-duplicated by content hash. The UI shows the deterministic version with a quiet "Refining…" and swaps when ready.
-3. **Optional throttled warm-up**, off by default.
-4. **free_tailor lake analyses are reused.**
+**Job-analysis policy** (v2; the first release analysed a job lazily, on its first detail view, which `AI_JOB_ANALYSIS=lazy` keeps available).
+1. **At ingest, always deterministic**: headings and lists, the vocabulary scan, levels and category rules, and the facets: soft skills, certifications, industries and the years the requirements ask for.
+2. **Then Claude, once per added job** (`AI_JOB_ANALYSIS=ingest`, the default), through the durable add-time backlog (`features/job-analysis/backlog.ts`): one system-owned task at a time on the background slot, newest `first_seen_at` first, jobs first seen before the release (`app_settings` `job_ai_backlog_since`) after every newer one, each posting text once (jobs that share a text share its analysis). Failures back off in `job_ai_attempts`. The UI shows the best analysis so far, with a quiet "Refining…" while the backlog reads that job.
+3. **Opening, saving or "Save all" never calls Claude**, queues an analysis or moves a job up the queue. `saved` runs the same backlog over saved jobs only; `lazy` queues on the first view (at most 20 new analyses per account per hour, plus the optional warm-up `AI_JOB_ANALYSIS_WARMUP_PER_HOUR`); `off` keeps the deterministic analysis only.
+4. **Grounded**: Claude's keywords, bullets, soft skills, certifications, industries and years count only when the posting states them; its work arrangement only when the posting's own words say the same, else it stays empty. `applyAiFacts` puts Claude's facts back after every ingest write, so a rewrite of the same text keeps them.
+5. **free_tailor lake analyses are reused** for display, but do not count as Claude's: those jobs are analysed again.
+
+**Background AI work** (v2, `src/ai/background.ts`). The job backlog and the resume backlog (`resume_analysis`: Claude reads each upload once, one task in flight server-wide, owned by the uploader) share these rules:
+- **Background gate**: no new task while any AI hold is active, or while the CLI's last usage reading is not plain "allowed" (`allowed_warning`: the window is nearly used up), until the window resets (30 minutes when the reading gives no reset time). So background work never trips the usage pause that would turn away people's own AI requests.
+- **Hourly caps**: `AI_RESUME_ANALYSIS_PER_HOUR` (default 20) and `AI_JOB_ANALYSIS_PER_HOUR` (default 0, no cap), counted in memory.
+- **Order**: resume readings go first; the job backlog waits while one is queued, running or due.
+- **Attempts**: only Claude failing on the input (`ai_failed`) counts, with waits of 30 and 60 minutes, then a day after the third; an outage (`ai_unavailable`) only waits for it to pass; a restart or a cancel counts nothing.
+- The task handlers are always registered; only the workers switch off (`AI_ENABLED=false`, `AI_CLI_BACKGROUND_SLOTS=0`, `AI_JOB_ANALYSIS=lazy` or `off`, `AI_RESUME_ANALYSIS=off`). No worker runs before its feature's `start()`.
 
 ## Data model (SQLite; full DDL in Appendix A)
 
@@ -566,6 +579,8 @@ A filter only appears when the data has values for it.
 | Jobs | `companies`, `jobs` (+ `jobs_fts` FTS5, `job_locations`), `job_analyses` (deterministic/ft_lake/ai), `job_sources`, `ingest_runs`, `job_source_links`, `user_job_state`, `user_hidden_companies`, `job_reports`, `saved_searches` |
 | Tracker | `applications` (denormalized `current_status`, `favorite`, `archived_at`, `resume_id`, `cover_letter_id`, `notes_html`, `tracked_on`), `application_status_events` (one per status, `occurred_on`), `application_questions` |
 | AI and system | `ai_tasks`, `app_settings`, `schema_migrations` |
+
+v2 adds `resume_analyses`, `resume_analysis_backlog` and `job_ai_attempts`, three `applications` columns (`resume_origin`, `resume_matched_at`, `resume_match_due`) and three `job_analyses` columns (`soft_skills`, `terms`, `required_years`), and allows the `resume_analysis` task kind: migrations `0002` to `0402`, listed under "As built (v2, 2026-10-24)".
 
 ## API surface (`/api`; errors `{error:{code,message,fields?,retryAfterSeconds?,requestId}}`; lists `{items,total?,nextCursor?}`)
 
@@ -580,6 +595,8 @@ A filter only appears when the data has values for it.
 | Tracker | `GET /applications/board`, `GET /applications`, `GET /applications/counts`<br>`POST /applications` (accepts `jobId`)<br>`GET/PATCH/DELETE /applications/:id`<br>`PUT /applications/:id/status`, `PUT/DELETE /applications/:id/events/:status`<br>`POST /applications/:id/{archive,restore}`, `POST /applications/bulk`, `POST /applications/archive-all`<br>`GET /applications/export.csv`, `POST /applications/import`<br>`GET /applications/sankey`, `GET /applications/insights`<br>CRUD `/applications/:id/questions` |
 | AI, files | `GET/DELETE /ai/tasks/:id`<br>`GET /files/:id`, `GET /files/:id/thumbnail` |
 | Admin | `/admin/sources` CRUD + `POST /admin/sources/:id/run`, `GET /admin/runs`<br>`POST /admin/import/jobs/preview`, `POST /admin/import/jobs`<br>`POST /admin/sources/ft-lake/test`<br>`GET/PATCH /admin/reports`<br>`GET /admin/ai/health`, `POST /admin/ai/test`<br>`GET/PATCH /admin/users` |
+
+The endpoints v2 added (resume analysis, resume matches, Save all, the resume ZIP, the Google Sheet import) are listed under "As built (v2, 2026-10-24)".
 
 ## Execution plan (ultracode: one workflow per phase, adversarial review per package)
 
@@ -631,7 +648,7 @@ A filter only appears when the data has values for it.
   - Answers `--version` and `auth status` and asserts the argv contract.
   - Emits realistic stream-json, choosing a canned scenario from a `[feature:x]` tag.
   - Fault modes: `stall`, `auth`, `ratelimit`, `badjson-once`, `apikey`.
-- **Real CLI smoke test** (your Max seat, `claude-sonnet-5-5`): one real call each for resume import, bullets, job analysis, a cover letter, and a template fill.
+- **Real CLI smoke test** (your Max seat, `claude-sonnet-5-5`): one real call each for resume import, bullets, job analysis, a cover letter, and a template fill. v2 adds Claude's reading of an uploaded resume and, for the job analysis (now driven by the add-time backlog), checks that its soft skills, terms and years are the posting's own (`apps/api/test/ai-real-features.test.ts`, run with `TAILORIT_REAL_CLAUDE=1`).
 - **Visual harness** (`npm run shots`):
   - Playwright at **1567×889**, seeded demo data, a frozen clock (`SEED_NOW=2026-10-22T12:00Z`).
   - Captures views matching screenshots 1–7 and writes side-by-side composites with `e2e/reference`.
@@ -835,7 +852,10 @@ Everything not listed here was built as planned.
   levels, job types, work arrangements, minimum salary). The preferences' `categories` and `locations` columns exist
   in the API but have no UI.
 - Vitest runs as projects in `vitest.config.ts` (shared, render, api, web) instead of a `vitest.workspace.ts`. No
-  package needed a migration of its own: the schema is still `0001_init.sql` alone.
+  package of the first release needed a migration of its own: its schema is `0001_init.sql` alone. v2 added five,
+  applied in this order: `0002_ai_resume_analysis_kind`, `0101_resume_analyses`, `0301_application_resume_match` (the
+  `resume_match_due` flag and the triggers that keep it current), `0401_job_analysis_facets` and `0402_job_ai_attempts`
+  (see "As built (v2, 2026-10-24)" › Data).
 - Settings the plan did not list: `LOG_LEVEL`, `AI_ENABLED`, `AI_CLI_FALLBACK_MODEL`, `INGEST_TIMEZONE`,
   `INGEST_HTTP_TIMEOUT_MS`. Next's `/api` proxy timeout is 120 s (`experimental.proxyTimeout`).
 
@@ -920,3 +940,187 @@ Everything not listed here was built as planned.
 - Phones (390 px): Jobs opens a job's detail with a back arrow; the tracker detail has a Status tab; the editor bars
   show icon buttons below 768 px. A cooldown answer on the sign-in page goes to the code step; unknown pages show a
   TailorIT "Page not found".
+
+---
+
+## As built (v2, 2026-10-24)
+
+What v2 built (Save all; a best-matched resume for each saved job, with the profile TailorIT reads from every resume
+and the resume ZIP; the Google Sheet import), as its commits (`1a02085` to `097913b`, work packages WP1 to WP12) and
+the code show. The sections above are updated where v2 changed the design (marked "v2"); this section holds the
+details, every new endpoint, and what was built differently from the v2 plan.
+
+**Rules that hold across v2**
+- **Uploaded resumes are never changed.** An upload's bytes, `file_id`, `extracted_text` and `updated_at` stay as
+  stored; what TailorIT reads from it lives beside it (`resume_analyses`); the ZIP copies it byte for byte. Only the
+  person's Delete or Bulk delete removes an upload. An editable copy that cannot start (unreadable text, AI busy or
+  off, no room) keeps the upload and answers 201 with `copyError`. A file the reader refuses (damaged, too large
+  unpacked) is still not kept: no resume exists yet at that point.
+- **Choosing a resume is local.** Saving a job, Save all, opening a job, the picker and the ZIP never call Claude or
+  queue AI work; the choice is made from the stored readings.
+- **At most 500 resumes per account** (`MAX_RESUMES_PER_ACCOUNT`, built and uploaded together): one more is refused
+  with 409 before anything is stored.
+- **"Keywords"** of a resume or a job are its roles (resumes only, the headline first), certifications and industries
+  (INDUSTRIES ids): the screening terms that are neither tools nor traits.
+
+**Data** (each migration depends only on lower numbers; a fresh database applies `0001`, `0002`, `0101`, `0301`,
+`0401`, `0402`)
+- `0002_ai_resume_analysis_kind`: rebuilds `ai_tasks` to allow the `resume_analysis` kind (SQLite cannot change a
+  CHECK in place). Rows are copied in `rowid` order, those of accounts that no longer exist are dropped, and
+  `idx_ai_queue`, `idx_ai_user` and `idx_ai_dedupe` are recreated.
+- `0101_resume_analyses`: `resume_analyses`, one `deterministic` row per resume plus an `ai` row for uploads (hard and
+  soft skills, keywords `{roles, certifications, domains}`, experience month ranges as written, `years_stated` and its
+  basis, `person_name`), keyed `(resume_id, source)` and indexed by `(content_hash, source, version)` so that a reading
+  of the same text is copied; and `resume_analysis_backlog`, Claude's queue of uploads (`state`, `attempts`,
+  `version`, `next_attempt_at`, `last_error`). A reading is current when its version is `RESUME_ANALYSIS_VERSION`
+  (which includes a stamp of `skills.json`) and its content hash is that of what it read, never the custom title: a
+  rename reads nothing again.
+- `0301_application_resume_match`: `applications.resume_origin` (`auto`: TailorIT's best match; `user`: the person's
+  pick, or None; NULL: not chosen yet), `resume_matched_at` and `resume_match_due`. Links made before v2 become
+  `user`; Saved applications of a job with no resume are marked due. Partial indexes `idx_app_saved_job`,
+  `idx_app_resume` and `idx_app_match_due`. **Triggers** set `resume_match_due` in the same transaction as the change
+  that calls for it: a resume deleted (its choices are released first), a resume reading inserted or changed, the
+  default resume changed, a posting's text changed, a Claude or lake analysis of the posting landed. They mark only
+  applications TailorIT may choose for: of a job, Saved, not archived, origin `auto` or NULL. The writers that create
+  or restore Saved applications set the flag themselves.
+- `0401_job_analysis_facets`: `job_analyses.soft_skills`, `terms` (`{certifications, domains}`) and `required_years`
+  (0 to 30); NULL on older rows until the posting is next ingested or read.
+- `0402_job_ai_attempts`: the job AI backlog's memory of failures and backoff, per posting text and prompt version (no
+  foreign key, like `job_analyses`).
+- `job_sources` is not rebuilt: a sheet import is a `csv` source with `config.sheet`. Resume ZIP builds are kept in
+  memory, their files under `<DATA_DIR>/resume-zips/`.
+
+**Resumes (WP2, WP3, WP9)**
+- Every write path (create, upload, JSON import, edit, both duplicates, the AI editable copy, the demo seed) stores
+  the rules' reading at once, best effort: a reader that fails never fails the write, and a backfill worker reads what
+  is missing. Read paths compute at most 5 missing readings per request.
+- The rules' reading: hard skills (the resume's own lists, then vocabulary hits), soft skills (the 1,247-entry list,
+  case ignored; a skill that is also a hard one stays hard; everyday words count only as whole list items), roles (the
+  headline first), certifications (a closed list; ambiguous acronyms need context), industries, and the years from the
+  Experience section's date ranges (overlaps merged, education left out; a built resume's typed total wins).
+- Claude refines each **upload** once (`resume_analysis`; built resumes are structured already): one task in flight
+  server-wide, owned by the uploader, on the background slot, the account served least recently first, then the oldest
+  upload. Three failed readings (30 and 60 minutes apart) mark it `failed`, tried again after a day. A duplicate or a
+  re-upload of the same text in the same account gets the reading copied instead of asking again.
+- Upload dialog: up to 50 files (PDF or Word, 5 MB each), two at a time. The queue pauses while the server is busy
+  (429, `Retry-After`) or unreachable, and reads the list again before sending again, so no resume is made twice.
+  Several files are each named after their file and never get an AI copy; one file works as before, with "Make an
+  editable copy with AI" unticked.
+- The list and grid show a profile line ("8 yrs · React, TypeScript, Node.js +9"; no new column) and search matches
+  main skills. An upload's menu has **Skills and details**: the file page's "What TailorIT read from this resume"
+  (experience and its basis, main and soft skills, roles, certifications, industries), with "Reading it with AI…" only
+  while its task runs and "Waiting for the AI reading" while it is in line. Polling backs off and stops after 10
+  minutes.
+
+**Jobs (WP4, WP7, WP8)**
+- Every added job gets the rules' analysis at ingest, now with soft skills, terms and the years its requirements ask
+  for (the general-experience mention first: "7+ years of backend work, including 3+ years leading teams" is 7), then
+  Claude's, once, through the add-time backlog (§9). The backlog keeps one task of its own in flight and at most 3 job
+  analyses pending in all; it rests 5 minutes after Claude was unavailable and 30 minutes after 5 failures in a row,
+  and logs when it pauses or reaches its cap.
+- The work arrangement is read strictly from descriptions: "remote monitoring", "hybrid cloud" and "on-site
+  interviews" set nothing; hybrid is read first; "not remote" counts as on-site only when the posting also says
+  on-site; remote and on-site statements together give none. The location text and structured fields still come
+  first, and an unsure arrangement stays empty. `NORMALIZE_VERSION` 2 has each scheduled source rewrite its jobs once,
+  on its next run.
+- **Save all** (the list header): the preview counts the matches for the "Save N jobs?" confirm, and the run saves at
+  most 100 of the jobs you haven't saved, in the order the list shows them, reading the filters exactly as the list
+  does. A job counts as tracked when its application is active, or Applied or later even when archived: those keep
+  their status. An application un-saved earlier (archived while only Saved) comes back. Writes go in chunks of 25 jobs
+  (or 200 ms of preparing), each committed on its own; resume choices get 2 s per click, and jobs past that are saved
+  due and linked by the match worker within seconds. One run per account at a time (409), 20 runs per account per
+  hour (429). Undo archives exactly what the click saved (`POST /applications/bulk` with `onlySaved`).
+- The job page shows "Experience: N+ years", **Skills and keywords** and "Scored with {resume}" (§7).
+
+**Job Tracker (WP5, WP6, WP10, WP11)**
+- **Saving a job links its best-matched resume**: `POST /applications {jobId, status: 1}` with no `resumeId` key
+  links the best match (origin `auto`), chosen before the write within 300 ms; a choice not ready by then is saved due.
+  `resumeId` null or `''` means None and, like an explicit resume or a `PATCH resumeId`, is the person's choice
+  (`user`), never changed automatically. Applied and later statuses never get an automatic resume, and a choice stops
+  changing once the application moves past Saved.
+- **How the best match is chosen**: the account's resumes are pre-ranked by the stored hard skills the job names, and
+  the top 40 (plus the default and the linked resume) are scored exactly, the hard skills with the Jobs card's own
+  matcher. The fit weighs hard skills 0.50, the title 0.20, years 0.15, soft skills 0.10 and keywords 0.05, over the
+  parts the job makes applicable; ties go to the default resume, then precision, then the newer last edit, then the
+  id. An unedited AI copy of a live upload never wins over the upload. The fit only orders: the numbers people see are
+  the card's.
+- One match worker drains `resume_match_due` per account in cooperative 15 ms slices (with 500 Saved applications and
+  50 uploads of 60k characters the event loop never blocks for 100 ms). Every automatic write goes through one guard
+  (Saved, not archived, still that job, origin `auto` or NULL, a resume of the same account) and never touches
+  `updated_at`.
+- Documents tab: **Best match** or **Chosen by you**, "Matching..." while a choice is pending, the ranked Change picker
+  ("{matched} of {total} keywords · {percentage}%", the top one tagged **Best match** unless it fits not at all), and
+  **Let TailorIT choose** (an active Saved application of a job only; 409 otherwise).
+- **Build resumes (zip)**: Options › Actions builds every active Saved application (the first 500 in tracked order; the
+  rest are counted as left out); the Manage jobs bar builds the selection. The build runs in the background: the page
+  polls it, then downloads `TailorIT_Resumes_<date>.zip` with a Content-Length. The selection's pending choices are
+  made first; then each application takes its linked resume, else the default one, counted as `usedDefault`.
+  - **Naming**: `{Company}/{Role}/{First_Last}_resume.{ext}`. First_Last comes from the name on the resume (a built
+    resume's name, an upload's `person_name`), then the account's name, else the file is `resume.{ext}`; titles and
+    suffixes ("Dr.", "Jr.", "PhD") are set aside and accents dropped from Latin letters. Folder and file names are
+    Windows-safe (reserved names, illegal characters, a length cap, never `.` or `..`), and a company and role seen
+    again become "Role (2)", "Role (3)", compared without case. `SKIPPED.txt` at the root lists what got no resume,
+    what got the default one, and what was left out.
+  - **Contents**: uploads are copied byte for byte with their own extension, never converted. Each distinct built
+    resume is rendered once, as a PDF through the shared Chrome pool (`PDF_MAX_CONCURRENCY - 1` at a time, at least
+    one), or as a Word file when Chrome is missing, busy or failing, or the deadline is near. Entries are stored
+    uncompressed (STORE), with UTF-8 names and the browser's local times (`tzOffsetMinutes`).
+  - **Limits**: the size is added up from stored metadata (each upload's size, 400 KB per built resume) and refused
+    above 200 MB (413) before any file is read; one build per account (409) and one on the server (429, with
+    `retryAfterSeconds`); a 10 minute deadline. A ready zip is kept for an hour; its temporary files go after a whole
+    download, at expiry, at startup and at shutdown.
+
+**Google Sheet import (WP12)**
+- Admin › Import jobs has a **File | Google Sheet** switch. The share card shows the service account's `client_email`
+  with Copy; then come the sheet's link, its tab (with none in the link, the newest day-named tab, else the first
+  visible one), the header row (1 to 20, with a suggestion) and, for free_tailor's day tabs, "use the tab name as the
+  posted date"; then the same column mapping as a file. Preview saves nothing and reuses its read while only the
+  mapping changes; one read of Google runs per admin, stopped when the page goes away.
+- Import reads the tab again, stores a fresh CSV copy as a `csv` source with `config.sheet`, and runs the normal
+  ingest: 201, or 202 when the run would outlast the time left (Runs follows it). Importing the same tab again (by
+  spreadsheet id and `gid`) updates that source; Sources and Runs label it "Google Sheet", with "Import the sheet
+  again". At most 10,000 rows (20 MB of text) per tab. Formula error cells (`#REF!` and the like) become blank, and a
+  link label such as "Apply" (a `HYPERLINK()` cell) is refused as a job link, in file imports too.
+- Read only: a `google-auth-library` JWT with the `spreadsheets.readonly` scope (its token request never retries on its
+  own), then plain `fetch` to `sheets.googleapis.com` with timeouts, one retry on 429 or 5xx and a byte cap. Nothing is
+  written to Google and nothing is scheduled.
+- The key (`GOOGLE_SERVICE_ACCOUNT_KEY_FILE`, default `service-account-key.json` in the repository root, git-ignored
+  since `cedc573`) is read only when an admin uses the import, and again whenever the file changes (no restart). The
+  private key, tokens and Google's raw errors never reach an answer or a log. Google's errors become sentences that say
+  what to do: a sheet not shared ("add {client_email} as a Viewer", a 400 on the link), the Sheets API turned off (its
+  activation link; told apart first), no such sheet, an Excel file stored in Drive, a computer clock that is off, a
+  deleted or disabled key, a tab that changed while it was read. Google's 401 and 403 never become TailorIT's own 401,
+  which would send the admin to sign-in: a key or API problem is 503 `sheets_unavailable`.
+- `npm run doctor` checks a key when one is there: a service account JSON key, git-ignored; it prints only the address
+  to share sheets with.
+
+**Endpoints added in v2** (each needs a signed-in account; the Admin ones an administrator)
+
+| Group | Endpoints |
+|---|---|
+| Resumes | `GET /resumes/:id/analysis` ("What TailorIT read from this resume")<br>`GET /resumes`: each item gains `analysis`, the profile line's brief<br>`POST /resumes/upload`: answers `copyError` when an editable copy asked for cannot start |
+| Jobs | `GET /jobs/save-all/preview?<list query>` → `{matched, saveable, willSave}`<br>`POST /jobs/save-all?<list query>` `{occurredOn?}` → `{items[{jobId, applicationId, resumeId, created}], alreadyTracked, remaining, pendingMatches, incomplete}`<br>`GET /jobs/:id/match` and `/insights` score a tracked job's linked resume; `/insights` names it (`resumeLabel`, `resumeBasis` `linked` or `default`)<br>The analysis view gains `softSkills`, `terms` and `requiredYears` |
+| Tracker | `GET /applications/:id/resume-matches` (every resume ranked for the application; 30 per account per minute)<br>`POST /applications/:id/resume-match` ("Let TailorIT choose"; 20 per account per minute)<br>`POST /applications/resume-zip` `{ids?, tzOffsetMinutes?}` → 202 `{buildId}`<br>`GET /applications/resume-zip/:buildId` (`building`, `ready` or `failed`; `done` of `total`; counts `{included, skipped, word, leftOut, usedDefault}`; `expiresAt`)<br>`GET /applications/resume-zip/:buildId/file`<br>`POST /applications/bulk` gains `onlySaved` (archive only); the detail gains `resumeOrigin`, `resumeMatchedAt` and `resumeMatchPending` |
+| Admin | `GET /admin/import/sheets/account` (whether a key is set up, and its `client_email`)<br>`POST /admin/import/sheets/preview`<br>`POST /admin/import/sheets/jobs` (201, or 202 for a long run) |
+
+New error code: `sheets_unavailable` (503): the Sheet import cannot run (no usable key, the Sheets API is off, Google
+is not answering).
+
+**After upgrading from the first release**
+- Saved applications of a job with no resume get their best match within seconds of the first start; resumes linked
+  before stay as they were (the person's choice).
+- Claude analyses jobs added from then on first; jobs from before the upgrade follow as the background slot allows.
+- Scheduled sources rewrite their jobs once (`NORMALIZE_VERSION` 2); CSV, JSON and seed jobs keep their old work
+  arrangement until those sources are run again.
+
+**Built differently from the v2 plan**
+- Admin › AI does not show the job or resume backlog, which the plan said it would. It shows the CLI's health, the
+  model of each feature (Resume analysis included) and a test call, and says that Claude reads each added job once. The
+  backlogs' pauses, caps and rests go to the API log (`[job-analysis] AI backlog`, `[resume-analysis]`).
+- The job backlog has rails the plan did not list: at most 3 job analyses pending in all, and rests after an outage or
+  a run of failures (above). The hourly caps are counted in memory, so a restart starts them afresh.
+- The ZIP falls back to Word not only when Chrome is missing (the plan) but also when it is busy or failing, or the
+  deadline is near; with no default resume, an application with none linked gets the newest resume; and its files are
+  also removed at shutdown.
+- The resume picker also ranks applications added by hand (no job), against their own description, as Resume Score
+  reads it.

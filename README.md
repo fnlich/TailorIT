@@ -11,10 +11,10 @@ use, never its logo, wordmark or upsells; review the look before any public laun
 
 | Area | What you get |
 |---|---|
-| **Jobs** | Full-text search, Simplify's filters (job type, experience level, category, work arrangement, place or "Remote in", minimum salary, H1B, industry, company size, company, clearance, last updated, hide applied), four sorts, saved searches. The detail shows the live chip, the facts grid with an experience-level check against your preferences, Summary / Full posting, the company, and the **Improve Your Resume** card: how many of the posting's keywords your default resume has. Save and Apply go straight into the tracker. |
-| **Job Tracker** | Board with drag and drop, list with Simplify's progress stepper, chart (application flow and insights), the Options menu (filters, favorites, visible columns, sort, manage jobs, CSV import/export, archive all) and the application detail (posting, documents, resume score, questions, status timeline, notes). |
-| **Documents** | Resumes (thumbnail grid and list; template chooser, editor with live preview, PDF / Word / JSON download, upload with an optional AI "editable copy"), Cover Letters (table and grid; AI generation with or without a template; editor with `{{VARIABLE}}` chips; PDF / Word export), Templates (six starters plus your own). |
-| **Admin** | `/settings/admin`: job sources, ingest runs, job import, reports, AI health, users. |
+| **Jobs** | Full-text search, Simplify's filters (job type, experience level, category, work arrangement, place or "Remote in", minimum salary, H1B, industry, company size, company, clearance, last updated, hide applied), four sorts, saved searches, and **Save all**: up to 100 of the jobs your filters match, saved in the order the list shows them, each with its best-matched resume (Undo un-saves them). The detail shows the live chip, the facts grid with an experience-level check against your preferences and the years the posting asks for, Summary / Full posting with the posting's soft skills, certifications and industries, the company, and the **Improve Your Resume** card: how many of the posting's keywords your resume has (a saved job's linked resume, else your default one; the card says which). Save and Apply go straight into the tracker. |
+| **Job Tracker** | Board with drag and drop, list with Simplify's progress stepper, chart (application flow and insights), the Options menu (filters, favorites, visible columns, sort, manage jobs, CSV import/export, **Build resumes (zip)**, archive all) and the application detail (posting, documents, resume score, questions, status timeline, notes). Each job you save gets its **best-matched resume** ("Best match" in the Documents tab until you pick one, "Chosen by you"; a picker ranked by fit, and "Let TailorIT choose"). **Build resumes (zip)** downloads `{Company}/{Role}/{First_Last}_resume.{pdf,docx}` for every Saved application, or for the ones selected in Manage jobs. |
+| **Documents** | Resumes (thumbnail grid and list; template chooser, editor with live preview, PDF / Word / JSON download; upload one file or up to 50 at once, with an optional AI "editable copy" for a single file; the **profile TailorIT reads from each resume**: main and soft skills, roles, certifications, industries and years of experience, as "8 yrs · React, TypeScript, Node.js +9" and under Skills and details; uploaded files are kept exactly as uploaded), Cover Letters (table and grid; AI generation with or without a template; editor with `{{VARIABLE}}` chips; PDF / Word export), Templates (six starters plus your own). |
+| **Admin** | `/settings/admin`: job sources, ingest runs, job import (a CSV or JSON file, or one tab of a **Google Sheet**, read once), reports, AI health, users. |
 
 ## Requirements
 
@@ -25,8 +25,11 @@ use, never its logo, wordmark or upsells; review the look before any public laun
   installed browser is found automatically; otherwise set `CHROME_PATH` or run `npm run setup:browser`.
 - **The `claude` CLI, signed in with a Claude subscription** (`npm i -g @anthropic-ai/claude-code`, then
   `claude auth login`). TailorIT runs `claude -p` as a child process for: importing a resume file into an editable
-  resume, Write / Improve with AI bullets, job analysis, cover letters and template fills. Things to know:
+  resume, reading each uploaded resume (skills, roles, dates), Write / Improve with AI bullets, job analysis, cover
+  letters and template fills. Things to know:
   - No API key is used. If the CLI reports API-key billing, the call is stopped.
+  - Claude analyses **every job added** to TailorIT once, in the background: see "How much Claude TailorIT uses"
+    below.
   - One subscription seat serves **every** user of your installation and is subject to its usage windows. That suits
     personal or self-hosted use; a public multi-user service running on one subscription likely breaks Anthropic's
     terms.
@@ -99,10 +102,44 @@ Administrators manage jobs at **/settings/admin**:
   `INGEST_TIMEZONE` or server time), one request per second per host, identified by `INGEST_USER_AGENT` (put a
   contact address in it). Only a complete, successful fetch closes postings that disappeared.
 - **Import jobs**: a CSV or JSON file, previewed and mapped column by column (free_tailor's sheet headers are
-  recognised).
+  recognised), or one tab of a Google Sheet (below).
 - **Runs** (history and logs), **Reports** (jobs people reported), **AI** (CLI health and a test call), **Users**.
 
 Apply always links to the original posting.
+
+## Google Sheet import
+
+Administrators can import postings from one tab of a Google Sheet at a time: **Admin › Import jobs › Google Sheet**.
+It is a one-time, read-only import. TailorIT reads the tab when you import it and keeps a copy; it never writes to the
+sheet, and never reads it again on its own.
+
+Set up once:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), pick or create a project and **turn on the Google
+   Sheets API** for it (APIs & Services › Library › Google Sheets API › Enable).
+2. Create a **service account** (IAM & Admin › Service accounts), then on its Keys tab **Add key › Create new key ›
+   JSON**. The browser downloads the JSON key.
+3. Save the key as **`service-account-key.json` in the repository root**. Git ignores that name (and
+   `*.service-account.json`); never commit a key. To keep it elsewhere, set `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` to its
+   path (a relative path is read from the repository root; write Windows paths without quotes) and restart the API. A
+   key saved at that path while the server runs is picked up without a restart.
+4. Run `npm run doctor`: it checks the key and prints the address to share sheets with (the key's `client_email`).
+
+Then, for each sheet:
+
+1. In Google Sheets, click **Share** and add the service account's address as a **Viewer**. Admin › Import jobs ›
+   Google Sheet shows the address, with Copy.
+2. Paste the sheet's link, pick the tab and the header row, check the column mapping (the same as for a file), then
+   **Import**. With no tab in the link, the newest tab named for a day is shown first (free_tailor's sheets add one a
+   day); such a tab can give every row its date as the posted date.
+3. The tab becomes a source, shown as "Google Sheet" under Sources. **Import the sheet again** reads it once more and
+   updates that source.
+
+Good to know: each import covers one tab (free_tailor's day tabs are imported one at a time), up to 10,000 rows.
+Formula errors such as `#REF!` come in blank. A link cell that shows a label instead of the address (a `HYPERLINK()`
+reading "Apply") cannot be a job link: that row is refused with a message. Problems are told in plain words: a sheet
+not shared with the service account, the Sheets API turned off (with the link to turn it on), a computer clock that is
+off, a deleted key.
 
 ## AI configuration
 
@@ -112,14 +149,42 @@ Apply always links to the original posting.
 | `AI_CLI_BIN` | `claude` | The CLI to run (a name on PATH or a path; the npm `.cmd` shim is resolved). |
 | `AI_CLI_MODEL` | `claude-sonnet-5-5` | The model for every feature, unless overridden below. `AI_CLI_FALLBACK_MODEL` is optional. |
 | `AI_CLI_EFFORT` | `low` | The effort level for every feature, unless overridden below. |
-| `AI_MODEL_<FEATURE>`, `AI_EFFORT_<FEATURE>` | empty | Per feature: `RESUME_IMPORT`, `BULLETS`, `JOB_ANALYSIS`, `COVER_LETTER`, `TEMPLATE_FILL`. |
+| `AI_MODEL_<FEATURE>`, `AI_EFFORT_<FEATURE>` | empty | Per feature: `RESUME_IMPORT`, `BULLETS`, `JOB_ANALYSIS`, `COVER_LETTER`, `TEMPLATE_FILL`, `RESUME_ANALYSIS`. |
 | `AI_CLI_CONCURRENCY`, `AI_CLI_BACKGROUND_SLOTS` | `4`, `1` | Calls at once, and how many of them background work may use. |
 | `AI_CLI_TIMEOUT_MS`, `AI_CLI_FIRST_EVENT_MS` | `300000`, `30000` | The deadline of a call, and how long the CLI may stay silent at the start. |
-| `AI_JOB_ANALYSIS` | `lazy` | Every job gets a free deterministic analysis at ingest. `lazy` adds an AI analysis the first time anyone opens the job (the page shows "Refining..." and swaps it in); `off` keeps the deterministic one only. |
-| `AI_JOB_ANALYSIS_WARMUP_PER_HOUR` | `0` | Background AI analyses per hour for jobs not opened yet (0 = off). |
+| `AI_JOB_ANALYSIS` | `ingest` | Every job gets a free rule-based analysis the moment it is added. `ingest`: then Claude analyses each added job once, in the background, newest first (jobs from before an upgrade last); opening or saving a job never asks it. `saved`: the same, for saved jobs only. `lazy`: the first time anyone opens the job (the page shows "Refining..." and swaps it in). `off`: the rule-based analysis only. |
+| `AI_JOB_ANALYSIS_PER_HOUR` | `0` | The most job analyses the background queue starts in an hour (0 = no cap). |
+| `AI_JOB_ANALYSIS_WARMUP_PER_HOUR` | `0` | `lazy` only: background AI analyses per hour for jobs not opened yet (0 = off). |
+| `AI_RESUME_ANALYSIS` | `auto` | `auto`: Claude also reads each uploaded resume once, after its instant rule-based reading (the file itself is never changed). `off`: the rule-based reading only. |
+| `AI_RESUME_ANALYSIS_PER_HOUR` | `20` | The most resume readings started in an hour (0 = no cap). |
 
 Every AI request is a background task: the API answers `202 {taskId}` and the page polls it, so the web server's `/api` proxy
 timeout (120 s) never cuts a long call short.
+
+**How much Claude TailorIT uses.**
+
+- With the default `AI_JOB_ANALYSIS=ingest`, Claude analyses **every job added** to TailorIT once (each posting text
+  once), on the single background slot: roughly 100 to 180 an hour, newest first. A large intake (a busy board, a big
+  import) leaves a backlog of older jobs that drains as the slot allows; until then a job shows its rule-based
+  analysis.
+- Each uploaded resume is read by Claude once as well, before any job analysis, at most 20 an hour by default. Built
+  resumes are structured already and are not sent.
+- Saving a job, Save all, opening a job, choosing a resume and building the resume zip **never add AI work**: the
+  best-matched resume is picked from what TailorIT has read already.
+- Background work waits while the subscription's usage window is nearly used up, or while AI is held after an error,
+  so people's own requests (imports, bullets, letters) keep their room.
+- To use less: `AI_JOB_ANALYSIS_PER_HOUR` caps the job queue; `AI_JOB_ANALYSIS=saved`, `lazy` or `off` analyses fewer
+  jobs; `AI_RESUME_ANALYSIS=off` keeps uploads to the rule-based reading; `AI_MODEL_JOB_ANALYSIS` can name a cheaper
+  model.
+- Admin › AI shows the CLI's health and the model each feature uses, and can make a test call. The API's log says when
+  the background queues pause or reach their hourly cap.
+
+## Upgrading from the first release
+
+The new migrations run by themselves on the next start. After it: Saved applications of a job get their best-matched
+resume within seconds (a resume you linked before stays yours); Claude analyses newly added jobs first and the older
+ones as the background slot allows; each scheduled job source rewrites its jobs once on its next run, which reads
+their work arrangement more strictly (CSV, JSON and demo jobs keep the old reading until those sources are run again).
 
 ## Production
 
