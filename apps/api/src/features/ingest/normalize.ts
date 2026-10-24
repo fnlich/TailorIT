@@ -38,8 +38,13 @@ import { IngestError, type ProvidedAnalysis, type RawCompany, type RawPosting, t
 // Turns an adapter's RawPosting into the row TailorIT stores (pure: no database, no clock). Structured source fields
 // always win; the shared parsers read the title, the location strings and the text for whatever the source left out.
 
-/** Bump when normalisation changes what it stores, so every posting is rewritten on the next run. */
-export const NORMALIZE_VERSION = 1;
+/**
+ * Bump when normalisation changes what it stores, so every posting is rewritten on its source's next run (the
+ * analyses' facets are filled and Claude's facts put back as each one is written: ingest/store.ts `writeAnalyses`).
+ * 2: the description gives the work arrangement only when it says how the role is worked ("remote monitoring",
+ * "on-site interviews" and "hybrid cloud" set nothing); the location text is read as before.
+ */
+export const NORMALIZE_VERSION = 2;
 
 const MAX_TITLE = 300;
 const MAX_TEXT = 100_000;
@@ -340,13 +345,15 @@ export function normalizePosting(raw: RawPosting): NormalizedPosting {
   });
   const requirementsText = deterministic.requirements.join('\n');
 
+  // The source's field, then the location and CSV arrangement text (any "Remote", "Hybrid", "On-site" there says it),
+  // then the description read strictly: empty unless it says in so many words how this role is worked.
   const locationWords = [...(raw.locations ?? []), raw.arrangementText ?? ''].join(' ; ');
   const allRemote = locations.length > 0 && locations.every((place) => place.isRemote);
   const workArrangement =
     oneOf(raw.workArrangement, WORK_ARRANGEMENTS) ??
     inferWorkArrangement(null, locationWords) ??
     (allRemote ? 'remote' : null) ??
-    inferWorkArrangement(descriptionText.slice(0, 6000), null);
+    inferWorkArrangement(descriptionText.slice(0, 6000), null, { strict: true });
 
   const employmentType =
     oneOf(raw.employmentType, EMPLOYMENT_TYPES) ??

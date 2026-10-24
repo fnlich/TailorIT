@@ -4,12 +4,18 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { requireAi } from '../src/ai/index';
 import { repoRoot } from '../src/core/paths';
 import {
+  checkedArrangement,
   finishAiAnalysis,
   grounded,
+  groundedCertifications,
+  groundedDomains,
+  groundedSoftSkills,
+  looseArrangement,
   numbersOf,
   numbersStated,
   postingEvidence,
   withFallbackKeywords,
+  writtenYears,
   type AnalysisFallback,
 } from '../src/features/job-analysis/ai';
 import { analyzeDeterministic, inPostingCase, postingSpelling } from '../src/features/job-analysis/deterministic';
@@ -193,6 +199,115 @@ describe('bullets: the posting\'s numbers and skills only', () => {
   });
 });
 
+describe('years: only numbers the posting writes as years', () => {
+  const PTO = {
+    title: 'Backend Engineer',
+    text: ['Requirements', '- 3+ years of experience with Go', '- On-call one week in five', 'Benefits', '- 5 days PTO to start, 401(k)'].join('\n'),
+  };
+
+  it("the AI's required years must be written in the posting ('5 days PTO' does not count)", () => {
+    const answer = (years: number | string) => output({ requiredYears: years, minYears: years });
+    const fallback = { requirements: ['3+ years of experience with Go'], responsibilities: [], desired: [], minYears: 3, requiredYears: 3 };
+    // 5 is in the posting, but as days off: the deterministic years stand.
+    expect(finishAiAnalysis(answer(5), PTO, fallback)).toMatchObject({ requiredYears: 3, minYears: 3 });
+    expect(finishAiAnalysis(answer('3'), PTO, { ...fallback, requiredYears: null, minYears: null })).toMatchObject({ requiredYears: 3, minYears: 3 });
+    // Nothing stated and nothing to fall back on: empty.
+    expect(finishAiAnalysis(answer(7), { ...PTO, text: 'Build things with Go.' }, { requirements: [], responsibilities: [], desired: [] })).toMatchObject({
+      requiredYears: null,
+      minYears: null,
+    });
+  });
+
+  it('reads the bounds of a range, and number words', () => {
+    const written = new Set([3, 5, 8]);
+    expect(writtenYears(5, written)).toBe(5);
+    expect(writtenYears('8', written)).toBe(8);
+    expect(writtenYears(4.6, written)).toBe(5);
+    expect(writtenYears(4, written)).toBeNull();
+    expect(writtenYears('lots', written)).toBeNull();
+    expect(writtenYears(null, written)).toBeNull();
+    const range = finishAiAnalysis(output({ requiredYears: 5 }), { title: 'x', text: 'You bring 3-5 years of professional experience.' }, { requirements: [], responsibilities: [], desired: [] });
+    expect(range.requiredYears).toBe(5);
+    const words = finishAiAnalysis(output({ requiredYears: 'five' }), { title: 'x', text: 'At least five years of experience.' }, { requirements: [], responsibilities: [], desired: [] });
+    // "five" is no number the model may give; 5 is.
+    expect(words.requiredYears).toBeNull();
+    expect(finishAiAnalysis(output({ requiredYears: 5 }), { title: 'x', text: 'At least five years of experience.' }, { requirements: [], responsibilities: [], desired: [] }).requiredYears).toBe(5);
+  });
+});
+
+describe('soft skills, certifications and industries: canonical names the posting carries', () => {
+  const SECTIONS = {
+    requirements: ['Strong communication skills', 'Experience with change management in large programs'],
+    responsibilities: ['Mentoring two junior engineers'],
+    desired: [],
+  };
+  const TEXT = [
+    'About us: we celebrate empathy and belonging.',
+    'Requirements',
+    '- Strong communication skills',
+    '- Experience with change management in large programs',
+    'Responsibilities',
+    '- Mentoring two junior engineers',
+    '- AWS Certified Solutions Architect or CKA certification preferred',
+    'We build claims software for the insurance industry.',
+  ].join('\n');
+
+  it('keeps listed soft skills the posting\'s sections name, by their canonical names, in the model\'s order', () => {
+    const sections = [...SECTIONS.requirements, ...SECTIONS.responsibilities].join('\n');
+    // "excellent communication skills" is read for the listed skill in it; "Empathy" is only in the about-us text;
+    // "Change management" stays a hard skill; "Diplomacy" is a listed skill the posting never asks for.
+    expect(groundedSoftSkills(['mentoring', 'excellent communication skills', 'Empathy', 'Change management', 'Diplomacy', 42], sections)).toEqual([
+      'Mentoring',
+      'Communication',
+    ]);
+    const finished = finishAiAnalysis(output({ softSkills: ['Empathy', 'Communication'] }), { title: 'Engineer', text: TEXT }, SECTIONS);
+    expect(finished.softSkills).toEqual(['Communication']);
+    // Without sections, the whole text counts.
+    expect(finishAiAnalysis(output({ softSkills: ['Empathy'] }), { title: 'Engineer', text: TEXT }, { requirements: [], responsibilities: [], desired: [] }).softSkills).toEqual([
+      'Empathy',
+    ]);
+    // Left out by the model: not read (the deterministic soft skills stand in).
+    expect(finishAiAnalysis(output(), { title: 'Engineer', text: TEXT }, SECTIONS).softSkills).toBeNull();
+  });
+
+  it('keeps certifications and industries the posting names, canonical and capped', () => {
+    expect(groundedCertifications(['CKA', 'AWS Solutions Architect Associate', 'CISSP', 'Certified Kubernetes Administrator'], TEXT)).toEqual([
+      'Certified Kubernetes Administrator (CKA)',
+      'AWS Certified Solutions Architect',
+    ]);
+    expect(groundedDomains(['Insurance', 'InsurTech', 'Healthcare', 'Technology', 'nonsense'], TEXT)).toEqual(['insurance']);
+    const finished = finishAiAnalysis(
+      output({ terms: { certifications: ['CKA', 'PMP'], domains: ['insurance', 'fintech'] } }),
+      { title: 'Engineer', text: TEXT },
+      SECTIONS,
+    );
+    expect(finished.terms).toEqual({ certifications: ['Certified Kubernetes Administrator (CKA)'], domains: ['insurance'] });
+  });
+});
+
+describe('work arrangement: the posting must say so', () => {
+  const posting = (text: string, locations: string | null = 'Austin, TX, USA') => ({ title: 'Backend Engineer', locations, text });
+
+  it("AI 'remote' with no remote wording gives NULL", () => {
+    const remote = output({ workArrangement: 'remote' });
+    const none = { requirements: [], responsibilities: [], desired: [] };
+    expect(finishAiAnalysis(remote, posting('Build payment services in Go. On-site interviews in Austin.'), none).facts.workArrangement).toBeNull();
+    expect(finishAiAnalysis(remote, posting('Build payment services in Go.'), none).facts.workArrangement).toBeNull();
+    expect(finishAiAnalysis(remote, posting('Build payment services in Go. Remote work options are available.'), none).facts.workArrangement).toBe('remote');
+    // The location says it.
+    expect(finishAiAnalysis(remote, posting('Build payment services in Go.', 'Remote in USA'), none).facts.workArrangement).toBe('remote');
+    expect(finishAiAnalysis(output({ workArrangement: 'hybrid' }), posting('Build services in Go.', 'Remote in USA'), none).facts.workArrangement).toBeNull();
+  });
+
+  it('reads the posting loosely: location first, then the title and the text', () => {
+    expect(looseArrangement({ title: 'Engineer (Remote)', locations: 'New York, NY, USA', text: 'Build things.' })).toBe('remote');
+    expect(looseArrangement({ title: 'Engineer', locations: 'Remote in USA', text: 'Three days a week in the office.' })).toBe('remote');
+    expect(looseArrangement({ title: 'Engineer', text: 'Three days a week in the office.' })).toBe('hybrid');
+    expect(checkedArrangement('onsite', { title: 'Engineer', text: 'This position is not remote.' })).toBe('onsite');
+    expect(checkedArrangement(null, { title: 'Engineer', text: 'Fully remote.' })).toBeNull();
+  });
+});
+
 describe('keyword labels: the posting\'s own casing', () => {
   it('labels the model\'s and the merged keywords as the posting writes them, else as the skill library does', () => {
     const finished = finishAiAnalysis(
@@ -267,29 +382,51 @@ describe('the fake CLI reads the posting it is given', () => {
     const text = [
       'Responsibilities',
       '- Build automated end-to-end tests with Playwright and Cypress',
+      '- Share quality metrics with clear communication and collaboration',
       'Requirements',
       '- 1-2 years of experience in test automation',
       '- Programming skills in TypeScript or Python',
+      '- ISTQB or CompTIA Security+ certification is a plus',
       'About Acme',
-      '- Acme makes robots',
+      '- Acme makes robots for logistics warehouses',
     ].join('\n');
     const prompt = jobAnalysisPrompt.user({ title: 'Junior QA Engineer', company: 'Acme', locations: 'Pittsburgh, PA', description: text });
     const answer = await fakeAnswer(prompt);
-    expect(answer.summary.responsibilities).toEqual(['Build automated end-to-end tests with Playwright and Cypress']);
+    expect(answer.summary.responsibilities).toEqual([
+      'Build automated end-to-end tests with Playwright and Cypress',
+      'Share quality metrics with clear communication and collaboration',
+    ]);
     expect(answer.summary.requirements.slice(0, 2)).toEqual(['1-2 years of experience in test automation', 'Programming skills in TypeScript or Python']);
     expect(answer.keywords.high.map((group) => group.term)).toEqual(['Python', 'TypeScript', 'Sumerian cuneiform']);
     expect(answer.keywords.low.map((group) => group.term)).toEqual(['Playwright', 'Cypress', 'Python']);
-    expect(answer).toMatchObject({ experienceLevels: ['junior'], minYears: 1, category: null });
+    expect(answer).toMatchObject({
+      experienceLevels: ['junior'],
+      minYears: 1,
+      requiredYears: 1,
+      category: null,
+      softSkills: ['communication', 'collaboration', 'Diplomacy'],
+      terms: { certifications: ['CompTIA Security+'], domains: ['logistics'] },
+    });
 
-    const finished = finishAiAnalysis(answer, { title: 'Junior QA Engineer', text }, { requirements: [], responsibilities: [], desired: [] });
-    expect(finished.requirements).toEqual(['1-2 years of experience in test automation', 'Programming skills in TypeScript or Python']);
+    const sections = {
+      requirements: ['1-2 years of experience in test automation', 'Programming skills in TypeScript or Python', 'ISTQB or CompTIA Security+ certification is a plus'],
+      responsibilities: ['Build automated end-to-end tests with Playwright and Cypress', 'Share quality metrics with clear communication and collaboration'],
+      desired: [],
+    };
+    const finished = finishAiAnalysis(answer, { title: 'Junior QA Engineer', text }, sections);
+    expect(finished.requirements).toEqual(['1-2 years of experience in test automation', 'Programming skills in TypeScript or Python', 'ISTQB or CompTIA Security+ certification is a plus']);
     expect(terms(finished.keywords.high)).toEqual(['Python', 'TypeScript']);
     expect(terms(finished.keywords.low)).toEqual(['Playwright', 'Cypress']);
     expect(finished.facts.salary).toBeNull();
+    // The invented soft skill goes; the rest by their canonical names.
+    expect(finished.softSkills).toEqual(['Communication', 'Collaboration']);
+    expect(finished.terms).toEqual({ certifications: ['CompTIA Security+'], domains: ['logistics_transportation'] });
+    expect(finished.requiredYears).toBe(1);
   });
 
   it('gives each job its own analysis through the AI queue', async () => {
-    ctx = createTestContext();
+    // Opening the job is what queues it here (lazy mode); the default mode leaves that to the add-time backlog.
+    ctx = createTestContext({ env: { AI_JOB_ANALYSIS: 'lazy' } });
     const source = insertSource(ctx.deps.db, { kind: 'greenhouse', name: 'ironvale', config: {} }, TEST_NOW.toISOString());
     const ingest = createIngestService(ctx.deps, {
       adapters: {

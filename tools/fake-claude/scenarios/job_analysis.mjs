@@ -4,10 +4,14 @@
 // - Summary: the posting's own bullet lines under its Requirements / Responsibilities / Nice-to-have headings.
 // - Keywords: terms of the small list below that the posting names, spelled as the posting spells them; "high" when
 //   the requirements or the title name them, "low" otherwise.
-// - Facts: experience levels from the title (else the years asked for), the fewest years asked for; the rest null,
-//   so the job's own facts stand.
+// - Soft skills: the phrases of the small list below that the requirement, duty and nice-to-have lines name, spelled
+//   as the posting spells them. Terms: the certifications and industries of the lists below the posting names.
+// - Facts: experience levels from the title (else the years asked for), the fewest years asked for, the years the
+//   requirements ask for in general (the first "N years of ... experience" line); the rest null, so the job's own
+//   facts stand.
 // - Like a real model now and then, it also slips in things the posting never says: a requirement, a keyword, a pay
-//   figure, and one keyword twice. TailorIT's grounding (apps/api/src/features/job-analysis/ai.ts) must drop them.
+//   figure, one keyword twice, and a soft skill (Diplomacy, a real entry of the soft-skill list). TailorIT's grounding
+//   (apps/api/src/features/job-analysis/ai.ts) must drop them.
 
 /** [term, synonyms, case-sensitive], grouped by kind; within a priority, keywords are listed in this order. */
 const TERMS = [
@@ -206,6 +210,61 @@ function minYearsOf(lines) {
   return null;
 }
 
+/** The first "N years of ... experience" (or work, development, engineering) line; else the first years at all. */
+function requiredYearsOf(lines) {
+  const general = /(\d{1,2})\s*\+?\s*(?:[-–]\s*\d{1,2}\s*)?years?\s+(?:of\s+|in\s+)?(?:[\w/+#.-]+\s+){0,4}?(?:experience|work|development|engineering)\b/i;
+  for (const line of lines) {
+    const match = general.exec(line);
+    if (match) return Number(match[1]);
+  }
+  return minYearsOf(lines);
+}
+
+/** Soft skills the fake recognises (a real model reads them off the requirements and duties). */
+const SOFT_SKILLS = [
+  'attention to detail',
+  'communication',
+  'collaboration',
+  'mentoring',
+  'leadership',
+  'ownership',
+  'problem-solving',
+  'problem solving',
+  'teamwork',
+  'adaptability',
+  'critical thinking',
+  'time management',
+  'stakeholder management',
+  'curiosity',
+  'empathy',
+];
+const SOFT_PATTERNS = SOFT_SKILLS.map((phrase) => new RegExp(`(?<![\\p{L}\\p{N}])${escape(phrase).replace(/[ -]/g, '[\\s-]')}(?![\\p{L}\\p{N}])`, 'iu'));
+
+/** The listed soft skills the lines name, as they spell them, each once. */
+function softSkillsOf(lines) {
+  const found = [];
+  for (const line of lines) {
+    for (const pattern of SOFT_PATTERNS) {
+      const match = line.match(pattern);
+      if (match && !found.some((item) => item.toLowerCase() === match[0].toLowerCase())) found.push(match[0]);
+    }
+  }
+  return found.slice(0, 15);
+}
+
+const CERTIFICATIONS = ['AWS Certified Solutions Architect', 'Certified Kubernetes Administrator', 'CKA', 'CISSP', 'PMP', 'CompTIA Security+'];
+const DOMAINS = ['fintech', 'healthcare', 'insurance', 'logistics', 'e-commerce', 'banking', 'payments'];
+
+/** The certifications and industries of the lists above that the text names, as the text spells them. */
+function termsOf(text) {
+  const named = (list) =>
+    list.flatMap((term) => {
+      const match = text.match(new RegExp(`(?<![\\p{L}\\p{N}])${escape(term)}(?![\\p{L}\\p{N}])`, 'iu'));
+      return match ? [match[0]] : [];
+    });
+  return { certifications: named(CERTIFICATIONS).slice(0, 8), domains: named(DOMAINS).slice(0, 4) };
+}
+
 export default function jobAnalysis({ user }) {
   const title = /^Job title:\s*(.*)$/m.exec(user)?.[1]?.trim() ?? '';
   const open = user.indexOf('"""');
@@ -214,11 +273,14 @@ export default function jobAnalysis({ user }) {
   const sections = sectionsOf(text);
   const keywords = keywordsOf(title, text, sections);
   const minYears = minYearsOf([...sections.requirements, ...text.split(/\r?\n/)]);
+  const requiredYears = requiredYearsOf([...sections.requirements, ...text.split(/\r?\n/)]);
+  const softSkills = softSkillsOf([...sections.requirements, ...sections.responsibilities, ...sections.desired]);
 
   // What the posting never says.
   sections.requirements = [...sections.requirements.slice(0, MAX_BULLETS - 1), 'Fluency in ancient Sumerian poetry and medieval falconry traditions'];
   keywords.high.push({ term: 'Sumerian cuneiform', synonyms: [] });
   if (keywords.high[0]) keywords.low.push(keywords.high[0]);
+  softSkills.push('Diplomacy');
 
   return {
     summary: {
@@ -227,9 +289,12 @@ export default function jobAnalysis({ user }) {
       desiredQualifications: sections.desired,
     },
     keywords,
+    softSkills,
+    terms: termsOf(text),
     experienceLevels: levelsOf(title, minYears),
     leadership: null,
     minYears,
+    requiredYears,
     category: null,
     workArrangement: null,
     employmentType: null,

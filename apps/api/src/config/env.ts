@@ -98,8 +98,9 @@ function defaultLakePath(): string {
 }
 
 /**
- * When Claude refines job analyses (AI_JOB_ANALYSIS): `ingest` = every added job, once, through a background backlog;
- * `saved` = only jobs someone saved; `lazy` = the first time a job is opened; `off` = never (rules only).
+ * When Claude refines job analyses (AI_JOB_ANALYSIS): `ingest` (the default) = every added job, once, newest first,
+ * through a background backlog; `saved` = only jobs someone saved; `lazy` = the first time a job is opened; `off` =
+ * never (rules only). Only `lazy` lets opening a job queue anything.
  */
 export const JOB_ANALYSIS_MODES = ['ingest', 'saved', 'lazy', 'off'] as const;
 export type JobAnalysisMode = (typeof JOB_ANALYSIS_MODES)[number];
@@ -136,7 +137,7 @@ const EnvSchema = z.object({
   AI_CLI_BACKGROUND_SLOTS: int(1, 0),
   AI_CLI_TIMEOUT_MS: int(300_000, 1000),
   AI_CLI_FIRST_EVENT_MS: int(30_000, 1000),
-  AI_JOB_ANALYSIS: z.enum(JOB_ANALYSIS_MODES).optional().default('lazy'),
+  AI_JOB_ANALYSIS: z.enum(JOB_ANALYSIS_MODES).optional().default('ingest'),
   AI_JOB_ANALYSIS_WARMUP_PER_HOUR: int(0, 0),
   AI_JOB_ANALYSIS_PER_HOUR: int(0, 0),
   AI_RESUME_ANALYSIS: z.enum(RESUME_ANALYSIS_MODES).optional().default('auto'),

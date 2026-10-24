@@ -1,9 +1,12 @@
+import { createBackgroundGate } from '../../ai/background';
 import type { AppDeps } from '../../core/context';
 import { JOB_ANALYSIS_PROMPT_VERSION } from './prompt';
 import type { JobAnalysisServiceInternals } from './service';
 
-// Optional AI warm-up (AI_JOB_ANALYSIS_WARMUP_PER_HOUR, off by default): every 60/N minutes, the most-viewed live job
-// without an AI analysis gets one, on the background slot, and only when no other job analysis is waiting.
+// Optional AI warm-up for lazy mode (AI_JOB_ANALYSIS=lazy with AI_JOB_ANALYSIS_WARMUP_PER_HOUR > 0; off by default):
+// every 60/N minutes, the most-viewed live job without an AI analysis gets one, on the background slot, only when no
+// other job analysis is waiting and the background gate is open (no AI hold, no usage warning). In the other modes
+// the add-time backlog (./backlog.ts) does this work.
 
 export interface Warmup {
   /** One warm-up step now (tests; the timer calls it). Returns the job queued, or null. */
@@ -18,6 +21,7 @@ export function startJobAnalysisWarmup(
 ): Warmup {
   const perHour = deps.config.ai.warmupPerHour;
   const enabled = perHour > 0 && deps.config.ai.jobAnalysis === 'lazy' && deps.config.ai.enabled && deps.config.ai.backgroundSlots > 0;
+  const gate = createBackgroundGate(deps);
   const busy = deps.db.prepare<[], { n: number }>(
     "SELECT count(*) AS n FROM ai_tasks WHERE kind = 'job_analysis' AND status IN ('queued', 'running')",
   );
@@ -30,7 +34,7 @@ export function startJobAnalysisWarmup(
   const tick = (): number | null => {
     if (!enabled) return null;
     try {
-      if ((busy.get()?.n ?? 0) > 0) return null;
+      if ((busy.get()?.n ?? 0) > 0 || !gate.allowed().ok) return null;
       for (const { id } of candidates.all(JOB_ANALYSIS_PROMPT_VERSION)) {
         if (service.enqueue(id, 'background')) return id;
       }

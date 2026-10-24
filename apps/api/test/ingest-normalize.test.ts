@@ -9,8 +9,10 @@ import {
   inferDegree,
   inferSponsorship,
   isoOrNull,
+  NORMALIZE_VERSION,
   normalizePosting,
   salaryFromText,
+  sha256,
   sourceHashOf,
   stableStringify,
 } from '../src/features/ingest/normalize';
@@ -117,6 +119,26 @@ describe('deterministic analysis', () => {
     expect(analysis.categoryId).toBe('devops-infrastructure');
     expect(analysis.subcategoryIds).toEqual(['platform-engineering']);
   });
+
+  it("reads the posting's facets from its sections: soft skills, certifications and industries, required years", () => {
+    const html = sanitizeDescription(
+      '<p>We are a fintech company and value belonging.</p>' +
+        '<h3>Requirements</h3><ul><li>7+ years of backend experience, including 3+ years leading teams</li>' +
+        '<li>Strong communication skills and collaboration with product</li><li>CKA certification preferred</li></ul>' +
+        '<h3>Responsibilities</h3><ul><li>Mentoring engineers on the healthcare platform</li></ul>' +
+        '<h3>Benefits</h3><ul><li>Medical, dental and vision; 5 days PTO</li></ul>',
+    );
+    const analysis = analyzeDeterministic({ title: 'Backend Engineer', html, text: htmlText(html) });
+    expect(analysis.softSkills).toEqual(['Communication', 'Collaboration', 'Mentoring']);
+    // "fintech" is in the about-us line, outside the sections: an industry the sections name counts.
+    expect(analysis.terms).toEqual({ certifications: ['Certified Kubernetes Administrator (CKA)'], domains: ['healthcare'] });
+    // The general requirement, not the leading years (inferMinYears, which sets the levels, still reads 3).
+    expect(analysis.requiredYears).toBe(7);
+    expect(analysis.minYears).toBe(3);
+
+    const plain = analyzeDeterministic({ title: 'Analyst', html: '', text: 'You bring 2+ years of experience with SQL and strong attention to detail.' });
+    expect(plain).toMatchObject({ softSkills: ['Attention to detail'], requiredYears: 2 });
+  });
 });
 
 function htmlText(html: string): string {
@@ -159,6 +181,39 @@ describe('normalisation', () => {
     expect(posting.categoryId).toBe('devops-infrastructure');
     expect(posting.descriptionHtml).not.toContain('content-intro');
     expect(posting.salary).toBeNull();
+  });
+
+  it('weak description mentions ("remote monitoring", "on-site interviews", "hybrid cloud") now give NULL at ingest', () => {
+    const arrangement = (description: string, locations = ['Austin, TX']) =>
+      normalizePosting(raw({ locations, descriptionHtml: `<p>${description}</p>` })).workArrangement;
+    // Words about something else, which the description reading used to take for the arrangement.
+    expect(arrangement('You will build remote monitoring for industrial devices.')).toBeNull();
+    expect(arrangement('Our process ends with on-site interviews in Austin.')).toBeNull();
+    expect(arrangement('Help us build a hybrid cloud platform for our customers.')).toBeNull();
+    expect(arrangement('Collaborate with remote teams across time zones.')).toBeNull();
+    expect(arrangement('An in-person interview is part of the process.')).toBeNull();
+    // A description that says how the role is worked still does.
+    expect(arrangement('This is a hybrid role: three days a week in our Austin office.')).toBe('hybrid');
+    expect(arrangement('This position is fully remote within the US.')).toBe('remote');
+    expect(arrangement('This role is on-site in Austin.')).toBe('onsite');
+    // Unsure (both said, or "not remote" alone): empty.
+    expect(arrangement('Fully remote. You will work on-site daily.')).toBeNull();
+    expect(arrangement('This position is not remote.')).toBeNull();
+    // The location text and a source's arrangement field are read as before.
+    expect(arrangement('Remote monitoring of devices.', ['Remote - US'])).toBe('remote');
+    expect(arrangement('Hybrid cloud work.', ['Austin, TX (Hybrid)'])).toBe('hybrid');
+    expect(normalizePosting(raw({ locations: ['Austin, TX'], arrangementText: 'On-site', descriptionHtml: '<p>Remote monitoring.</p>' })).workArrangement).toBe(
+      'onsite',
+    );
+    expect(normalizePosting(raw({ locations: ['Austin, TX'], workArrangement: 'remote', descriptionHtml: '<p>On-site interviews.</p>' })).workArrangement).toBe(
+      'remote',
+    );
+  });
+
+  it('is normalisation version 2, which every source hash carries (so each posting is rewritten once)', () => {
+    expect(NORMALIZE_VERSION).toBe(2);
+    const { supplement: _supplement, ...listed } = raw();
+    expect(sourceHashOf(raw())).toBe(sha256(`v2\n${stableStringify(listed)}`));
   });
 
   it('keeps structured fields over inference and fills the country of bare places', () => {

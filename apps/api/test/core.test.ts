@@ -609,7 +609,7 @@ describe('config', () => {
   });
 
   it('reads when Claude analyses jobs (lazy until the add-time backlog lands) and caps the background backlog', () => {
-    expect(buildConfig({}).ai).toMatchObject({ jobAnalysis: 'lazy', jobAnalysisPerHour: 0 });
+    expect(buildConfig({}).ai).toMatchObject({ jobAnalysis: 'ingest', jobAnalysisPerHour: 0 });
     for (const mode of ['ingest', 'saved', 'lazy', 'off'] as const) {
       expect(buildConfig({ AI_JOB_ANALYSIS: mode }).ai.jobAnalysis).toBe(mode);
     }

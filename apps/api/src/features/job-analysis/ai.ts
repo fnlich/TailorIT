@@ -1,27 +1,42 @@
 import {
   EMPLOYMENT_TYPES,
   EXPERIENCE_LEVELS,
+  MAX_JOB_CERTIFICATIONS,
+  MAX_JOB_DOMAINS,
+  MAX_JOB_SOFT_SKILLS,
   SALARY_PERIODS,
   WORK_ARRANGEMENTS,
+  canonicalCertification,
+  canonicalSoftSkill,
   containsTerm,
+  domainOf,
   extractKeywords,
+  facetText,
+  findCertifications,
+  findDomains,
+  findSoftSkills,
+  inferWorkArrangement,
   isJobCategoryId,
   maskFalseFriends,
   isJobSubcategoryId,
+  softKey,
+  softSkillScanner,
   spellingsOf,
   subcategoryParent,
   synonymKey,
   toAnnualUsd,
+  yearsMentioned,
   type EmploymentType,
   type ExperienceLevel,
   type JobKeywords,
+  type JobTerms,
   type KeywordGroup,
   type Leadership,
   type SalaryPeriod,
   type WorkArrangement,
 } from '@tailorit/shared';
 import { getSkillLibrary } from '../../core/skills-vocabulary';
-import { inPostingCase, MAX_HIGH_KEYWORDS, MAX_LOW_KEYWORDS, type AnalysisDraft } from './deterministic';
+import { inPostingCase, jobSkillLists, MAX_HIGH_KEYWORDS, MAX_LOW_KEYWORDS, type AnalysisDraft } from './deterministic';
 import type { JobAnalysisOutput } from './prompt';
 import { cleanItem, MAX_SECTION_ITEMS } from './sections';
 
@@ -29,7 +44,10 @@ import { cleanItem, MAX_SECTION_ITEMS } from './sections';
 // it or one of its synonyms is in the posting) and the rest are labelled as the posting writes them; a list left
 // empty or short is made up from the deterministic keywords. A bullet is dropped when little of the posting's wording
 // is in it, or it states a number or names a skill the posting does not (the deterministic section stands in when a
-// whole section goes). Every fact is checked against its vocabulary.
+// whole section goes). Soft skills, certifications and industries count only by their canonical names and only when
+// the rule-based reading finds them in the posting too (soft skills in its sections, when it has any). Every fact is
+// checked against its vocabulary; years count only when the posting writes them as years ("5 days PTO" is not 5
+// years), and the work arrangement only when the posting's own words, read loosely, say the same (else it is empty).
 
 export interface AiFacts {
   workArrangement: WorkArrangement | null;
@@ -348,20 +366,116 @@ const EMPLOYMENT_WORDS: Record<string, EmploymentType> = {
   intern: 'internship',
 };
 
+/** A posting as the work-arrangement check reads it. */
+export interface ArrangementPosting {
+  title: string;
+  /** The job's location text ("Remote in USA; Austin, TX, USA"). */
+  locations?: string | null;
+  /** The description's text. */
+  text: string;
+}
+
+/** How far into the description the loose reading looks: as far as ingest read it before it read descriptions strictly. */
+const ARRANGEMENT_TEXT = 6000;
+
+/**
+ * The work arrangement a posting's own words give when read loosely (any "remote", "hybrid", "on-site" counts): the
+ * location text first, then the title and the description.
+ */
+export function looseArrangement(posting: ArrangementPosting): WorkArrangement | null {
+  return inferWorkArrangement(`${posting.title}\n${posting.text.slice(0, ARRANGEMENT_TEXT)}`, posting.locations ?? null);
+}
+
+/**
+ * An AI work arrangement, kept only when the posting's loose reading says the same; null otherwise. The strict
+ * reading leaves an arrangement empty when unsure, so the model's answer is the one that fills it: one the posting's
+ * words do not back ("remote" for a posting that never says remote) is a guess, and a guess stays empty.
+ */
+export function checkedArrangement(value: WorkArrangement | null, posting: ArrangementPosting): WorkArrangement | null {
+  return value !== null && looseArrangement(posting) === value ? value : null;
+}
+
+function strings(list: readonly unknown[]): string[] {
+  return list
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.replace(/\s+/g, ' ').trim().slice(0, 120))
+    .filter(Boolean);
+}
+
+/**
+ * The model's soft skills that the posting asks for: each read as a listed soft skill (a phrase the list does not
+ * have, "excellent written communication skills", is read for the ones in it), kept by its canonical name only when
+ * the rule-based reading of `facetSource` (the posting's sections, else its text) finds that skill too. Skills that are
+ * also hard skills stay keywords. Each once, at most MAX_JOB_SOFT_SKILLS, in the model's order.
+ */
+export function groundedSoftSkills(raw: readonly unknown[], facetSource: string): string[] {
+  const lists = jobSkillLists();
+  const scanner = softSkillScanner(lists.soft, lists.hard);
+  const inPosting = new Set(findSoftSkills(facetSource, scanner, { max: 1000 }).map(softKey));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const phrase of strings(raw)) {
+    const canonical = canonicalSoftSkill(phrase, scanner);
+    for (const name of canonical ? [canonical] : findSoftSkills(phrase, scanner, { max: 3 })) {
+      const key = softKey(name);
+      if (seen.has(key) || !inPosting.has(key)) continue;
+      seen.add(key);
+      out.push(name);
+    }
+  }
+  return out.slice(0, MAX_JOB_SOFT_SKILLS);
+}
+
+/** The model's certifications by their canonical names, kept when the posting names them; each once, capped. */
+export function groundedCertifications(raw: readonly unknown[], postingText: string): string[] {
+  const inPosting = new Set(findCertifications(postingText, { max: 100 }));
+  const out: string[] = [];
+  for (const phrase of strings(raw)) {
+    const name = canonicalCertification(phrase);
+    if (name && inPosting.has(name) && !out.includes(name)) out.push(name);
+  }
+  return out.slice(0, MAX_JOB_CERTIFICATIONS);
+}
+
+/** The model's industries as INDUSTRIES ids, kept when the posting's words name that industry; each once, capped. */
+export function groundedDomains(raw: readonly unknown[], postingText: string): string[] {
+  const inPosting = new Set<string>(findDomains(postingText, 100));
+  const out: string[] = [];
+  for (const phrase of strings(raw)) {
+    const id = domainOf(phrase);
+    if (id && inPosting.has(id) && !out.includes(id)) out.push(id);
+  }
+  return out.slice(0, MAX_JOB_DOMAINS);
+}
+
+/**
+ * A number of years the model gave, kept only when the posting writes it as years ("5+ years", the 3 or the 5 of
+ * "3-5 years of experience"); `written` holds those numbers (`yearsMentioned`). Null otherwise.
+ */
+export function writtenYears(value: unknown, written: ReadonlySet<number>): number | null {
+  const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value.trim()) : NaN;
+  if (!Number.isFinite(number)) return null;
+  const years = Math.round(number);
+  return years >= 0 && years <= 30 && written.has(years) ? years : null;
+}
+
 /** What stands in where the model's answer falls short: the deterministic analysis of the same posting. */
 export interface AnalysisFallback extends Pick<AnalysisDraft, 'requirements' | 'responsibilities' | 'desired'> {
   /** Its keywords: they replace an empty keyword list and fill out a short one. */
   keywords?: JobKeywords;
+  /** Its years: they stand in for years the model gave that the posting does not write (or none at all). */
+  minYears?: number | null;
+  requiredYears?: number | null;
 }
 
 /**
- * The model's answer as the analysis TailorIT stores. `posting` is the text the model read (title, then the
- * description); `fallback` supplies a section the model's answer leaves empty after grounding, and the keywords a
- * keyword list left empty or short needs.
+ * The model's answer as the analysis TailorIT stores. `posting` is what the model read (the title, the location text,
+ * then the description); `fallback` supplies a section the model's answer leaves empty after grounding, the keywords a
+ * keyword list left empty or short needs, the sections its soft skills are checked against, and the years.
  */
 export function finishAiAnalysis(
   output: JobAnalysisOutput,
-  posting: { title: string; text: string },
+  posting: { title: string; text: string; locations?: string | null },
   fallback: AnalysisFallback,
 ): FinishedAiAnalysis {
   const postingText = `${posting.title}\n${posting.text}`;
@@ -385,14 +499,24 @@ export function finishAiAnalysis(
     : [];
   const leadershipWord = word(output.leadership);
   const leadership: Leadership | null = leadershipWord === 'manager' ? 'manager' : leadershipWord === 'ic' ? 'ic' : null;
-  const years = typeof output.minYears === 'number' ? output.minYears : typeof output.minYears === 'string' ? Number(output.minYears) : NaN;
-  const minYears = Number.isFinite(years) && years >= 0 && years <= 30 ? Math.round(years) : null;
+  const written = new Set(yearsMentioned(postingText));
+  const minYears = writtenYears(output.minYears, written) ?? fallback.minYears ?? null;
+  const requiredYears = writtenYears(output.requiredYears, written) ?? fallback.requiredYears ?? null;
   const arrangement = ARRANGEMENT_WORDS[word(output.workArrangement)] ?? null;
   const employment = EMPLOYMENT_WORDS[word(output.employmentType)] ?? null;
   const degree = typeof output.degree === 'string' && output.degree.trim() ? output.degree.trim().slice(0, 60) : null;
 
+  // Soft skills are read where the deterministic reading reads them: the posting's sections, when it has any.
+  const softSkills = output.softSkills === undefined ? null : groundedSoftSkills(output.softSkills, facetText({ text: posting.text, sections: fallback }));
+  const terms: JobTerms | null = output.terms
+    ? {
+        certifications: groundedCertifications(output.terms.certifications ?? [], groundText),
+        domains: groundedDomains(output.terms.domains ?? [], groundText),
+      }
+    : null;
+
   const facts: AiFacts = {
-    workArrangement: (WORK_ARRANGEMENTS as readonly string[]).includes(arrangement ?? '') ? arrangement : null,
+    workArrangement: checkedArrangement((WORK_ARRANGEMENTS as readonly string[]).includes(arrangement ?? '') ? arrangement : null, posting),
     employmentType: (EMPLOYMENT_TYPES as readonly string[]).includes(employment ?? '') ? employment : null,
     salary: salaryOf(output.salary, posting.text),
     sponsorsH1b: bool(output.sponsorsH1b),
@@ -410,6 +534,9 @@ export function finishAiAnalysis(
     categoryId,
     subcategoryIds,
     extras: { ...facts },
+    softSkills,
+    terms,
+    requiredYears,
     facts,
   };
 }

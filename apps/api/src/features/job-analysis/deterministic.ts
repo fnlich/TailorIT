@@ -1,23 +1,31 @@
 import {
   categorizeTitle,
+  extractJobFacets,
   extractKeywords,
   inferExperienceLevels,
   inferLeadership,
   inferMinYears,
+  inferRequiredYears,
   maskFalseFriends,
   OTHER_CATEGORY_ID,
   termPattern,
   type ExperienceLevel,
   type JobKeywords,
+  type JobTerms,
   type KeywordGroup,
   type Leadership,
+  type SkillLists,
 } from '@tailorit/shared';
 import { getSkillLibrary } from '../../core/skills-vocabulary';
 import { emptySections, extractSections, mergeSections, type PostingSections } from './sections';
 
 // The free analysis every posting gets at ingest (docs/ARCHITECTURE.md §9, job-analysis policy 1): the summary
-// sections from its headings and lists, keywords from the skill library's vocabulary, and the level, leadership,
-// years and category rules. No AI. Bump DETERMINISTIC_VERSION when the output for the same posting would change.
+// sections from its headings and lists, keywords from the skill library's vocabulary, the level, leadership, years
+// and category rules, and the posting's facets (soft skills, certifications and industries, required years). No AI.
+// Bump DETERMINISTIC_VERSION when an existing field's output for the same posting would change. A new field is not a
+// reason: rows stored before it was read are filled in place (job-analysis/store.ts `fillFacets`), at the next ingest
+// or when the analysis is next read, because a bump would have every posting re-read by the lazy path, which lacks
+// the source's own sections, department and plain-text reading.
 
 /** 2: keywords are labelled as the posting writes them ("AWS services", not the library's "Aws Services"). */
 export const DETERMINISTIC_VERSION = 2;
@@ -60,6 +68,16 @@ export function inPostingCase(keywords: JobKeywords, text: string): JobKeywords 
   return { high: keywords.high.map(relabel), low: keywords.low.map(relabel) };
 }
 
+/** What a posting asks for beside its keywords (job_analyses soft_skills, terms and required_years). */
+export interface JobFacetsDraft {
+  /** Soft skills, by their canonical names. */
+  softSkills: string[];
+  /** The certifications and industries (INDUSTRIES ids) it names. */
+  terms: JobTerms;
+  /** The years of experience its requirements ask for; null when it does not say. */
+  requiredYears: number | null;
+}
+
 /** What an analysis says about a posting, before it is stored (job_analyses columns). */
 export interface AnalysisDraft {
   requirements: string[];
@@ -72,6 +90,43 @@ export interface AnalysisDraft {
   categoryId: string | null;
   subcategoryIds: string[];
   extras: Record<string, unknown>;
+  /** The facets (JobFacetsDraft). Left out or null: not read (an analysis made before they were, a lake one). */
+  softSkills?: string[] | null;
+  terms?: JobTerms | null;
+  requiredYears?: number | null;
+}
+
+/** The skill library's lists as the facet readers take them: the same arrays every call, so their scanners are reused. */
+export function jobSkillLists(): SkillLists {
+  const library = getSkillLibrary();
+  return { hard: library.vocabulary, soft: library.soft };
+}
+
+/**
+ * A posting's facets: soft skills, certifications and industries read from its sections when it has any (the whole
+ * text otherwise, so equal-opportunity and benefits text stays out), and the years of experience its requirements ask
+ * for (the general requirement first: "7+ years of backend work, including 3+ years leading teams" is 7).
+ */
+export function jobFacetsOf(posting: {
+  title: string;
+  text: string;
+  requirements: readonly string[];
+  responsibilities: readonly string[];
+  desired: readonly string[];
+}): JobFacetsDraft {
+  const facets = extractJobFacets(
+    {
+      text: posting.text,
+      title: posting.title,
+      sections: { requirements: posting.requirements, responsibilities: posting.responsibilities, desired: posting.desired },
+    },
+    jobSkillLists(),
+  );
+  return {
+    softSkills: facets.softSkills,
+    terms: facets.terms,
+    requiredYears: inferRequiredYears(posting.requirements.join('\n') || posting.text),
+  };
 }
 
 export interface DeterministicInput {
@@ -129,5 +184,6 @@ export function analyzeDeterministic(input: DeterministicInput): AnalysisDraft {
     categoryId: category.categoryId,
     subcategoryIds: category.subcategoryIds,
     extras: {},
+    ...jobFacetsOf({ title: input.title, text: input.text, ...sections }),
   };
 }

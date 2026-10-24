@@ -87,8 +87,11 @@ async function waitTask(taskId: string) {
 
 describe.runIf(REAL)('AI features against the real claude CLI', () => {
   beforeAll(async () => {
-    // AI_CLI_BIN=claude: the real, signed-in CLI. Everything else is the usual temporary test app.
-    ctx = createTestContext({ env: { AI_CLI_BIN: 'claude', AI_CLI_TIMEOUT_MS: String(CALL_TIMEOUT), AI_CLI_FIRST_EVENT_MS: '120000' } });
+    // AI_CLI_BIN=claude: the real, signed-in CLI. Everything else is the usual temporary test app; lazy job analysis,
+    // because the job_analysis case below has opening a job queue its analysis.
+    ctx = createTestContext({
+      env: { AI_CLI_BIN: 'claude', AI_CLI_TIMEOUT_MS: String(CALL_TIMEOUT), AI_CLI_FIRST_EVENT_MS: '120000', AI_JOB_ANALYSIS: 'lazy' },
+    });
     me = await signIn(ctx, 'real-ai@example.com', { name: 'Jordan Lee' });
     const health = await requireAi(ctx.deps).health(true);
     record('health', JSON.stringify(health));

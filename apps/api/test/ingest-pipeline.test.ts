@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { saveAnalysis } from '../src/features/job-analysis/store';
 import { createIngestService, type IngestService } from '../src/features/ingest/service';
 import { insertSource } from '../src/features/ingest/sources';
 import type { FetchResult, RawPosting, SourceAdapter, SourceKind } from '../src/features/ingest/types';
@@ -128,6 +129,93 @@ describe('upsert', () => {
     release();
     await first.done;
     expect(service.isRunning(source.id)).toBe(false);
+  });
+});
+
+describe('analyses and facts at ingest', () => {
+  const FACETS = (id: string) =>
+    `<h3>Requirements</h3><ul><li>5+ years of experience with Kubernetes</li><li>Strong communication skills</li>` +
+    `<li>CISSP preferred</li></ul><p>${LONG}</p><p>Job ${id} works on our insurance claims platform.</p>`;
+  const deterministic = (hash: unknown) =>
+    ctx.deps.db
+      .prepare("SELECT soft_skills, terms, required_years FROM job_analyses WHERE content_hash = ? AND source = 'deterministic'")
+      .get(hash) as { soft_skills: string | null; terms: string | null; required_years: number | null };
+
+  it("stores the posting's facets with its deterministic analysis, and fills a row stored before they were read", async () => {
+    const source = addSource('greenhouse');
+    let postedAt = '2026-10-01T10:00:00.000Z';
+    const service = serviceWith('greenhouse', () => listing([posting('1', { descriptionHtml: FACETS('1'), postedAt })]));
+    await service.run(source.id, 'manual').done;
+    const hash = jobRow(1).content_hash;
+    const stored = deterministic(hash);
+    expect(JSON.parse(String(stored.soft_skills))).toEqual(['Communication']);
+    // The industry is outside the sections; the certification is in them.
+    expect(JSON.parse(String(stored.terms))).toEqual({ certifications: ['CISSP'], domains: [] });
+    expect(stored.required_years).toBe(5);
+
+    // A row from before the facets were read (migration 0401 left it NULL) is filled the next time the posting is written.
+    ctx.deps.db.prepare('UPDATE job_analyses SET soft_skills = NULL, terms = NULL, required_years = NULL').run();
+    postedAt = '2026-10-02T10:00:00.000Z';
+    expect(await service.run(source.id, 'manual').done).toMatchObject({ updated: 1 });
+    expect(deterministic(hash)).toEqual(stored);
+    expect(ctx.deps.db.prepare('SELECT count(*) AS n FROM job_analyses').get()).toEqual({ n: 1 });
+  });
+
+  it("puts Claude's facts back after every write: a rewrite of the same text, and a lower-precedence source's fill", async () => {
+    const board = addSource('greenhouse');
+    const seed = addSource('seed');
+    let postedAt = '2026-10-01T10:00:00.000Z';
+    // "Hybrid options" is no statement of how the role is worked to the strict reading: the job's arrangement is empty.
+    const html = `${FACETS('1')}<p>We offer hybrid options.</p>`;
+    const service = createIngestService(ctx.deps, {
+      adapters: {
+        greenhouse: { kind: 'greenhouse', fetch: async () => listing([posting('1', { descriptionHtml: html, postedAt })]) },
+        seed: { kind: 'seed', fetch: async () => listing([posting('s1', { descriptionHtml: html, url: 'https://jobs.example.com/acme/1', postedAt })]) },
+      },
+    });
+    await service.run(board.id, 'manual').done;
+    const job = jobRow(1);
+    const facts = () =>
+      ctx.deps.db.prepare('SELECT experience_levels, work_arrangement, degree, sponsors_h1b, salary_min, salary_max FROM jobs WHERE id = 1').get();
+    expect(facts()).toEqual({ experience_levels: '["senior"]', work_arrangement: null, degree: null, sponsors_h1b: null, salary_min: null, salary_max: null });
+
+    // What Claude read from this text (an answer stored by the job-analysis service).
+    saveAnalysis(
+      ctx.deps.db,
+      {
+        requirements: [],
+        responsibilities: [],
+        desired: [],
+        keywords: { high: [], low: [] },
+        experienceLevels: ['senior'],
+        leadership: 'ic',
+        minYears: 5,
+        categoryId: null,
+        subcategoryIds: [],
+        extras: {
+          workArrangement: 'hybrid',
+          employmentType: 'full_time',
+          salary: { min: 150000, max: 180000, currency: 'USD', period: 'year' },
+          sponsorsH1b: true,
+          requiresClearance: null,
+          degree: "Bachelor's",
+        },
+        contentHash: String(job.content_hash),
+        source: 'ai',
+        version: 1,
+      },
+      TEST_NOW.toISOString(),
+    );
+    const claude = { experience_levels: '["senior"]', work_arrangement: 'hybrid', degree: "Bachelor's", sponsors_h1b: 1, salary_min: 150000, salary_max: 180000 };
+
+    postedAt = '2026-10-02T10:00:00.000Z';
+    expect(await service.run(board.id, 'manual').done).toMatchObject({ updated: 1 });
+    expect(facts()).toEqual(claude);
+
+    // A lower-precedence source listing the same posting fills only what is empty: Claude's facts stay.
+    expect(await service.run(seed.id, 'manual').done).toMatchObject({ created: 0 });
+    expect(facts()).toEqual(claude);
+    expect(jobRow(1).analysis_id).toBe((ctx.deps.db.prepare("SELECT id FROM job_analyses WHERE source = 'ai'").get() as { id: number }).id);
   });
 });
 

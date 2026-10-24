@@ -1,12 +1,14 @@
 import type { Db } from '../../core/db/connection';
 import { DETERMINISTIC_VERSION } from '../job-analysis/deterministic';
-import { hasAnalysis, refreshAnalysisLinks, saveAnalysis } from '../job-analysis/store';
+import { applyAiFacts, fillFacets, refreshAnalysisLinks, saveAnalysis } from '../job-analysis/store';
 import { normalizePosting, titleKeyOf, type NormalizedCompany, type NormalizedPosting } from './normalize';
 import { SOURCE_PRECEDENCE, type RawPosting, type SourceKind, type SourceRecord } from './types';
 
 // Writes normalised postings: companies (by normalised name), jobs, job_locations, job_source_links, jobs_fts and the
 // postings' analyses, in the caller's transaction. A posting whose source hash has not changed only moves its
-// last-seen and last-verified times. A job is live while any of its source links is not missing.
+// last-seen and last-verified times. A job is live while any of its source links is not missing. After every write
+// of a job, the facts Claude read from its text are put back where the write left them empty (`applyAiFacts`), so a
+// rewrite (a changed listing, a NORMALIZE_VERSION bump) never loses them.
 
 /** Postings per transaction. */
 export const BATCH_SIZE = 200;
@@ -273,9 +275,18 @@ export function createIngestStore(db: Db): IngestStore {
     );
   }
 
+  /** The posting's analyses (deterministic, the lake's), then the AI facts of its text back on its jobs. */
   function writeAnalyses(contentHash: string, posting: NormalizedPosting, now: string): void {
-    if (!hasAnalysis(db, contentHash, 'deterministic', DETERMINISTIC_VERSION)) {
-      saveAnalysis(db, { ...posting.deterministic, contentHash, source: 'deterministic', version: DETERMINISTIC_VERSION }, now);
+    const draft = posting.deterministic;
+    // An existing deterministic row is kept as it is, except for facets it was stored without (before they were
+    // read), which this posting supplies when it is that text.
+    const deterministicId = saveAnalysis(db, { ...draft, contentHash, source: 'deterministic', version: DETERMINISTIC_VERSION }, now);
+    if (draft.softSkills && posting.contentHash === contentHash) {
+      fillFacets(db, deterministicId, {
+        softSkills: draft.softSkills,
+        terms: draft.terms ?? { certifications: [], domains: [] },
+        requiredYears: draft.requiredYears ?? null,
+      });
     }
     const provided = posting.provided;
     if (provided) {
@@ -303,6 +314,7 @@ export function createIngestStore(db: Db): IngestStore {
       );
     }
     refreshAnalysisLinks(db, contentHash);
+    applyAiFacts(db, contentHash);
   }
 
   function jobValues(posting: NormalizedPosting, companyId: number, linkKeyValue: string | null) {
@@ -405,7 +417,8 @@ export function createIngestStore(db: Db): IngestStore {
     if (posting.salary && job.salary_min === null && job.salary_max === null) writeSalary(job.id, posting, now);
     if (posting.verified) sql.touchJob.run(now, 1, now, job.id);
     // Its analysis reads the same posting (same link or same text): file it under the job's text.
-    if (posting.provided) writeAnalyses(job.content_hash, { ...posting, contentHash: job.content_hash }, now);
+    if (posting.provided) writeAnalyses(job.content_hash, posting, now);
+    else applyAiFacts(db, job.content_hash);
   }
 
   function outranks(source: SourceRecord, jobId: number): boolean {

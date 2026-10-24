@@ -117,6 +117,20 @@ export function inferMinYears(text: string | null | undefined): number | null {
   return mentions.length > 0 ? Math.min(...mentions.map((mention) => mention.from)) : null;
 }
 
+/**
+ * Every number of years a posting writes as an accepted "N years" mention: each mention's lower bound and, for a range,
+ * its upper bound ("3-5 years of experience" is 3 and 5). "5 days PTO" is no mention. An AI analysis's years are kept
+ * only when they are one of these.
+ */
+export function yearsMentioned(text: string | null | undefined): number[] {
+  const values = new Set<number>();
+  for (const mention of yearMentions(text ?? '')) {
+    values.add(mention.from);
+    if (mention.to !== null) values.add(mention.to);
+  }
+  return [...values];
+}
+
 /** The most years a resume says its writer has ("10+ years of experience", "over 8 years in software"), or null. */
 export function inferStatedYears(text: string | null | undefined): number | null {
   const mentions = yearMentions(text ?? '', 60);

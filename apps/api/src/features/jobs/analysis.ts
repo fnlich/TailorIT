@@ -8,15 +8,18 @@ import {
   type JobAnalysisSource,
   type JobAnalysisView,
   type JobKeywords,
+  type JobTerms,
 } from '@tailorit/shared';
 import type { AppDeps } from '../../core/context';
 import { getSkillLibrary } from '../../core/skills-vocabulary';
+import { jobFacetsOf } from '../job-analysis/deterministic';
 import type { EnsuredAnalysis, JobAnalysisService } from '../job-analysis/types';
 import { experienceLevelsOf, jsonStrings } from './rows';
 
-// The job analysis the page shows ("About the job" summary and the keywords the match uses). Work package J1's
-// service decides which analysis is best and queues the AI one; while that service is absent (or fails) the analysis
-// stored on the job is used, and failing that one is computed here, deterministically, from the posting.
+// The job analysis the page shows ("About the job" summary, the keywords the match uses, and the posting's facets:
+// soft skills, certifications and industries, required years). Work package J1's service decides which analysis is
+// best (and, in lazy mode, queues the AI one); while that service is absent (or fails) the analysis stored on the job
+// is used, and failing that one is computed here, deterministically, from the posting. Nothing here writes.
 
 interface JobForAnalysis {
   id: number;
@@ -39,6 +42,50 @@ interface AnalysisRow {
   experience_levels: string;
   category_id: string | null;
   subcategory_ids: string;
+  /** NULL: not read (a row from before the facets were); then they are computed from the row's sections. */
+  soft_skills: string | null;
+  terms: string | null;
+  required_years: number | null;
+}
+
+type ViewFacets = Required<Pick<JobAnalysisView, 'softSkills' | 'terms' | 'requiredYears'>>;
+
+const MAX_SOFT_SKILLS = 40;
+/** JobTermsSchema's bounds. */
+const MAX_CERTIFICATIONS = 10;
+const MAX_DOMAINS = 6;
+
+/** The text a posting's facets and keywords are read from: its plain text, else its HTML as text. */
+function postingText(job: Pick<JobForAnalysis, 'description_html' | 'description_text'>): string {
+  return job.description_text?.trim() ? job.description_text : htmlToText(job.description_html ?? '');
+}
+
+/** A posting's facets, read from its sections (the whole text when it has none): the job-analysis rule itself. */
+function facetsOfPosting(job: JobForAnalysis, sections: PostingSections): ViewFacets {
+  return jobFacetsOf({ title: job.title, text: postingText(job), ...sections });
+}
+
+/** Terms in the shared contract's bounds, whatever the value holds. */
+function conformTerms(value: unknown): JobTerms {
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const list = (items: unknown, maxLength: number, max: number) =>
+    strings(items)
+      .filter((item) => item.length <= maxLength)
+      .slice(0, max);
+  return { certifications: list(record.certifications, 120, MAX_CERTIFICATIONS), domains: list(record.domains, 40, MAX_DOMAINS) };
+}
+
+/** Required years in the contract's bounds (a whole number 0 to 30), else null. */
+function yearsOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 30 ? value : null;
+}
+
+function parsed(text: string | null): unknown {
+  try {
+    return text === null ? null : JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 const SOURCES: readonly JobAnalysisSource[] = ['deterministic', 'ft_lake', 'ai'];
@@ -105,12 +152,20 @@ function bullets(text: string | null | undefined): string[] {
 
 function fromRow(row: AnalysisRow, job: JobForAnalysis): JobAnalysisView {
   const levels = experienceLevelsOf(row.experience_levels);
+  const sections = { requirements: bullets(row.requirements), responsibilities: bullets(row.responsibilities), desired: bullets(row.desired) };
+  // A row read before facets were stored (or a lake row, which has none) gets them computed from its sections.
+  const facets: ViewFacets =
+    row.soft_skills === null
+      ? facetsOfPosting(job, sections)
+      : {
+          softSkills: strings(parsed(row.soft_skills)).slice(0, MAX_SOFT_SKILLS),
+          terms: conformTerms(parsed(row.terms)),
+          requiredYears: yearsOrNull(row.required_years),
+        };
   return {
     source: SOURCES.includes(row.source as JobAnalysisSource) ? (row.source as JobAnalysisSource) : 'deterministic',
     refining: false,
-    requirements: bullets(row.requirements),
-    responsibilities: bullets(row.responsibilities),
-    desired: bullets(row.desired),
+    ...sections,
     keywords: keywordsOf(row.keywords),
     experienceLevels: levels.length > 0 ? levels : experienceLevelsOf(job.experience_levels),
     categoryId: row.category_id ?? job.category_id,
@@ -118,6 +173,7 @@ function fromRow(row: AnalysisRow, job: JobForAnalysis): JobAnalysisView {
       const ids = jsonStrings(row.subcategory_ids);
       return ids.length > 0 ? ids : jsonStrings(job.subcategory_ids);
     })(),
+    ...facets,
   };
 }
 
@@ -218,7 +274,7 @@ export function computeAnalysis(job: JobForAnalysis): JobAnalysisView {
   const cached = computed.get(key);
   if (cached) return cached;
   const sections = extractSections(job.description_html, job.description_text);
-  const text = job.description_text?.trim() ? job.description_text : htmlToText(job.description_html ?? '');
+  const text = postingText(job);
   const keywords = extractKeywords(text, getSkillLibrary().vocabulary, {
     title: job.title,
     requirementsText: sections.requirements.join('\n'),
@@ -231,6 +287,7 @@ export function computeAnalysis(job: JobForAnalysis): JobAnalysisView {
     experienceLevels: experienceLevelsOf(job.experience_levels),
     categoryId: job.category_id,
     subcategoryIds: jsonStrings(job.subcategory_ids),
+    ...facetsOfPosting(job, sections),
   };
   if (computed.size >= COMPUTED_MAX) computed.delete(computed.keys().next().value as string);
   computed.set(key, view);
@@ -254,7 +311,8 @@ export function fallbackAnalysis(deps: Pick<AppDeps, 'db'>, jobId: number): JobA
   if (job.analysis_id !== null) {
     const row = deps.db
       .prepare(
-        `SELECT source, requirements, responsibilities, desired, keywords, experience_levels, category_id, subcategory_ids
+        `SELECT source, requirements, responsibilities, desired, keywords, experience_levels, category_id, subcategory_ids,
+                soft_skills, terms, required_years
          FROM job_analyses WHERE id = ?`,
       )
       .get(job.analysis_id) as AnalysisRow | undefined;
@@ -269,7 +327,10 @@ function strings(value: unknown): string[] {
     : [];
 }
 
-/** The service's answer in the contract's shape whatever it holds (it is another package's data). */
+/**
+ * The service's answer in the contract's shape whatever it holds (it is another package's data). Facets it leaves out
+ * stay out (the contract's fields are optional).
+ */
 function fromService(result: EnsuredAnalysis): JobAnalysisView {
   const analysis = result.analysis;
   const levels = new Set(strings(analysis.experienceLevels));
@@ -283,13 +344,17 @@ function fromService(result: EnsuredAnalysis): JobAnalysisView {
     experienceLevels: EXPERIENCE_LEVELS.filter((level) => levels.has(level)),
     categoryId: typeof analysis.categoryId === 'string' && analysis.categoryId ? analysis.categoryId : null,
     subcategoryIds: strings(analysis.subcategoryIds),
+    ...(Array.isArray(analysis.softSkills) ? { softSkills: strings(analysis.softSkills).slice(0, MAX_SOFT_SKILLS) } : {}),
+    ...(analysis.terms !== undefined ? { terms: conformTerms(analysis.terms) } : {}),
+    ...(analysis.requiredYears !== undefined ? { requiredYears: yearsOrNull(analysis.requiredYears) } : {}),
   };
 }
 
 /**
  * The analysis to show for a job: the job-analysis service's, else the fallback. Null when the job does not exist.
- * `queue` lets the service start the AI analysis, as when a person opens the job: on the background slot (people's own
- * AI requests come first) and against `userId`'s hourly budget of new analyses.
+ * `queue` is what a person opening the job asks for: in lazy mode the service may start the AI analysis then, on the
+ * background slot (people's own AI requests come first) and against `userId`'s hourly budget of new analyses; in the
+ * other modes it never queues (the add-time backlog has Claude read each added job).
  */
 export function analysisForJob(
   deps: AppDeps,
@@ -302,6 +367,24 @@ export function analysisForJob(
       const result = options.queue
         ? service.ensure(jobId, { interactive: false, requestedBy: options.userId })
         : service.get(jobId);
+      if (result) return fromService(result);
+    } catch (error) {
+      deps.log.warn(`[jobs] the job analysis service failed for job ${jobId}; using the stored analysis`, error);
+    }
+  }
+  return fallbackAnalysis(deps, jobId);
+}
+
+/**
+ * `analysisForJob` without a single write or AI task: the service's `peek` (the same answer as `get`), else the
+ * stored or computed fallback. For passes over many jobs (the resume chooser, Save all). Null when the job does not
+ * exist.
+ */
+export function peekAnalysisForJob(deps: AppDeps, jobId: number): JobAnalysisView | null {
+  const service = serviceOf(deps);
+  if (service && typeof service.peek === 'function') {
+    try {
+      const result = service.peek(jobId);
       if (result) return fromService(result);
     } catch (error) {
       deps.log.warn(`[jobs] the job analysis service failed for job ${jobId}; using the stored analysis`, error);

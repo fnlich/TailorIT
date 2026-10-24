@@ -39,7 +39,7 @@ export function AiTab() {
     <section>
       <SectionHeader
         title="AI"
-        description="AI features run through the Claude CLI signed in on this server, on its subscription. Job analysis uses it lazily, the first time a job is opened."
+        description="AI features run through the Claude CLI signed in on this server, on its subscription. By default, Claude reads each added job once, in the background, newest first. Opening or saving a job never starts a reading."
         actions={
           <>
             <Button variant="outline" icon={<ArrowsClockwiseIcon size={16} />} onClick={() => recheck.mutate()} loading={recheck.isPending}>

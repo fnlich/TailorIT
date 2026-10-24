@@ -3,9 +3,15 @@ import { z } from 'zod';
 import { JOB_CATEGORIES } from '@tailorit/shared';
 import type { PromptModule } from '../../ai/index';
 
-// The `job_analysis` prompt: a posting read for Simplify's "About the job" summary and the resume keyword card.
-// The rule it is built on (free_tailor's keyword extractor, reworded): take what the posting says, in the posting's
-// own words; never what such a role usually involves. Bump the version whenever the wording or the shape changes.
+// The `job_analysis` prompt: a posting read for Simplify's "About the job" summary, the resume keyword card and the
+// resume fit (soft skills, certifications and industries, required years). The rule it is built on (free_tailor's
+// keyword extractor, reworded): take what the posting says, in the posting's own words; never what such a role usually
+// involves.
+//
+// Bump the version only when the answers already stored must be asked for again: every job without an analysis of
+// the new version goes back to Claude. A new optional field keeps it (softSkills, terms and requiredYears were added
+// to version 1: older answers lack them, and the rule-based reading stands in), and JOB_ANALYSIS_PROMPT_HASH records
+// on each new row which wording produced it.
 
 export const JOB_ANALYSIS_PROMPT_VERSION = 1;
 
@@ -55,14 +61,28 @@ KEYWORDS (matched literally against resumes)
   pay and benefits, and recruiting phrases ("fast-paced", "rockstar").
 - Up to 15 high and 15 low keywords. Every term or one of its synonyms must appear in the posting.
 
+SOFT SKILLS AND OTHER KEYWORDS
+- softSkills: the personal and interpersonal skills the posting asks of the candidate ("communication",
+  "collaboration", "mentoring", "attention to detail"), named as the posting names them, from its requirements and
+  duties. Never a tool or a technology, and nothing from the company description, benefits or EEO text. Up to 15.
+- terms.certifications: certifications and licences the posting names ("AWS Certified Solutions Architect", "CISSP",
+  "PMP"), as it writes them. Up to 8.
+- terms.domains: the industries the role or the company is in, when the posting says so ("fintech", "healthcare",
+  "insurance", "logistics"). Never "technology" or "software". Up to 4.
+- [] for a list the posting gives nothing for.
+
 FACTS (null when the posting does not say)
 - experienceLevels: any of "entry", "junior", "mid", "senior", "expert", from the title and the years asked for
   (0-1 years entry, 2-3 junior, 3-5 mid, 5-8 senior, 8+ expert; intern and new-grad roles are entry; staff,
   principal, lead, director and above are expert). [] when neither says.
 - leadership: "manager" when the role manages people, otherwise "ic".
 - minYears: the fewest years of experience the posting asks for, as a number.
+- requiredYears: the years of experience the requirements ask for in general, as a number ("7+ years of backend
+  experience, including 3+ years leading teams" is 7). Only a number of years the posting writes.
 - category: {"id": one category id below, "subcategoryIds": the subcategory ids of that category that fit}.
-- workArrangement: "remote", "hybrid" or "onsite".
+- workArrangement: "remote", "hybrid" or "onsite", only when the posting says how this role is worked (where the
+  person works); null when it does not say. Remote tools or monitoring, remote customers or teams, on-site
+  interviews and hybrid cloud are not arrangements.
 - employmentType: "full_time", "part_time", "contract" or "internship".
 - salary: {"min", "max", "currency" (ISO code such as "USD"), "period" ("year", "month", "week", "day" or "hour")}
   only when the posting states pay; numbers exactly as stated, never estimated.
@@ -76,7 +96,8 @@ ${taxonomyLines()}
 Answer with this shape:
 {"summary":{"requirements":[],"responsibilities":[],"desiredQualifications":[]},
  "keywords":{"high":[{"term":"","synonyms":[]}],"low":[]},
- "experienceLevels":[],"leadership":null,"minYears":null,
+ "softSkills":[],"terms":{"certifications":[],"domains":[]},
+ "experienceLevels":[],"leadership":null,"minYears":null,"requiredYears":null,
  "category":{"id":null,"subcategoryIds":[]},
  "workArrangement":null,"employmentType":null,
  "salary":null,"sponsorsH1b":null,"requiresClearance":null,"degree":null}`;
@@ -90,6 +111,11 @@ const KeywordOutput = z.object({
   synonyms: z.array(z.string()).max(40).default([]),
 });
 const loose = z.union([z.string(), z.number(), z.boolean(), z.null()]).optional();
+/**
+ * A list added after version 1's answers were defined: read as leniently as can be (anything unexpected reads as "not
+ * given"), so a slip in it never costs the rest of the answer a repair round. finishAiAnalysis keeps its strings.
+ */
+const extraList = z.array(z.unknown()).max(200).optional().catch(undefined);
 
 export const JobAnalysisOutputSchema = z.object({
   summary: z.object({
@@ -101,9 +127,12 @@ export const JobAnalysisOutputSchema = z.object({
     high: z.array(KeywordOutput).max(60).default([]),
     low: z.array(KeywordOutput).max(60).default([]),
   }),
+  softSkills: extraList,
+  terms: z.object({ certifications: extraList, domains: extraList }).nullable().optional().catch(undefined),
   experienceLevels: z.array(z.string()).max(10).default([]),
   leadership: loose,
   minYears: loose,
+  requiredYears: loose,
   category: z
     .object({ id: z.string().nullable().optional(), subcategoryIds: z.array(z.string()).max(30).default([]) })
     .nullable()
