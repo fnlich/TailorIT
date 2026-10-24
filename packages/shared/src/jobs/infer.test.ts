@@ -5,6 +5,8 @@ import {
   inferExperienceLevels,
   inferLeadership,
   inferMinYears,
+  inferRequiredYears,
+  inferStatedYears,
   inferWorkArrangement,
   levelsForYears,
 } from './infer';
@@ -82,6 +84,129 @@ describe('inferWorkArrangement', () => {
     ['Fully remote team.', 'Hybrid - New York, NY', 'hybrid'],
   ])('%s', (text, location, expected) => {
     expect(inferWorkArrangement(text, location)).toBe(expected);
+  });
+});
+
+describe('inferWorkArrangement, strict description reading', () => {
+  const strict = (text: string, location: string | null = null) => inferWorkArrangement(text, location, { strict: true });
+
+  it.each([
+    ['This role is hybrid, three days a week in the office.', null, 'hybrid'],
+    ['2 days per week in the office, the rest remote.', null, 'hybrid'],
+    ['This is a fully remote position.', null, 'remote'],
+    ['You can work from home anywhere in the US.', null, 'remote'],
+    ['This role is not remote; you will work on-site in Austin.', null, 'onsite'],
+    ['You will work in-office with the team.', null, 'onsite'],
+    ['We build great software.', null, null],
+    ['We build great software.', 'Remote - US', 'remote'],
+    ['Fully remote team.', 'Hybrid - New York, NY', 'hybrid'],
+  ])('keeps the existing case: %s', (text, location, expected) => {
+    expect(strict(text, location)).toBe(expected);
+  });
+
+  it.each([
+    // Hybrid with work context, read before "not remote".
+    ['This is a hybrid role, not a remote role.', 'hybrid'],
+    ['We offer a hybrid work schedule.', 'hybrid'],
+    ['Hybrid working policy for the London office.', 'hybrid'],
+    ['This position is hybrid.', 'hybrid'],
+    ['Hybrid (3 days in office)', 'hybrid'],
+    ['Hybrid - 2 days onsite', 'hybrid'],
+    ['Hybrid: three days a week', 'hybrid'],
+    ['Work arrangement: Hybrid', 'hybrid'],
+    ['Workplace type: Hybrid', 'hybrid'],
+    ['We are partially remote.', 'hybrid'],
+    ['A mix of remote and in-office work.', 'hybrid'],
+    // "Hybrid" that names a technology.
+    ['Build a hybrid cloud platform.', null],
+    ['Experience with hybrid-cloud networking.', null],
+    ['Operate hybrid (on-prem/AWS) deployments.', null],
+    ['Ship a hybrid mobile app.', null],
+    ['We use a hybrid model of agile and waterfall.', null],
+    ['Hybrid multi-cloud infrastructure', null],
+    ['A hybrid environment of Linux and Windows', null],
+    ['Work model: hybrid cloud', null],
+    ['Hybrid architecture and hybrid apps; a hybrid approach to hybrid deployment.', null],
+    // Strong remote statements.
+    ['This is a remote position.', 'remote'],
+    ['This is a fully remote opportunity.', 'remote'],
+    ['A remote-eligible role', 'remote'],
+    ['We are a remote-first company.', 'remote'],
+    ['Our team is remote friendly.', 'remote'],
+    ['The role is remote.', 'remote'],
+    ['You will work remotely.', 'remote'],
+    ['Remote (US)', 'remote'],
+    ['Remote - Canada', 'remote'],
+    ['Location: Remote', 'remote'],
+    ['WFH available', 'remote'],
+    ['A fully distributed team', 'remote'],
+    ['Telecommuting is supported.', 'remote'],
+    ['100% remote', 'remote'],
+    // Words about something else.
+    ['Remote monitoring of devices.', null],
+    ['Collaborate with remote teams across time zones.', null],
+    ['Remote debugging of embedded targets.', null],
+    ['On-site interviews in Austin.', null],
+    ['An in-person interview is part of the process.', null],
+    // Strong on-site statements.
+    ['This role is on-site.', 'onsite'],
+    ['On-site only.', 'onsite'],
+    ['You will work in the office every day.', 'onsite'],
+    ['Five days a week in the office.', 'onsite'],
+    ['Workplace type: On-site', 'onsite'],
+    // A conflict, or "not remote" alone, is not sure.
+    ['Fully remote. You will work on-site daily.', null],
+    ['Remote work is not available.', null],
+    ['This position is not remote.', null],
+    ['Not remote: you will work on-site in Austin.', 'onsite'],
+  ])('%s -> %s', (text, expected) => {
+    expect(strict(text)).toBe(expected);
+  });
+
+  it('leaves the default reading as it was', () => {
+    expect(inferWorkArrangement('Build a hybrid cloud platform.', null)).toBe('hybrid');
+    expect(inferWorkArrangement('This position is not remote.', null)).toBe('onsite');
+    expect(inferWorkArrangement('Remote monitoring of devices.', null)).toBe('remote');
+  });
+});
+
+describe('inferRequiredYears', () => {
+  it.each([
+    ['7+ years of backend work, including 3+ years leading teams', 7],
+    ['Minimum 2 years of experience; ideally 5+ years of professional experience', 2],
+    ['2+ years of Python and 5+ years of software development experience', 5],
+    ['5+ years in a similar role', 5],
+    ['3+ years of people management experience', 3],
+    ['3+ years leading teams and 2+ years of Go', 3],
+    ['No experience needed', null],
+    ['Enjoy 5 days PTO', null],
+    ['', null],
+  ])('%s -> %s', (text, expected) => {
+    expect(inferRequiredYears(text)).toBe(expected);
+  });
+
+  it('keeps inferMinYears on the fewest years', () => {
+    expect(inferMinYears('7+ years of backend work, including 3+ years leading teams')).toBe(3);
+  });
+
+  it('stays fast on long runs of spaces', () => {
+    const started = Date.now();
+    expect(inferMinYears(`at least${' '.repeat(60_000)}5 years`)).toBe(5);
+    expect(inferRequiredYears(`5${' '.repeat(60_000)}+ years of experience`)).toBe(5);
+    expect(inferStatedYears(' '.repeat(60_000))).toBeNull();
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe('inferStatedYears', () => {
+  it.each([
+    ['Engineer with 12+ years of experience; 5 years at Google', 12],
+    ['Over 35 years of industry experience', 35],
+    ['8-10 years of experience in fintech', 8],
+    ['The company was founded 10 years ago.', null],
+    ['', null],
+  ])('%s -> %s', (text, expected) => {
+    expect(inferStatedYears(text)).toBe(expected);
   });
 });
 

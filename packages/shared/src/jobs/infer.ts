@@ -82,22 +82,31 @@ const WORD_NUMBERS: Record<string, number> = {
   fifteen: 15,
 };
 
+// A mention without a lead word never starts right after whitespace (the whitespace before it would match too), and
+// "\s*(?:\+\s*)?" reads what "\s*\+?\s*" reads: both keep the scan linear on long runs of spaces.
 const YEARS_MENTION =
-  /(?<lead>at\s+least|minimum(?:\s+of)?|min\.?|over|more\s+than)?\s*\b(?<from>\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen)\s*(?<plus>\+)?\s*(?:(?:-|–|—|to)\s*(?<to>\d{1,2})\s*\+?\s*)?(?:years?|yrs?)\b(?=(?<after>[^.\n;]{0,80}))/gi;
+  /(?:(?<lead>at\s+least|minimum(?:\s+of)?|min\.?|over|more\s+than)|(?<!\s))\s*\b(?<from>\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen)\s*(?:(?<plus>\+)\s*)?(?:(?:-|–|—|to)\s*(?<to>\d{1,2})\s*(?:\+\s*)?)?(?:years?|yrs?)\b(?=(?<after>[^.\n;]{0,80}))/gi;
 const EXPERIENCE_CONTEXT = /experience|\bexp\b|background|professional|industry|hands-on|working|relevant|track record/i;
 
-/** One accepted "N years" mention: its lower bound and, for a range, its upper bound. */
-function yearMentions(text: string): Array<{ from: number; to: number | null }> {
-  const mentions: Array<{ from: number; to: number | null }> = [];
+/** One accepted "N years" mention: its lower bound, for a range its upper bound, and the words after it. */
+interface YearMention {
+  from: number;
+  to: number | null;
+  after: string;
+}
+
+/** Every accepted "N years" mention; `maxFrom` caps the number read (30 for postings). */
+function yearMentions(text: string, maxFrom = 30): YearMention[] {
+  const mentions: YearMention[] = [];
   for (const match of text.matchAll(YEARS_MENTION)) {
     const groups = match.groups ?? {};
     const fromText = (groups.from ?? '').toLowerCase();
     const from = WORD_NUMBERS[fromText] ?? Number(fromText);
-    if (!Number.isFinite(from) || from > 30) continue;
+    if (!Number.isFinite(from) || from > maxFrom) continue;
     const strong = Boolean(groups.plus || groups.lead);
     if (!strong && !EXPERIENCE_CONTEXT.test(groups.after ?? '')) continue;
     const to = groups.to ? Number(groups.to) : null;
-    mentions.push({ from, to: to !== null && to > from && to <= 40 ? to : null });
+    mentions.push({ from, to: to !== null && to > from && to <= 40 ? to : null, after: groups.after ?? '' });
   }
   return mentions;
 }
@@ -106,6 +115,32 @@ function yearMentions(text: string): Array<{ from: number; to: number | null }> 
 export function inferMinYears(text: string | null | undefined): number | null {
   const mentions = yearMentions(text ?? '');
   return mentions.length > 0 ? Math.min(...mentions.map((mention) => mention.from)) : null;
+}
+
+/** The most years a resume says its writer has ("10+ years of experience", "over 8 years in software"), or null. */
+export function inferStatedYears(text: string | null | undefined): number | null {
+  const mentions = yearMentions(text ?? '', 60);
+  return mentions.length > 0 ? Math.max(...mentions.map((mention) => mention.from)) : null;
+}
+
+/**
+ * Words after "N years" that make it the general requirement: "of (professional) experience", "of backend work", "in
+ * software development". Leading, managing or a single skill ("3+ years leading teams", "2+ years of Python") is not.
+ */
+const GENERAL_EXPERIENCE =
+  /^\s*(?:(?:of|in)\s+)?(?:(?:the|a|an)\s+)?(?:[\w+#./-]+\s+){0,4}?(?:experience|exp\b|work\b|development\b|engineering\b|industry\b|field\b|roles?\b|positions?\b|capacity\b)/i;
+const SPECIFIC_EXPERIENCE = /^\s*(?:(?:of|in)\s+)?(?:[\w+#./-]+\s+){0,4}?(?:lead(?:ing|ership)?|manag(?:ing|ement|er)|supervis(?:ing|ory|ion)|mentor(?:ing)?|people)\b/i;
+
+/**
+ * The years of experience a posting's requirements ask for, for "Experience: N+ years" and the resume fit: the first
+ * general-experience mention ("7+ years of backend work, including 3+ years leading teams" is 7), else the first
+ * mention at all. Read the requirements text (the whole text when there is none); `inferMinYears`, which sets the
+ * experience levels, keeps its fewest-years rule.
+ */
+export function inferRequiredYears(text: string | null | undefined): number | null {
+  const mentions = yearMentions(text ?? '');
+  const general = mentions.find((mention) => GENERAL_EXPERIENCE.test(mention.after) && !SPECIFIC_EXPERIENCE.test(mention.after));
+  return (general ?? mentions[0])?.from ?? null;
 }
 
 /** Year bands: entry [0,2), junior [2,3), mid [3,5), senior [5,8), expert [8,...). */
@@ -201,12 +236,83 @@ function arrangementIn(text: string): WorkArrangement | null {
   return null;
 }
 
+// The strict reading of a description: only statements about how the role is worked count, so "hybrid cloud",
+// "remote monitoring", "remote teams" and "on-site interviews" set nothing. Hybrid is read first ("a hybrid role, not
+// a remote role" is hybrid); "not remote" voids remote wording and reads as on-site only when the posting also says
+// on-site; remote and on-site statements together, or none, are null.
+
+/** What "hybrid" must not be followed by: it names a technology, not a way of working. */
+const NOT_WORK_HYBRID = String.raw`(?![\s-]*(?:multi[\s-]?)?(?:cloud|infrastructure|environment|apps?|applications?|mobile|models?|architectures?|deployments?|approach(?:es)?)\b)`;
+const ARRANGEMENT_LABEL = String.raw`\b(?:location|workplace\s+type|work\s+type|work\s+model|working\s+model|work\s+arrangement|work\s+location|work\s+setting)\s*:\s*`;
+const STRICT_HYBRID = new RegExp(
+  [
+    String.raw`\bhybrid${NOT_WORK_HYBRID}[\s-]+(?:work|working|schedule|role|position|arrangement|policy|workplace)\b`,
+    String.raw`\b(?:role|position|job)\s+is\s+hybrid\b${NOT_WORK_HYBRID}`,
+    String.raw`\bhybrid${NOT_WORK_HYBRID}[\s(:,\-–—]+(?:\d|one|two|three|four)(?:\s*[-–]\s*\d)?\s*days?\b`,
+    String.raw`${ARRANGEMENT_LABEL}hybrid\b${NOT_WORK_HYBRID}`,
+    String.raw`\b(?:[1-4]|one|two|three|four)\s+days?\s+(?:a|per)\s+week\s+(?:in|at|from)\s+(?:the\s+|our\s+)?office\b`,
+    String.raw`\bpartially\s+remote\b`,
+    String.raw`\bremote[\s-]+(?:and|&|\/)[\s-]+(?:in[\s-]office|on[\s-]?site)\b`,
+  ].join('|'),
+  'i',
+);
+const STRICT_REMOTE = new RegExp(
+  [
+    String.raw`(?:\bfully|\b100%|\bcompletely|\bentirely)[\s-]+remote\b`,
+    String.raw`\bremote(?:-(?:first|friendly|only|eligible|role|position|job|opportunity)\b|\s+(?:first|friendly|only|eligible)\b)`,
+    String.raw`\b(?:role|position|job|opportunity|team)\s+(?:is|can\s+be|will\s+be)\s+(?:fully\s+|100%\s+)?remote\b`,
+    String.raw`\b(?:a|an|this)\s+(?:fully\s+)?remote[\s-](?:role|position|job|opportunity)\b`,
+    String.raw`\bwork(?:ing)?\s+(?:remotely|from\s+home|from\s+anywhere)\b`,
+    String.raw`\bremote\s*(?:\(\s*|[-–—:,]\s*)(?:US|USA|U\.S\.|United\s+States|Canada|UK|EU|Europe|EMEA|LATAM|APAC|anywhere|global|worldwide)\b`,
+    String.raw`${ARRANGEMENT_LABEL}remote\b`,
+    String.raw`\bwfh\b`,
+    String.raw`\bfully\s+distributed\b`,
+    String.raw`\btelecommut(?:e|ing)\b`,
+  ].join('|'),
+  'i',
+);
+const STRICT_ONSITE = new RegExp(
+  [
+    String.raw`\b(?:role|position|job)\s+(?:is|will\s+be)\s+(?:fully\s+|100%\s+)?(?:on[\s-]?site|in[\s-]office|in[\s-]person)\b`,
+    String.raw`\b(?:on[\s-]?site|in[\s-]office|in[\s-]person)\s+(?:role|position|job|only|5\s+days|five\s+days|every\s+day|daily)\b`,
+    String.raw`\b(?:work|working|be\s+based|report)\s+(?:on[\s-]?site|in[\s-]office|in\s+the\s+office|in\s+our\s+office|in[\s-]person)\b`,
+    String.raw`\b(?:5|five)\s+days\s+(?:a|per)\s+week\s+in\s+(?:the|our)\s+office\b`,
+    String.raw`${ARRANGEMENT_LABEL}(?:on[\s-]?site|in[\s-]office|in[\s-]person)\b`,
+  ].join('|'),
+  'i',
+);
+
+function strictArrangementIn(text: string): WorkArrangement | null {
+  if (!text) return null;
+  if (STRICT_HYBRID.test(text)) return 'hybrid';
+  const onsite = STRICT_ONSITE.test(text);
+  if (NOT_REMOTE.test(text)) return onsite ? 'onsite' : null;
+  const remote = STRICT_REMOTE.test(text);
+  if (remote === onsite) return null;
+  return remote ? 'remote' : 'onsite';
+}
+
+export interface WorkArrangementOptions {
+  /**
+   * Read the description strictly (statements about how the role is worked only; null when unsure or when they
+   * disagree). The location text is always read as before.
+   */
+  strict?: boolean;
+}
+
 /**
  * Remote, Hybrid or In Person, from the location text first (the stronger signal) and then the description: hybrid
  * wording wins over remote ("3 days a week in the office"), "not remote" reads as on-site. Null when nothing says.
+ * With `strict`, the description is read strictly (above).
  */
-export function inferWorkArrangement(text: string | null | undefined, locationText?: string | null): WorkArrangement | null {
-  return arrangementIn(locationText ?? '') ?? arrangementIn(text ?? '');
+export function inferWorkArrangement(
+  text: string | null | undefined,
+  locationText?: string | null,
+  options: WorkArrangementOptions = {},
+): WorkArrangement | null {
+  const fromLocation = arrangementIn(locationText ?? '');
+  if (fromLocation) return fromLocation;
+  return options.strict ? strictArrangementIn(text ?? '') : arrangementIn(text ?? '');
 }
 
 const PEOPLE_MANAGER =

@@ -184,6 +184,12 @@ const MONTH_BY_NAME = new Map<string, number>(
 );
 MONTH_BY_NAME.set('sept', 9);
 
+/** The month (1-12) a name or its abbreviation means ("Jan", "jan.", "September", "Sept"), or null. */
+export function monthNumber(name: string): number | null {
+  if (typeof name !== 'string') return null;
+  return MONTH_BY_NAME.get(name.trim().replace(/\.$/, '').toLowerCase()) ?? null;
+}
+
 function isoOf(year: number, month: number, day: number): string | null {
   const date = calendarDay(year, month, day);
   return date ? toIsoDate(date) : null;

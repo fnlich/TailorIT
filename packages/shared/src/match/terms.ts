@@ -11,6 +11,11 @@ const WORD_CHAR = /[\p{L}\p{N}]/u;
 export interface TermPatternOptions {
   /** A `g` pattern, for counting or scanning every match. */
   global?: boolean;
+  /**
+   * A `y` pattern: it matches only where `lastIndex` points, so a caller that knows where a term can start (the
+   * prepared evidence of `match/evidence.ts`) tests just those places. The boundary checks read the text around it.
+   */
+  sticky?: boolean;
   /** Override the case rule (default: case-sensitive only for terms of 2 characters or fewer). */
   caseSensitive?: boolean;
 }
@@ -25,13 +30,15 @@ export interface TermPatternOptions {
  * term.
  */
 export function termPattern(term: string, options: TermPatternOptions | boolean = {}): RegExp | null {
-  const { global = false, caseSensitive } = typeof options === 'boolean' ? { global: options } : options;
+  const settings = typeof options === 'boolean' ? { global: options } : options;
+  const { global = false, sticky = false, caseSensitive } = settings;
   const normalized = term.trim().replace(/\s+/g, ' ');
   if (!normalized) return null;
   const body = escapeRegExp(normalized).replace(/ /g, '\\s+');
   const trail = WORD_CHAR.test(normalized.charAt(normalized.length - 1)) ? '(?![\\p{L}\\p{N}+#])' : '';
   const sensitive = caseSensitive ?? normalized.length <= 2;
-  return new RegExp(`(?<![\\p{L}\\p{N}])${body}${trail}`, `u${sensitive ? '' : 'i'}${global ? 'g' : ''}`);
+  const flags = `u${sensitive ? '' : 'i'}${global ? 'g' : ''}${sticky ? 'y' : ''}`;
+  return new RegExp(`(?<![\\p{L}\\p{N}])${body}${trail}`, flags);
 }
 
 // Non-global patterns are stateless, so they can be cached and reused.

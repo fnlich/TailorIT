@@ -1,14 +1,6 @@
-import type { JobKeywords, KeywordGroup, MatchResult, MatchedKeyword } from './schemas';
-import {
-  alnumRuns,
-  containsTerm,
-  firstRun,
-  maskFalseFriends,
-  matchKey,
-  synonymKey,
-  synonymsOf,
-  termPattern,
-} from './terms';
+import { evidenceHas, prepareEvidence, type PreparedEvidence } from './evidence';
+import type { JobKeywords, KeywordGroup, KeywordPriority, MatchResult, MatchedKeyword } from './schemas';
+import { alnumRuns, firstRun, maskFalseFriends, matchKey, synonymKey, synonymsOf, termPattern } from './terms';
 
 // ------------------------------------------------------------------------------------------------- the match
 
@@ -28,16 +20,25 @@ export function spellingsOf(group: KeywordGroup): string[] {
   return out;
 }
 
+/** One keyword the match counts, with every spelling that finds it. */
+export interface PlannedKeyword {
+  readonly term: string;
+  readonly priority: KeywordPriority;
+  readonly spellings: readonly string[];
+}
+
+/** A posting's keywords as the match counts them; it depends on the posting alone, so build it once per job. */
+export interface KeywordPlan {
+  readonly groups: readonly PlannedKeyword[];
+}
+
 /**
- * Scores a resume's own words against a posting's keywords (Simplify's job analysis card). A group is matched when
- * any of its spellings is in `evidenceText` as a whole word (`containsTerm`). Groups are taken high first, then low,
- * and a group repeating an earlier one (same synonym key) is skipped, so a keyword is never counted twice.
+ * The keywords the match counts, in order: high first, then low; a blank term is left out, and a group repeating an
+ * earlier one (any shared synonym key) is skipped, so a keyword is never counted twice.
  */
-export function matchKeywords(evidenceText: string, keywords: JobKeywords): KeywordMatch {
-  const text = maskFalseFriends(evidenceText);
+export function planKeywords(keywords: JobKeywords): KeywordPlan {
   const seen = new Set<string>();
-  const matched: MatchedKeyword[] = [];
-  const missing: MatchedKeyword[] = [];
+  const groups: PlannedKeyword[] = [];
   for (const priority of ['high', 'low'] as const) {
     for (const group of keywords[priority]) {
       const term = group.term.replace(/\s+/g, ' ').trim();
@@ -46,9 +47,27 @@ export function matchKeywords(evidenceText: string, keywords: JobKeywords): Keyw
       const keys = spellings.map(synonymKey);
       if (keys.some((key) => seen.has(key))) continue;
       keys.forEach((key) => seen.add(key));
-      const found = spellings.some((spelling) => containsTerm(text, spelling));
-      (found ? matched : missing).push({ term, priority });
+      groups.push({ term, priority, spellings });
     }
+  }
+  return { groups };
+}
+
+function isPlan(keywords: JobKeywords | KeywordPlan): keywords is KeywordPlan {
+  return Array.isArray((keywords as KeywordPlan).groups);
+}
+
+/**
+ * `matchKeywords` over evidence prepared once (`prepareEvidence`): the one code path the Jobs card, Resume Score and
+ * the resume picker share. Pass a `planKeywords` plan to score many resumes against one job.
+ */
+export function matchPreparedKeywords(evidence: PreparedEvidence, keywords: JobKeywords | KeywordPlan): KeywordMatch {
+  const plan = isPlan(keywords) ? keywords : planKeywords(keywords);
+  const matched: MatchedKeyword[] = [];
+  const missing: MatchedKeyword[] = [];
+  for (const { term, priority, spellings } of plan.groups) {
+    const found = spellings.some((spelling) => evidenceHas(evidence, spelling));
+    (found ? matched : missing).push({ term, priority });
   }
   const total = matched.length + missing.length;
   return {
@@ -58,6 +77,16 @@ export function matchKeywords(evidenceText: string, keywords: JobKeywords): Keyw
     total,
     percentage: total > 0 ? Math.round((matched.length / total) * 100) : 0,
   };
+}
+
+/**
+ * Scores a resume's own words against a posting's keywords (Simplify's job analysis card). A group is matched when
+ * any of its spellings is in `evidenceText` as a whole word (`containsTerm`, false friends masked). Groups are taken
+ * high first, then low, and a group repeating an earlier one (same synonym key) is skipped, so a keyword is never
+ * counted twice.
+ */
+export function matchKeywords(evidenceText: string, keywords: JobKeywords): KeywordMatch {
+  return matchPreparedKeywords(prepareEvidence(evidenceText), keywords);
 }
 
 /** The full API answer for a user with a resume. */

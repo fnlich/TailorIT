@@ -10,6 +10,7 @@ import {
   formatMediumDate,
   formatShortDate,
   isFutureDate,
+  monthNumber,
   parseFlexibleDate,
   relativeOrDash,
   relativeTime,
@@ -175,4 +176,16 @@ describe('parseFlexibleDate', () => {
     expect(parseFlexibleDate(text)).toBeNull();
     },
   );
+});
+
+describe('monthNumber', () => {
+  it('reads month names and abbreviations in any case', () => {
+    expect(monthNumber('Jan')).toBe(1);
+    expect(monthNumber('jan.')).toBe(1);
+    expect(monthNumber('September')).toBe(9);
+    expect(monthNumber('Sept')).toBe(9);
+    expect(monthNumber(' DEC ')).toBe(12);
+    expect(monthNumber('Smarch')).toBeNull();
+    expect(monthNumber('')).toBeNull();
+  });
 });
