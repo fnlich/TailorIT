@@ -4,10 +4,11 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  * Work package I: one person's path through every feature, against the dev server (`npm run dev` with the fake Claude
  * CLI and AUTH_DEV_FIXED_CODE). Navigation between the areas uses the header and the editor bar (client-side, as a
  * person clicks), so what one feature changes must show in the others without a reload.
- *   Jobs (search, filter, open, Save) → Job Tracker (under Saved) → Jobs (Apply, "Did you apply?" → Applied chip)
- *   → Job Tracker (under Applied, list stepper dates) → the application's Documents → Generate cover letter (editor
- *   prefilled, the fake AI writes it) → the letter is linked on the application → Documents › Cover Letters lists it
- *   → Documents › Resumes: a resume from a template, made the default → the Jobs keyword card scores that resume.
+ *   Jobs (search, filter, open, Save: the best resume is linked) → Job Tracker (under Saved) → Jobs (Apply, "Did you
+ *   apply?" → Applied chip) → Job Tracker (under Applied, list stepper dates) → the application's Documents → Generate
+ *   cover letter (editor prefilled, the fake AI writes it) → the letter is linked on the application → Documents ›
+ *   Cover Letters lists it → Documents › Resumes: a resume from a template, made the default → the Jobs keyword card
+ *   of an untracked job scores that resume, while the saved job's card keeps scoring the resume linked to it.
  * And: an experience level saved in Settings reaches the Jobs page's level check.
  *   npx playwright test --project=e2e e2e/specs/integration.spec.ts
  */
@@ -42,46 +43,189 @@ async function json<T>(page: Page, path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** Waits until the job's analysis is final (the fake CLI's AI analysis replaces the deterministic one on first view). */
-async function settledKeywords(page: Page, jobId: number): Promise<string[]> {
-  let terms: string[] = [];
+/** The parts of GET /api/jobs/:id/insights this spec reads: the analysis and the keyword card's match. */
+interface Match {
+  state: 'ok' | 'no_resume';
+  resumeId?: string;
+  resumeLabel?: string;
+  resumeBasis?: 'linked' | 'default';
+  matchedCount: number;
+  total: number;
+}
+interface Insights {
+  analysis: {
+    source: 'deterministic' | 'ft_lake' | 'ai';
+    refining: boolean;
+    keywords: { high: Array<{ term: string }>; low: Array<{ term: string }> };
+  };
+  match: Match | null;
+}
+
+/**
+ * A job's insights once no AI analysis of it is running. With AI_JOB_ANALYSIS=ingest (the default) Claude reads each
+ * added job when the add-time backlog reaches it, not when someone opens or saves it: until its analysis is `ai`, it
+ * can still change while the test runs, so callers read it again right before relying on it.
+ */
+async function settledInsights(page: Page, jobId: number): Promise<Insights> {
+  let latest = null as Insights | null;
   await expect
     .poll(
       async () => {
-        const analysis = await json<{ refining: boolean; keywords: { high: Array<{ term: string }>; low: Array<{ term: string }> } }>(
-          page,
-          `/api/jobs/${jobId}/analysis`,
-        );
-        terms = [...analysis.keywords.high, ...analysis.keywords.low].map((keyword) => keyword.term);
-        return analysis.refining;
+        latest = await json<Insights>(page, `/api/jobs/${jobId}/insights`);
+        return latest.analysis.refining;
       },
-      { timeout: 60_000, intervals: [500, 1000, 2000] },
+      { message: `job ${jobId}'s analysis finishes`, timeout: 90_000, intervals: [500, 1000, 2000] },
     )
     .toBe(false);
-  return terms;
+  return latest!;
 }
+
+const termsOf = (insights: Insights): string[] =>
+  [...insights.analysis.keywords.high, ...insights.analysis.keywords.low].map((keyword) => keyword.term);
+
+/** A posting the flow can use: its analysis names keywords (so a score has something to count). */
+interface Candidate {
+  id: number;
+  /** Active, with a link to apply. */
+  applyable: boolean;
+  /** Claude's analysis: it will not change any more. */
+  final: boolean;
+}
+
+async function candidateOf(page: Page, id: number): Promise<Candidate | null> {
+  const job = await json<{ applyUrl?: string; active?: boolean }>(page, `/api/jobs/${id}`);
+  const insights = await settledInsights(page, id);
+  if (termsOf(insights).length === 0) return null;
+  return { id, applyable: job.active !== false && Boolean(job.applyUrl), final: insights.analysis.source === 'ai' };
+}
+
+/** The first candidate other than `not`, one whose analysis is final when there is one. */
+function preferFinal(candidates: readonly Candidate[], not?: number): Candidate | undefined {
+  const usable = candidates.filter((candidate) => candidate.id !== not);
+  return usable.find((candidate) => candidate.final) ?? usable[0];
+}
+
+/**
+ * The last GET /api/jobs/:id/insights answer the page itself received, per job. The job page shows exactly that answer
+ * (React Query keeps the latest read), so the keyword card is checked against it, however the analysis changes.
+ */
+function watchInsights(page: Page) {
+  const latest = new Map<number, { seq: number; insights: Insights }>();
+  let received = 0;
+  page.on('response', (res) => {
+    const path = /^\/api\/jobs\/(\d+)\/insights$/.exec(new URL(res.url()).pathname);
+    if (!path || res.request().method() !== 'GET' || !res.ok()) return;
+    const seq = (received += 1);
+    const jobId = Number(path[1]);
+    void res.json().then(
+      (insights: Insights) => {
+        if ((latest.get(jobId)?.seq ?? 0) < seq) latest.set(jobId, { seq, insights });
+      },
+      () => undefined, // the page moved on before the body was read
+    );
+  });
+  return {
+    /** Answers that arrive after this mark are newer. */
+    mark: (): number => received,
+    /** Waits until the page has read the job's insights after `since`. */
+    async read(jobId: number, since = 0): Promise<void> {
+      await expect
+        .poll(() => (latest.get(jobId)?.seq ?? 0) > since, { message: `the page reads job ${jobId}'s insights`, timeout: 30_000 })
+        .toBe(true);
+    },
+    latest: (jobId: number): Insights | undefined => latest.get(jobId)?.insights,
+  };
+}
+type InsightsWatch = ReturnType<typeof watchInsights>;
 
 const nav = (page: Page, name: 'Jobs' | 'Job Tracker' | 'Documents') =>
   page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name, exact: true });
 const jobCards = (page: Page) => page.getByRole('list', { name: 'Jobs' }).locator('[data-job-card]');
 const jobDetail = (page: Page) => page.getByRole('region', { name: 'Job details' });
+const improveCard = (page: Page) => page.locator('[data-improve-card]');
 const column = (page: Page, status: number) => page.locator(`[data-column="${status}"]`);
 const trackerCard = (scope: Page | Locator, title: string) => scope.locator('[data-application-card]').filter({ hasText: title });
 
+/** The resume linked to the job's tracker application; null while it has none (or the job is not tracked). */
+async function linkedResumeOf(page: Page, jobId: number): Promise<string | null> {
+  const { userState } = await json<{ userState: { applicationId: string | null } }>(page, `/api/jobs/${jobId}`);
+  if (!userState.applicationId) return null;
+  return (await json<{ resumeId: string | null }>(page, `/api/applications/${userState.applicationId}`)).resumeId;
+}
+
+/** Finds a job again with the search box (every word must match, so title and company narrow it down) and opens it. */
+async function openFromSearch(page: Page, job: { id: number; title: string; company: string }): Promise<void> {
+  await page.getByRole('searchbox', { name: 'Find your dream role' }).fill(`${job.title} ${job.company}`);
+  const card = page.locator(`[data-job-card="${job.id}"]`);
+  await expect(card).toBeVisible();
+  await card.locator('a').click();
+  await expect(page).toHaveURL(new RegExp(`[?&]jobId=${job.id}(&|$)`));
+  await expect(jobDetail(page).getByRole('heading', { level: 1 })).toHaveText(job.title);
+}
+
+/** What the keyword card says for a match: the score and the resume it scored, or that the posting names no keywords. */
+function cardLines(match: Match): string[] {
+  if (match.total === 0) return ["We didn't find any skill keywords in this posting."];
+  const linked = match.resumeBasis === 'linked' ? ' (linked to this saved job)' : '';
+  return [`${match.matchedCount} out of ${match.total} required keywords found`, `Scored with ${match.resumeLabel}${linked}`];
+}
+
+async function cardShows(page: Page): Promise<string[]> {
+  const card = improveCard(page);
+  const lines = [
+    ...(await card.getByTestId('keyword-score').allInnerTexts()),
+    ...(await card.getByTestId('scored-with').allInnerTexts()),
+    ...(await card.getByText("We didn't find any skill keywords in this posting.").allInnerTexts()),
+  ];
+  return lines.map((line) => line.replace(/\s+/g, ' ').trim());
+}
+
+/**
+ * The keyword card shows the last insights the page read for the open job (after `since`). Polled: a newer read (the
+ * page polls while Claude analyses the job) can replace them at any moment. Answers the match it showed.
+ */
+async function expectCardShowsRead(page: Page, watch: InsightsWatch, jobId: number, since = 0): Promise<Match> {
+  await watch.read(jobId, since);
+  let shown = null as Match | null;
+  await expect
+    .poll(
+      async () => {
+        const match = watch.latest(jobId)?.match;
+        if (!match || match.state !== 'ok') return `the page read no score for job ${jobId}`;
+        const want = cardLines(match);
+        const got = await cardShows(page);
+        shown = match;
+        return JSON.stringify(got) === JSON.stringify(want) ? 'same' : `the card shows ${JSON.stringify(got)}, the page read ${JSON.stringify(want)}`;
+      },
+      { timeout: 20_000 },
+    )
+    .toBe('same');
+  return shown!;
+}
+
+/** Achievement lines that name every keyword, a few to a line. */
+function achievementLines(keywords: readonly string[]): string {
+  const lines: string[] = [];
+  for (let start = 0; start < keywords.length; start += 6) lines.push(`Worked daily with ${keywords.slice(start, start + 6).join(', ')}`);
+  return lines.join('\n');
+}
+
 test.describe('integration', () => {
   test('a job from search to tracker, cover letter, default resume and keyword match', async ({ page, context }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(360_000);
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
+    const insights = watchInsights(page);
 
     await signInFresh(page);
-    // A first resume (the account's default) with nothing a tech posting asks for.
+    // A first resume (the account's default) with nothing a tech posting asks for. Lists call it by its headline.
+    const firstLabel = 'Pastry Chef';
     const first = await page.request.post('/api/resumes', {
       headers: { Origin: ORIGIN },
       data: {
         document: {
           name: 'Robin Castellanos',
-          title: 'Pastry Chef',
+          title: firstLabel,
           contact: { email: 'robin@example.com', phone: '', location: 'Portland, OR' },
           summary: 'Pastry chef who bakes laminated doughs and plated desserts for a busy bistro.',
           skills: ['Lamination', 'Sugar work', 'Menu costing'],
@@ -103,29 +247,47 @@ test.describe('integration', () => {
     await expect(page).toHaveURL(/[?&]type=full_time/);
     await expect(page.getByRole('status').filter({ hasText: /^Found [\d,]+ jobs?$/ })).toBeVisible();
 
-    // A posting whose analysis names keywords (so the score has something to count) and that has a link to apply.
-    let card: Locator | null = null;
-    let jobId = 0;
+    // Two postings whose analyses name keywords: one to save and apply to (it needs a link to apply), and one that
+    // stays untracked. Analyses Claude has finished are preferred: they no longer change.
     const count = await jobCards(page).count();
     expect(count).toBeGreaterThan(0);
-    for (let index = 0; index < count && !card; index += 1) {
-      const id = Number(await jobCards(page).nth(index).getAttribute('data-job-card'));
-      const job = await json<{ applyUrl?: string; active?: boolean }>(page, `/api/jobs/${id}`);
-      if (job.active === false || !job.applyUrl) continue;
-      if ((await settledKeywords(page, id)).length > 0) {
-        card = jobCards(page).nth(index);
-        jobId = id;
+    const candidates: Candidate[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const candidate = await candidateOf(page, Number(await jobCards(page).nth(index).getAttribute('data-job-card')));
+      if (candidate) candidates.push(candidate);
+      const best = preferFinal(candidates.filter((item) => item.applyable));
+      if (best?.final && preferFinal(candidates, best.id)?.final) break;
+    }
+    const target = preferFinal(candidates.filter((item) => item.applyable));
+    expect(target, 'a job with keywords and a link to apply').toBeDefined();
+    const jobId = target!.id;
+    let other = preferFinal(candidates, jobId);
+    if (!other) {
+      // Only one posting of this search names keywords: the untracked one comes from the first page of all jobs.
+      const everything = await json<{ items: Array<{ id: number }> }>(page, '/api/jobs');
+      for (const item of everything.items) {
+        if (item.id === jobId) continue;
+        other = (await candidateOf(page, item.id)) ?? undefined;
+        if (other) break;
       }
     }
-    expect(card, 'a job with keywords').not.toBeNull();
-    const title = (await card!.locator('h3').innerText()).trim();
-    await card!.locator('a').click();
+    expect(other, 'a second job with keywords, left untracked').toBeDefined();
+    const otherId = other!.id;
+
+    const card = page.locator(`[data-job-card="${jobId}"]`);
+    const title = (await card.locator('h3').innerText()).trim();
+    await card.locator('a').click();
     await expect(page).toHaveURL(new RegExp(`[?&]jobId=${jobId}(&|$)`));
     await expect(jobDetail(page).getByRole('heading', { level: 1 })).toHaveText(title);
     const company = (await json<{ company: { name: string } }>(page, `/api/jobs/${jobId}`)).company.name;
 
     await jobDetail(page).getByRole('button', { name: 'Save', exact: true }).click();
     await expect(jobDetail(page).getByRole('button', { name: 'Saved', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    // Saving links the best-matching resume to the application, here the account's only one: from now on the job's
+    // keyword card scores that resume, whatever the default becomes (once applied, the choice no longer changes).
+    await expect
+      .poll(() => linkedResumeOf(page, jobId), { message: 'saving links the best-matching resume', timeout: 30_000 })
+      .toBe(firstResumeId);
     const jobsUrl = page.url();
 
     // ------------------------------------------------------------------ Job Tracker: the board has it under Saved
@@ -214,17 +376,16 @@ test.describe('integration', () => {
     await expect(letterRow).toBeVisible();
     await expect(letterRow).toContainText('Generated');
 
-    // ------------------------------- The keyword card with the first resume (the default): this job's score, cached
+    // ----------------------- The keyword card with the first resume (linked to the job, and the default): no match
     await nav(page, 'Jobs').click();
-    await page.getByRole('searchbox', { name: 'Find your dream role' }).fill(title);
-    const ours = page.locator(`[data-job-card="${jobId}"]`);
-    await expect(ours).toBeVisible();
-    await ours.locator('a').click();
-    const score = page.locator('[data-improve-card]').getByTestId('keyword-score');
-    await expect(score).toHaveText(/^0 out of \d+ required keywords found$/);
-    const keywords = await settledKeywords(page, jobId);
+    await openFromSearch(page, { id: jobId, title, company });
+    const before = await expectCardShowsRead(page, insights, jobId);
+    expect(before.resumeId).toBe(firstResumeId);
+    expect(before.matchedCount).toBe(0);
 
     // ----------------------------------------- Documents › Resumes: a resume from a template, then the default
+    // It names the keywords both postings ask for now (read again: an analysis Claude had not finished may have changed).
+    const keywords = [...new Set([...termsOf(await settledInsights(page, jobId)), ...termsOf(await settledInsights(page, otherId))])];
     await nav(page, 'Documents').click();
     await page.getByRole('tab', { name: 'Resumes' }).click();
     await page.locator('[data-new-fallback="resume"]').click();
@@ -242,7 +403,7 @@ test.describe('integration', () => {
     await page.getByRole('button', { name: 'Add experience' }).click();
     await page.getByLabel('Job title').fill('Site Reliability Engineer');
     await page.getByLabel('Company').fill('Harborview Logistics');
-    await page.getByLabel('Achievements, one per line').fill(`Worked daily with ${keywords.slice(0, 8).join(', ')}`);
+    await page.getByLabel('Achievements, one per line').fill(achievementLines(keywords));
     await page.getByRole('button', { name: 'Done' }).click();
     await page.getByRole('button', { name: 'Create Resume' }).click();
     await expect(page).toHaveURL(/\/documents\?tab=resumes/);
@@ -257,21 +418,26 @@ test.describe('integration', () => {
     await page.getByRole('menuitem', { name: 'Set as default' }).click();
     await expect(resumeRow.locator('[data-default-resume]')).toBeVisible();
 
-    // ------------------------------------------- Jobs: "Improve Your Resume" scores the new default resume
-    // The page reads the analysis and its match together (GET /api/jobs/:id/insights); the resume change marked the
-    // cached answer stale, so opening the job reads it again.
-    const matched = page.waitForResponse(
-      (res) => new URL(res.url()).pathname === `/api/jobs/${jobId}/insights` && res.request().method() === 'GET',
-      { timeout: 30_000 },
-    );
+    // ------------------- Jobs: "Improve Your Resume" of an untracked job scores the new default resume, by name
+    // The resume change marked every cached insights answer stale, so opening a job reads it again.
+    const afterDefault = insights.mark();
+    const otherJob = await json<{ title: string; company: { name: string } }>(page, `/api/jobs/${otherId}`);
     await nav(page, 'Jobs').click();
-    await page.getByRole('searchbox', { name: 'Find your dream role' }).fill(title);
-    await expect(ours).toBeVisible();
-    await ours.locator('a').click();
-    const { match } = (await (await matched).json()) as { match: { resumeId: string; matchedCount: number; total: number } };
-    expect(match.resumeId).toBe(newResumeId);
-    expect(match.matchedCount).toBeGreaterThan(0);
-    await expect(score).toHaveText(`${match.matchedCount} out of ${match.total} required keywords found`);
+    await openFromSearch(page, { id: otherId, title: otherJob.title, company: otherJob.company.name });
+    const untracked = await expectCardShowsRead(page, insights, otherId, afterDefault);
+    expect(untracked).toMatchObject({ resumeId: newResumeId, resumeLabel: newTitle, resumeBasis: 'default' });
+    expect(untracked.matchedCount).toBeGreaterThan(0);
+    await expect(improveCard(page).getByTestId('scored-with')).toHaveText(`Scored with ${newTitle}`);
+
+    // ---------------------- ...while the saved job's card keeps scoring the resume linked to it (it says so), not the
+    // new default, though that one names every keyword the job asks for
+    await openFromSearch(page, { id: jobId, title, company });
+    const tracked = await expectCardShowsRead(page, insights, jobId, afterDefault);
+    expect(tracked).toMatchObject({ resumeId: firstResumeId, resumeLabel: firstLabel, resumeBasis: 'linked', matchedCount: 0 });
+    // The line sits under the score, so a posting that (after Claude read it) names no keywords has neither.
+    if (tracked.total > 0) {
+      await expect(improveCard(page).getByTestId('scored-with')).toHaveText(`Scored with ${firstLabel} (linked to this saved job)`);
+    }
 
     expect(pageErrors, 'uncaught page errors').toEqual([]);
   });

@@ -11,6 +11,7 @@ import { userMessage } from '@/lib/api';
 import type { JobMatch } from '../api';
 import { showMoreLabel } from '../format';
 import { TargetIcon } from '../icons';
+import { scoredWithLine } from './facets';
 
 interface Chip extends MatchedKeyword {
   matched: boolean;
@@ -95,9 +96,10 @@ function KeywordChips({ chips }: { chips: Chip[] }) {
 }
 
 /**
- * Simplify's job analysis card, "Improve Your Resume": how many of the job's keywords the default resume has
- * ("5 out of 13 required keywords found") and which, matched first. No "Tailor my resume" button (out of scope).
- * Without a resume it asks for one.
+ * Simplify's job analysis card, "Improve Your Resume": how many of the job's keywords the resume has ("5 out of 13
+ * required keywords found") and which, matched first. The resume is the one linked to the job's application when the
+ * job is tracked, else the default resume; a small line under the score says which ("Scored with {label}", plus
+ * "(linked to this saved job)"). No "Tailor my resume" button (out of scope). Without a resume it asks for one.
  */
 export function ImproveResumeCard({
   match,
@@ -159,6 +161,7 @@ export function ImproveResumeCard({
       ...match.matched.map((keyword) => ({ ...keyword, matched: true })),
       ...match.missing.map((keyword) => ({ ...keyword, matched: false })),
     ];
+    const scoredWith = scoredWithLine(match);
     body = (
       <div className="flex flex-col">
         <p className="text-sm leading-5 text-foreground" data-testid="keyword-score">
@@ -167,6 +170,12 @@ export function ImproveResumeCard({
           </b>{' '}
           required keywords found
         </p>
+        {scoredWith && (
+          <p className="mt-1 text-xs leading-4 break-words text-muted-foreground" data-testid="scored-with">
+            {scoredWith.lead} <span className="font-medium text-foreground">{scoredWith.label}</span>
+            {scoredWith.note && ` ${scoredWith.note}`}
+          </p>
+        )}
         <div className="mt-4 flex flex-col">
           <KeywordChips chips={chips} />
         </div>

@@ -239,6 +239,17 @@ function JobDetailBody({
   const chip = liveChip({ active: job.active, postedAt: job.postedAt, updatedAt: job.updatedAt }, now);
   const levels = jobLevelsOf(job.experienceLevels, analysis);
 
+  // The keyword card scores the resume linked to the job's application while the job is tracked (saved, or applied),
+  // else the default resume. Saving, un-saving or applying, here or from the list, can change which: read it again.
+  const trackedState = `${applicationId ?? ''}|${saved}|${appliedOn ?? ''}`;
+  const scoredFor = useRef(trackedState);
+  const refetchInsights = insights.refetch;
+  useEffect(() => {
+    if (scoredFor.current === trackedState) return;
+    scoredFor.current = trackedState;
+    void refetchInsights();
+  }, [trackedState, refetchInsights]);
+
   // Overview | Company follow the scroll position (the Company tab lights up once its section reaches the header).
   useEffect(() => {
     const container = scrollRef.current;
@@ -463,7 +474,13 @@ function JobDetailBody({
             </Pill>
           </div>
 
-          <FactsGrid job={job} levels={levels} levelMatch={match?.levelMatch} className="mt-8" />
+          <FactsGrid
+            job={job}
+            levels={levels}
+            levelMatch={match?.levelMatch}
+            requiredYears={analysis?.requiredYears}
+            className="mt-8"
+          />
         </section>
 
         <hr className="mt-5 border-border" />

@@ -11,9 +11,10 @@ import {
 } from '@tailorit/shared';
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
-import { CheckCircleIcon, InfoIcon, MapPinIcon, ShieldCheckIcon } from '@/components/ui/icons';
+import { BriefcaseIcon, CheckCircleIcon, InfoIcon, MapPinIcon, ShieldCheckIcon } from '@/components/ui/icons';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { levelsLabel, placesOf } from '../format';
+import { requiredExperienceText } from './facets';
 import {
   BuildingIcon,
   GraduationCapIcon,
@@ -75,20 +76,25 @@ const ARRANGEMENT_ICON = {
 
 /**
  * The 3-column facts under the title, in Simplify's order: salary ("No salary listed"), experience level with its
- * match icon, degree, location (+N more), work arrangement, category / subcategory, H1B, clearance.
+ * match icon, the experience the posting asks for ("Experience: 7+ years"), degree, location (+N more), work
+ * arrangement (none when unknown), category / subcategory, H1B, clearance.
  */
 export function FactsGrid({
   job,
   levels,
   levelMatch,
+  requiredYears,
   className,
 }: {
   job: JobDetail;
   levels: readonly ExperienceLevel[];
   levelMatch: LevelMatch | undefined;
+  /** The years of experience the job's analysis read from its requirements; hidden while unknown. */
+  requiredYears?: number | null;
   className?: string;
 }) {
   const level = levelsLabel(levels);
+  const experience = requiredExperienceText(requiredYears);
   const { first, others } = placesOf(job.primaryLocation, job.locations);
   const category = categoryFact(job.categoryId, job.subcategoryIds);
   return (
@@ -100,6 +106,11 @@ export function FactsGrid({
         <Fact icon={<StepsIcon size={20} />} label="Experience level">
           <span className="truncate">{level}</span>
           <LevelMatchIcon match={levelMatch} />
+        </Fact>
+      )}
+      {experience && (
+        <Fact icon={<BriefcaseIcon size={20} />} label="Required experience">
+          {experience}
         </Fact>
       )}
       {job.degree && (

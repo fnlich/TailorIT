@@ -3,9 +3,11 @@
 import type { JobAnalysisView } from '@tailorit/shared';
 import { clsx } from 'clsx';
 import { useState } from 'react';
+import { Chip } from '@/components/ui/Chip';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SkeletonText } from '@/components/ui/Skeleton';
 import { Spinner } from '@/components/ui/Spinner';
+import { jobFacetGroups, type JobFacetGroup } from './facets';
 
 type AboutView = 'summary' | 'full';
 
@@ -37,40 +39,72 @@ const POSTING_HTML = clsx(
   '[&_table]:my-3 [&_table]:w-full [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:p-2',
 );
 
+/**
+ * The posting's soft skills, certifications and industries: one labelled row of chips per group that has any (its
+ * hard skills are the keyword card's chips).
+ */
+function SkillsAndKeywords({ groups }: { groups: JobFacetGroup[] }) {
+  return (
+    <section aria-label="Skills and keywords" data-job-facets>
+      <h3 className="text-lg leading-7 font-semibold text-foreground">Skills and keywords</h3>
+      <dl className="mt-3 flex flex-col gap-3">
+        {groups.map((group) => (
+          <div key={group.key} className="flex flex-col gap-1.5 sm:flex-row sm:gap-4">
+            <dt className="shrink-0 text-sm leading-5 font-semibold text-foreground sm:w-32 sm:leading-7">{group.label}</dt>
+            <dd className="min-w-0 flex-1">
+              <ul aria-label={group.label} data-job-facet={group.key} className="flex flex-wrap gap-2">
+                {group.items.map((item) => (
+                  <li key={item} className="max-w-full">
+                    <Chip size="sm" tone="outline">
+                      {item}
+                    </Chip>
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 function Summary({ analysis, onShowFull }: { analysis: JobAnalysisView; onShowFull: () => void }) {
   const sections = SECTIONS.filter((section) => analysis[section.key].length > 0);
-  if (sections.length === 0) {
-    return (
-      <p className="text-[15px] leading-6 text-muted-foreground">
-        There is no summary for this posting yet.{' '}
-        <button type="button" onClick={onShowFull} className="font-semibold text-primary-ink hover:underline">
-          Read the full posting
-        </button>
-      </p>
-    );
-  }
+  const facets = jobFacetGroups(analysis);
   return (
     <div className="flex flex-col gap-6">
-      {sections.map((section) => (
-        <section key={section.key} aria-label={section.title}>
-          <h3 className="text-lg leading-7 font-semibold text-foreground">{section.title}</h3>
-          <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-[15px] leading-5 text-foreground marker:text-foreground">
-            {analysis[section.key].map((item, index) => (
-              <li key={`${index}-${item}`} className="pl-0.5">
-                {item}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {sections.length === 0 ? (
+        <p className="text-[15px] leading-6 text-muted-foreground">
+          There is no summary for this posting yet.{' '}
+          <button type="button" onClick={onShowFull} className="font-semibold text-primary-ink hover:underline">
+            Read the full posting
+          </button>
+        </p>
+      ) : (
+        sections.map((section) => (
+          <section key={section.key} aria-label={section.title}>
+            <h3 className="text-lg leading-7 font-semibold text-foreground">{section.title}</h3>
+            <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-[15px] leading-5 text-foreground marker:text-foreground">
+              {analysis[section.key].map((item, index) => (
+                <li key={`${index}-${item}`} className="pl-0.5">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      )}
+      {facets.length > 0 && <SkillsAndKeywords groups={facets} />}
     </div>
   );
 }
 
 /**
  * "About the job" with Simplify's Summary | Full posting toggle. Summary lists the analysis's Requirements,
- * Responsibilities and Desired Qualifications; Full posting shows the sanitized description. A quiet "Refining…"
- * shows while the AI analysis is being made; when it lands the bullets change in place.
+ * Responsibilities and Desired Qualifications, then its Skills and keywords (soft skills, certifications, industries)
+ * when it names any; Full posting shows the sanitized description. A quiet "Refining…" shows while the AI analysis is
+ * being made; when it lands the bullets and chips change in place.
  */
 export function AboutJob({
   analysis,
