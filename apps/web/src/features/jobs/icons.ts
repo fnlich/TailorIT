@@ -2,6 +2,7 @@
  * Phosphor icons the Jobs page adds to the kit's set (one module per icon, as in components/ui/icons.ts).
  */
 export { ArrowLeftIcon } from '@phosphor-icons/react/ArrowLeft';
+export { BookmarksSimpleIcon } from '@phosphor-icons/react/BookmarksSimple';
 export { BuildingIcon } from '@phosphor-icons/react/Building';
 export { BuildingOfficeIcon } from '@phosphor-icons/react/BuildingOffice';
 export { CertificateIcon } from '@phosphor-icons/react/Certificate';

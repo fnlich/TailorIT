@@ -1,10 +1,32 @@
-import { emptyJobsQuery, normalizeJobsQuery, type JobsQuery } from '@tailorit/shared';
+import {
+  emptyJobsQuery,
+  normalizeJobsQuery,
+  type JobsQuery,
+  type SaveAllPreview,
+  type SaveAllResponse,
+} from '@tailorit/shared';
 import { describe, expect, it } from 'vitest';
 import { activeFilters, clearedQuery, minSalaryLabel, suggestedSearchName, toggled } from './filters';
-import { cardAge, cardLocationLine, cardMetaLine, foundJobsLabel, jobLevelsOf, levelsLabel, placesOf, showMoreLabel } from './format';
+import {
+  SAVE_ALL_FAILED,
+  SAVE_ALL_HINT,
+  UNDO_SAVE_ALL_FAILED,
+  cardAge,
+  cardLocationLine,
+  cardMetaLine,
+  foundJobsLabel,
+  jobLevelsOf,
+  levelsLabel,
+  nothingToSaveCopy,
+  placesOf,
+  saveAllConfirmCopy,
+  saveAllResultCopy,
+  saveAllUndoneCopy,
+  showMoreLabel,
+} from './format';
 import { jobHrefBuilder, jobShareUrl, jobsHref, queryKeyOf, readJobId, readJobsUrl } from './url';
 
-// Work package J2: the Jobs page's pure helpers (address state, wording, filter chips).
+// Work package J2: the Jobs page's pure helpers (address state, wording, filter chips). WP7: Save all's wording.
 
 const query = (input: Record<string, unknown> = {}): JobsQuery => normalizeJobsQuery(input);
 const NOW = Date.parse('2026-10-22T12:00:00.000Z');
@@ -79,6 +101,108 @@ describe('wording', () => {
     ).toEqual({ first: 'Fremont, CA, USA', others: ['Remote in USA', 'London, UK'] });
     expect(showMoreLabel(8, false)).toBe('Show 8 more');
     expect(showMoreLabel(8, true)).toBe('Show less');
+  });
+});
+
+describe('Save all wording', () => {
+  const preview = (matched: number, saveable: number, willSave = Math.min(saveable, 100)): SaveAllPreview => ({ matched, saveable, willSave });
+  const result = (saved: number, rest: Partial<Pick<SaveAllResponse, 'remaining' | 'incomplete'>> = {}) => ({
+    items: Array.from({ length: saved }, (_, index) => ({ jobId: index + 1, applicationId: `a${index}`, resumeId: null, created: true })),
+    remaining: rest.remaining ?? 0,
+    incomplete: rest.incomplete ?? false,
+  });
+
+  it('asks "Save N jobs?" with where they go, the cap, and the matches that keep their status', () => {
+    expect(saveAllConfirmCopy(preview(1, 1))).toEqual({
+      title: 'Save 1 job?',
+      description: 'It goes to your Job Tracker under Saved.',
+      note: null,
+      confirmLabel: 'Save 1 job',
+      busyLabel: 'Saving...',
+    });
+    expect(saveAllConfirmCopy(preview(12, 12))).toEqual({
+      title: 'Save 12 jobs?',
+      description: 'They go to your Job Tracker under Saved.',
+      note: null,
+      confirmLabel: 'Save 12 jobs',
+      busyLabel: 'Saving...',
+    });
+    // Matches already in the Job Tracker keep their status.
+    expect(saveAllConfirmCopy(preview(5, 4)).note).toBe('1 matching job is already in your Job Tracker and keeps its status.');
+    expect(saveAllConfirmCopy(preview(6, 4)).note).toBe('2 matching jobs are already in your Job Tracker and keep their status.');
+    expect(saveAllConfirmCopy(preview(2101, 1)).note).toBe('2,100 matching jobs are already in your Job Tracker and keep their status.');
+    // Over the cap: the first 100 of the jobs not saved yet, in the list's order.
+    expect(saveAllConfirmCopy(preview(1480, 1250))).toEqual({
+      title: 'Save 100 jobs?',
+      description:
+        "You can save up to 100 jobs at a time. These are the first 100 of 1,250 jobs you haven't saved, in the order the list shows them.",
+      note: '230 matching jobs are already in your Job Tracker and keep their status.',
+      confirmLabel: 'Save 100 jobs',
+      busyLabel: 'Saving...',
+    });
+    // Exactly 100 is not over the cap.
+    expect(saveAllConfirmCopy(preview(100, 100)).description).toBe('They go to your Job Tracker under Saved.');
+    expect(saveAllConfirmCopy(preview(101, 101)).description).toBe(
+      "You can save up to 100 jobs at a time. These are the first 100 of 101 jobs you haven't saved, in the order the list shows them.",
+    );
+  });
+
+  it('says when there is nothing new to save', () => {
+    expect(nothingToSaveCopy(0)).toEqual({ title: 'Nothing new to save', description: 'No jobs match these filters any more.' });
+    expect(nothingToSaveCopy(1)).toEqual({ title: 'Nothing new to save', description: 'This job is already in your Job Tracker.' });
+    expect(nothingToSaveCopy(1250)).toEqual({ title: 'Nothing new to save', description: 'All 1,250 jobs are already in your Job Tracker.' });
+  });
+
+  it('reports what one click saved, what is left, and a run that stopped part-way', () => {
+    expect(saveAllResultCopy(result(1))).toEqual({ title: 'Saved 1 job', description: 'Find it in your Job Tracker under Saved.' });
+    expect(saveAllResultCopy(result(12))).toEqual({ title: 'Saved 12 jobs', description: 'Find them in your Job Tracker under Saved.' });
+    expect(saveAllResultCopy(result(100, { remaining: 1150 }))).toEqual({
+      title: 'Saved 100 jobs',
+      description: 'Find them in your Job Tracker under Saved. 1,150 more can be saved with Save all.',
+    });
+    expect(saveAllResultCopy(result(1, { remaining: 1 })).description).toBe(
+      'Find it in your Job Tracker under Saved. 1 more can be saved with Save all.',
+    );
+    // Stopped part-way: trying again is what to do (it says so instead of the count left).
+    expect(saveAllResultCopy(result(25, { remaining: 75, incomplete: true }))).toEqual({
+      title: 'Saved 25 jobs',
+      description: 'Find them in your Job Tracker under Saved. Some jobs could not be saved. Click Save all to try the rest.',
+    });
+    // Saved meanwhile (another tab): nothing new.
+    expect(saveAllResultCopy(result(0, { remaining: 2 }))).toEqual({
+      title: 'Nothing new to save',
+      description: 'These jobs are already in your Job Tracker.',
+    });
+  });
+
+  it('confirms an Undo', () => {
+    expect(saveAllUndoneCopy(1)).toEqual({ title: 'Removed 1 job from saved jobs', description: 'It is archived in your Job Tracker.' });
+    expect(saveAllUndoneCopy(1250)).toEqual({
+      title: 'Removed 1,250 jobs from saved jobs',
+      description: 'They are archived in your Job Tracker.',
+    });
+    expect(saveAllUndoneCopy(0)).toEqual({
+      title: 'Nothing was removed from saved jobs',
+      description: 'These jobs have moved past Saved in your Job Tracker.',
+    });
+  });
+
+  it('names the button and its failures, and never uses an em dash', () => {
+    expect(SAVE_ALL_HINT).toBe('Save the jobs that match your filters, up to 100 at a time');
+    expect(SAVE_ALL_FAILED).toBe('The jobs could not be saved');
+    expect(UNDO_SAVE_ALL_FAILED).toBe('The jobs could not be removed from saved jobs');
+    const counts = [0, 1, 2, 99, 100, 101, 1250];
+    const texts = [
+      SAVE_ALL_HINT,
+      SAVE_ALL_FAILED,
+      UNDO_SAVE_ALL_FAILED,
+      ...counts.flatMap((n) => Object.values(nothingToSaveCopy(n))),
+      ...counts.flatMap((n) => Object.values(saveAllUndoneCopy(n))),
+      ...counts.flatMap((n) => Object.values(saveAllConfirmCopy(preview(n + 3, n)))),
+      ...counts.flatMap((n) => [false, true].flatMap((incomplete) => Object.values(saveAllResultCopy(result(n, { remaining: n, incomplete }))))),
+    ].filter((text): text is string => typeof text === 'string');
+    expect(texts.length).toBeGreaterThan(50);
+    for (const text of texts) expect(text, text).not.toMatch(/[–—]/);
   });
 });
 

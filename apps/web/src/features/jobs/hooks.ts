@@ -9,7 +9,14 @@ import {
   type InfiniteData,
   type QueryClient,
 } from '@tanstack/react-query';
-import { toIsoDate, type JobDetail, type JobFacet, type JobReportBody, type JobsQuery } from '@tailorit/shared';
+import {
+  toIsoDate,
+  type JobDetail,
+  type JobFacet,
+  type JobReportBody,
+  type JobsQuery,
+  type SavedJobRef,
+} from '@tailorit/shared';
 import { useCallback } from 'react';
 import { useToast } from '@/components/ui/Toast';
 import { userMessage } from '@/lib/api';
@@ -32,9 +39,11 @@ import {
   listQueryString,
   reportJob,
   restoreApplication,
+  saveAllJobs,
   trackJob,
   unhideCompany,
   unhideJob,
+  unsaveApplications,
   type ApplicationRef,
   type JobListItem,
   type JobListPage,
@@ -128,38 +137,48 @@ export function useSavedSearches(enabled = true) {
 
 type ListData = InfiniteData<JobListPage, string | undefined>;
 
-/** Changes one job wherever it is cached: every list page that shows it and its detail. */
-export function patchJob(
-  client: QueryClient,
-  jobId: number,
-  patch: Partial<Pick<JobListItem, 'saved' | 'appliedOn' | 'applicationId'>>,
-): void {
+/** What the Jobs page shows of a job's tie to the tracker. */
+export type JobPatch = Partial<Pick<JobListItem, 'saved' | 'appliedOn' | 'applicationId'>>;
+
+/** Changes jobs wherever they are cached, in one pass over the lists: every page that shows one, and their details. */
+export function patchJobs(client: QueryClient, patches: ReadonlyMap<number, JobPatch>): void {
+  if (patches.size === 0) return;
   client.setQueriesData<ListData>({ queryKey: jobsKeys.lists }, (data) =>
     data
       ? {
           ...data,
           pages: data.pages.map((page) => ({
             ...page,
-            items: page.items.map((item) => (item.id === jobId ? { ...item, ...patch } : item)),
+            items: page.items.map((item) => {
+              const patch = patches.get(item.id);
+              return patch ? { ...item, ...patch } : item;
+            }),
           })),
         }
       : data,
   );
-  client.setQueryData<JobDetail>(jobsKeys.detail(jobId), (detail) =>
-    detail
-      ? {
-          ...detail,
-          ...(patch.saved !== undefined ? { saved: patch.saved } : {}),
-          ...(patch.appliedOn !== undefined ? { appliedOn: patch.appliedOn } : {}),
-          userState: {
-            ...detail.userState,
+  for (const [jobId, patch] of patches) {
+    client.setQueryData<JobDetail>(jobsKeys.detail(jobId), (detail) =>
+      detail
+        ? {
+            ...detail,
             ...(patch.saved !== undefined ? { saved: patch.saved } : {}),
             ...(patch.appliedOn !== undefined ? { appliedOn: patch.appliedOn } : {}),
-            ...(patch.applicationId !== undefined ? { applicationId: patch.applicationId } : {}),
-          },
-        }
-      : detail,
-  );
+            userState: {
+              ...detail.userState,
+              ...(patch.saved !== undefined ? { saved: patch.saved } : {}),
+              ...(patch.appliedOn !== undefined ? { appliedOn: patch.appliedOn } : {}),
+              ...(patch.applicationId !== undefined ? { applicationId: patch.applicationId } : {}),
+            },
+          }
+        : detail,
+    );
+  }
+}
+
+/** Changes one job wherever it is cached: every list page that shows it and its detail. */
+export function patchJob(client: QueryClient, jobId: number, patch: JobPatch): void {
+  patchJobs(client, new Map([[jobId, patch]]));
 }
 
 /** Drops jobs from every cached list (hidden jobs, a hidden company's jobs). */
@@ -190,6 +209,21 @@ function refreshAfterTracking(client: QueryClient, jobId: number): Promise<unkno
     client.invalidateQueries({ queryKey: jobsKeys.detail(jobId) }),
     client.invalidateQueries({ queryKey: jobsKeys.lists, refetchType: 'none' }),
     client.invalidateQueries({ queryKey: jobsKeys.counts }),
+    client.invalidateQueries({ queryKey: TRACKER_KEY }),
+  ]);
+}
+
+/**
+ * After Save all and its Undo: many jobs changed, most of them beyond the loaded pages. The lists on screen are read
+ * again now (not only marked stale, unlike a single save), with the counts, the details, the keyword cards (a saved
+ * job scores the resume linked to it) and the Job Tracker.
+ */
+function refreshAfterBulkTracking(client: QueryClient): Promise<unknown> {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: jobsKeys.lists }),
+    client.invalidateQueries({ queryKey: jobsKeys.counts }),
+    client.invalidateQueries({ queryKey: jobsKeys.details }),
+    client.invalidateQueries({ queryKey: jobsKeys.allInsights }),
     client.invalidateQueries({ queryKey: TRACKER_KEY }),
   ]);
 }
@@ -326,6 +360,50 @@ export function useSaveToggle() {
   );
 
   return { toggle, pending: save.isPending || unsave.isPending || restore.isPending };
+}
+
+/**
+ * Save all: saves the jobs matching the filters the confirm was shown for (`queryString`), at most 100, on the
+ * browser's day. Their cards read Saved as soon as the answer is in; the rest is read again afterwards. The refresh is
+ * not awaited (nor returned from onSettled), so `mutateAsync`, and with it the confirm dialog, finishes with the save.
+ */
+export function useSaveAll() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ queryString }: { queryString: string }) => saveAllJobs(queryString, localToday()),
+    onSuccess: (result) =>
+      patchJobs(
+        client,
+        new Map<number, JobPatch>(result.items.map((item) => [item.jobId, { saved: true, applicationId: item.applicationId }])),
+      ),
+    onSettled: () => {
+      void refreshAfterBulkTracking(client);
+    },
+  });
+}
+
+/**
+ * Save all's Undo: archives exactly the applications the click saved (an application applied to since is left as it
+ * is). Optimistic: the cards read not saved at once, and come back if it fails.
+ */
+export function useUndoSaveAll() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (items: readonly SavedJobRef[]) => unsaveApplications(items.map((item) => item.applicationId)),
+    onMutate: async (items) => {
+      // A refetch still running (the one after Save all) would bring the saved state back over the change.
+      await Promise.all([client.cancelQueries({ queryKey: jobsKeys.lists }), client.cancelQueries({ queryKey: jobsKeys.details })]);
+      patchJobs(client, new Map<number, JobPatch>(items.map((item) => [item.jobId, { saved: false, applicationId: null }])));
+    },
+    onError: (_error, items) =>
+      patchJobs(
+        client,
+        new Map<number, JobPatch>(items.map((item) => [item.jobId, { saved: true, applicationId: item.applicationId }])),
+      ),
+    onSettled: () => {
+      void refreshAfterBulkTracking(client);
+    },
+  });
 }
 
 /** "Did you apply?" → Yes, and "Already Applied?": tracks the job as Applied today. */

@@ -18,6 +18,7 @@ import { foundJobsLabel } from '../format';
 import type { useJobsList } from '../hooks';
 import { jobHrefBuilder } from '../url';
 import { JobCard } from './JobCard';
+import { SaveAllButton } from './SaveAllButton';
 
 export interface JobListProps {
   query: JobsQuery;
@@ -73,8 +74,9 @@ function CardSkeleton() {
 }
 
 /**
- * The left panel: "Found N jobs" and the sort, then the cards, 21 at a time; the next page loads as the end of the
- * list comes near (IntersectionObserver with Simplify's 150% bottom margin). "Load more" appears only after an error.
+ * The left panel: "Found N jobs", Save all and the sort, then the cards, 21 at a time; the next page loads as the end
+ * of the list comes near (IntersectionObserver with Simplify's 150% bottom margin). "Load more" appears only after an
+ * error.
  */
 export function JobList({
   query,
@@ -113,11 +115,14 @@ export function JobList({
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between bg-surface pr-4 pl-4">
-        <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+      <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between gap-2 bg-surface pr-4 pl-4">
+        <p className="min-w-0 truncate text-xs text-muted-foreground" role="status" aria-live="polite">
           {list.isPending ? 'Finding jobs...' : list.data ? foundJobsLabel(total) : ''}
         </p>
-        <SortMenu sort={query.sort} onChange={(sort) => onQueryChange({ sort })} />
+        <div className="flex shrink-0 items-center gap-1">
+          <SaveAllButton query={query} list={list} />
+          <SortMenu sort={query.sort} onChange={(sort) => onQueryChange({ sort })} />
+        </div>
       </div>
 
       {list.isPending ? (

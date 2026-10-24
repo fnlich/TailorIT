@@ -38,8 +38,8 @@ async function openJobs(page: Page, path = '/jobs') {
   await expect(page).toHaveURL(/jobId=\d+/);
 }
 
-/** Creates a resume through R1's API when it is live; false when it is not there yet. */
-async function tryCreateResume(page: Page): Promise<boolean> {
+/** Creates a resume through R1's API: its id, or null when the API is not there. */
+async function createResume(page: Page): Promise<string | null> {
   const res = await page.request.post('/api/resumes', {
     headers: { Origin: ORIGIN },
     data: {
@@ -52,8 +52,45 @@ async function tryCreateResume(page: Page): Promise<boolean> {
       },
     },
   });
-  return res.status() === 201 || res.status() === 200;
+  if (res.status() !== 201 && res.status() !== 200) return null;
+  return ((await res.json()) as { id: string }).id;
 }
+
+/** Creates a resume through R1's API when it is live; false when it is not there yet. */
+async function tryCreateResume(page: Page): Promise<boolean> {
+  return (await createResume(page)) !== null;
+}
+
+interface ListedJob {
+  id: number;
+  title: string;
+}
+
+/**
+ * A list of 3 to 21 of the database's jobs (one page): a company's jobs, narrowed by a search for one of their
+ * titles when the company has more. Null when no company of the facet's top 50 gives one within 40 tries.
+ */
+async function shortJobList(page: Page): Promise<{ query: string; jobs: ListedJob[] } | null> {
+  const facet = (await (await page.request.get('/api/jobs/facets/companies?limit=50')).json()) as {
+    items: Array<{ value: string; count: number }>;
+  };
+  let tries = 0;
+  for (const company of facet.items) {
+    if (company.count < 3) continue;
+    const all = (await (await page.request.get(`/api/jobs?company=${company.value}`)).json()) as { items: ListedJob[] };
+    for (const q of ['', ...new Set(all.items.map((job) => job.title))]) {
+      tries += 1;
+      if (tries > 40) return null;
+      const query = new URLSearchParams({ company: company.value, ...(q ? { q } : {}) }).toString();
+      const list = (await (await page.request.get(`/api/jobs?${query}`)).json()) as { items: ListedJob[]; total: number };
+      if (list.total >= 3 && list.total <= 21 && list.items.length === list.total) return { query, jobs: list.items };
+    }
+  }
+  return null;
+}
+
+/** "1 job" / "3 jobs". */
+const jobCount = (count: number) => `${count} ${count === 1 ? 'job' : 'jobs'}`;
 
 test.describe('Jobs page', () => {
   test('search, filter, open a job, save it, apply, see the Applied chip and the keyword card', async ({ page }) => {
@@ -458,6 +495,68 @@ test.describe('Jobs page', () => {
     expect(await css(improve, 'border-top-left-radius')).toBe('16px');
     expect(await css(improve, 'border-top-color')).toBe('rgb(167, 212, 222)');
     expect(await css(improve, 'background-image')).toContain('linear-gradient');
+  });
+
+  test('Save all saves the filtered jobs, leaves tracked ones, and Undo un-saves them', async ({ page }) => {
+    await signInFresh(page, 'saveall');
+    const resumeId = await createResume(page);
+    const short = await shortJobList(page);
+    test.skip(!short, 'no company in the database gives a list of 3 to 21 jobs');
+    const { query, jobs } = short!;
+
+    // Through the API: the first job saved, the second applied to. Save all leaves both as they are.
+    const [savedJob, appliedJob, ...rest] = jobs;
+    for (const [job, status] of [
+      [savedJob!, 1],
+      [appliedJob!, 2],
+    ] as const) {
+      const res = await page.request.post('/api/applications', { headers: { Origin: ORIGIN }, data: { jobId: job.id, status } });
+      expect(res.ok(), await res.text()).toBeTruthy();
+    }
+    const count = rest.length;
+
+    await openJobs(page, `/jobs?${query}`);
+    await page.getByRole('region', { name: 'Job list' }).getByRole('button', { name: 'Save all', exact: true }).click();
+    const dialog = page.getByRole('alertdialog', { name: `Save ${jobCount(count)}?` });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('2 matching jobs are already in your Job Tracker and keep their status.');
+    const answer = page.waitForResponse(
+      (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/jobs/save-all',
+    );
+    await dialog.getByRole('button', { name: `Save ${jobCount(count)}`, exact: true }).click();
+    const response = await answer;
+    expect(response.status()).toBe(200);
+    const saved = (await response.json()) as {
+      items: Array<{ jobId: number; applicationId: string; resumeId: string | null }>;
+      pendingMatches: number;
+    };
+    await expect(dialog).toBeHidden();
+    // The jobs not tracked yet, in the list's order, each with the best (here: the only) resume, unless still pending.
+    expect(saved.items.map((item) => item.jobId)).toEqual(rest.map((job) => job.id));
+    if (resumeId) {
+      expect(saved.items.filter((item) => item.resumeId !== null).every((item) => item.resumeId === resumeId)).toBeTruthy();
+      expect(saved.items.filter((item) => item.resumeId === null)).toHaveLength(saved.pendingMatches);
+    }
+
+    const notifications = page.getByRole('region', { name: 'Notifications' });
+    const done = notifications.getByRole('dialog', { name: `Saved ${jobCount(count)}` });
+    await expect(done).toBeVisible();
+    await expect(done).toContainText(count === 1 ? 'Find it in your Job Tracker under Saved.' : 'Find them in your Job Tracker under Saved.');
+    const card = (job: ListedJob) => page.locator(`[data-job-card="${job.id}"]`);
+    for (const job of [savedJob!, ...rest]) {
+      await expect(card(job).getByRole('button', { name: `Remove ${job.title} from saved jobs`, exact: true })).toBeVisible();
+    }
+    await expect(card(appliedJob!).getByRole('button', { name: `Save ${appliedJob!.title}`, exact: true })).toBeVisible();
+    const counts = async () =>
+      (await (await page.request.get('/api/applications/counts')).json()) as { archived: number; byStatus: Record<string, number> };
+    expect(await counts()).toMatchObject({ archived: 0, byStatus: { '1': count + 1, '2': 1 } });
+
+    // Undo archives exactly what the click saved: the job saved before stays saved.
+    await done.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(notifications.getByRole('dialog', { name: `Removed ${jobCount(count)} from saved jobs` })).toBeVisible();
+    for (const job of rest) await expect(card(job).getByRole('button', { name: `Save ${job.title}`, exact: true })).toBeVisible();
+    await expect(card(savedJob!).getByRole('button', { name: `Remove ${savedJob!.title} from saved jobs`, exact: true })).toBeVisible();
+    expect(await counts()).toMatchObject({ archived: count, byStatus: { '1': 1, '2': 1 } });
   });
 
   test('loads the next 21 jobs as the list scrolls (when there are more than 21)', async ({ page }) => {

@@ -1,4 +1,5 @@
 import {
+  BulkApplicationsResponseSchema,
   JobAnalysisViewSchema,
   JobDetailSchema,
   JobFacetResponseSchema,
@@ -6,16 +7,22 @@ import {
   JobSummarySchema,
   LevelMatchSchema,
   MatchResultSchema,
+  SaveAllPreviewSchema,
+  SaveAllResponseSchema,
   SavedSearchListSchema,
   SavedSearchSchema,
   jobsQueryToQueryString,
   listResponse,
+  type BulkApplicationsBody,
   type JobDetail,
   type JobFacet,
   type JobFacetResponse,
   type JobFacetsSummary,
   type JobReportBody,
   type JobsQuery,
+  type SaveAllBody,
+  type SaveAllPreview,
+  type SaveAllResponse,
   type SavedSearch,
 } from '@tailorit/shared';
 import { z } from 'zod';
@@ -54,6 +61,7 @@ export const jobsKeys = {
   count: (queryString: string) => ['jobs', 'count', queryString] as const,
   details: ['jobs', 'detail'] as const,
   detail: (id: number) => ['jobs', 'detail', id] as const,
+  allInsights: ['jobs', 'insights'] as const,
   insights: (id: number) => ['jobs', 'insights', id] as const,
   facet: (facet: JobFacet, q: string) => ['jobs', 'facets', facet, q] as const,
   facetsSummary: ['jobs', 'facets', 'summary'] as const,
@@ -144,3 +152,36 @@ export const archiveApplication = (applicationId: string) =>
 /** Undo of an un-save: the archived application is active (and the job saved) again. */
 export const restoreApplication = (applicationId: string) =>
   api.post<ApplicationRef>(`/api/applications/${encodeURIComponent(applicationId)}/restore`, undefined, { schema: ApplicationRefSchema });
+
+// ------------------------------------------------------------------------------------------- Save all (WP7)
+
+/**
+ * The "Save N jobs?" numbers for the list's filters (`listQueryString`): every match, those Save all can save (not
+ * saved yet), and what one click saves (at most SAVE_ALL_LIMIT).
+ */
+export function fetchSaveAllPreview(queryString: string, signal?: AbortSignal) {
+  return api.get<SaveAllPreview>(`/api/jobs/save-all/preview${queryString ? `?${queryString}` : ''}`, {
+    schema: SaveAllPreviewSchema,
+    signal,
+  });
+}
+
+/**
+ * Saves the jobs matching the list's filters, at most SAVE_ALL_LIMIT, in the order the list shows them, as Saved on
+ * `occurredOn` (the browser's day). The answer lists the applications saved, for Undo.
+ */
+export function saveAllJobs(queryString: string, occurredOn: string) {
+  const body: SaveAllBody = { occurredOn };
+  return api.post<SaveAllResponse>(`/api/jobs/save-all${queryString ? `?${queryString}` : ''}`, body, {
+    schema: SaveAllResponseSchema,
+  });
+}
+
+/**
+ * Save all's Undo: archives the applications the click saved (as un-saving one job does), leaving alone any that
+ * moved past Saved meanwhile. `affected` is how many it archived.
+ */
+export function unsaveApplications(applicationIds: readonly string[]) {
+  const body: BulkApplicationsBody = { ids: [...applicationIds], action: 'archive', onlySaved: true };
+  return api.post<{ affected: number }>(`/api/applications/bulk`, body, { schema: BulkApplicationsResponseSchema });
+}

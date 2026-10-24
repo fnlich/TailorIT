@@ -5,7 +5,8 @@ import { BM25_WEIGHTS, buildFtsQuery } from './fts';
 import { APPLICATION_JOIN, SUMMARY_COLUMNS, toListItem, type JobListItem, type SummaryRow } from './rows';
 
 // GET /api/jobs: the Jobs page's list. One SQL query per page (keyset-paginated, 21 rows) plus one COUNT for "Found N
-// jobs". Every value reaches SQLite as a bound parameter; only fixed SQL fragments are concatenated.
+// jobs". Every value reaches SQLite as a bound parameter; only fixed SQL fragments are concatenated. Save all
+// (save-all.ts) reads the same matches through `countJobs` and `matchingJobIds`: the same filters, joins and order.
 
 /** "Recently posted": the posting's own date, else when TailorIT first saw it. */
 export const POSTED_SQL = 'COALESCE(j.posted_at, j.first_seen_at)';
@@ -143,6 +144,33 @@ function ordering(query: JobsQuery, hasSearch: boolean): { mode: OrderMode; key:
 const FTS_JOIN = `JOIN (SELECT rowid AS job_id, bm25(jobs_fts, ${BM25_WEIGHTS.join(', ')}) AS rank
                        FROM jobs_fts WHERE jobs_fts MATCH @fts) f ON f.job_id = j.id`;
 
+/**
+ * The viewer tracks the job, as the list shows it (rows.ts `toListItem`): saved (an application that is not archived),
+ * or applied to and on (Applied or later, archived or not). An application archived while only Saved (un-saved) does
+ * not count. Binds @userId; the partial index on applications(user_id, job_id) answers it, as for `hideApplied`.
+ */
+const TRACKED_SQL = `EXISTS (SELECT 1 FROM applications ap WHERE ap.user_id = @userId AND ap.job_id = j.id
+      AND (ap.archived_at IS NULL OR ap.current_status >= ${STATUS.applied}))`;
+
+export interface MatchOptions {
+  /** Only the matches Save all can save: jobs the viewer does not track (never tracked, or un-saved). */
+  untrackedOnly?: boolean;
+}
+
+/** What every read of the matches shares (the page, its count, Save all's selection): FROM, WHERE and parameters. */
+function matchingSql(
+  query: JobsQuery,
+  scope: SearchScope,
+  options: MatchOptions = {},
+): { fts: string | null; params: Params; where: string[]; from: string } {
+  const fts = buildFtsQuery(query.q);
+  const params = new Params({ userId: scope.userId, ...(fts ? { fts } : {}) });
+  const where = filterConditions(query, scope, params);
+  if (options.untrackedOnly) where.push(`NOT ${TRACKED_SQL}`);
+  const from = `jobs j JOIN companies c ON c.id = j.company_id ${fts ? FTS_JOIN : ''}`;
+  return { fts, params, where, from };
+}
+
 export interface JobsPage {
   items: JobListItem[];
   total: number;
@@ -156,10 +184,7 @@ function isFtsSyntaxError(error: unknown): boolean {
 
 /** One page of the list for `query` as `scope.userId` sees it. */
 export function searchJobs(db: Db, query: JobsQuery, scope: SearchScope): JobsPage {
-  const fts = buildFtsQuery(query.q);
-  const params = new Params({ userId: scope.userId, ...(fts ? { fts } : {}) });
-  const where = filterConditions(query, scope, params);
-  const from = `jobs j JOIN companies c ON c.id = j.company_id ${fts ? FTS_JOIN : ''}`;
+  const { fts, params, where, from } = matchingSql(query, scope);
   const order = ordering(query, fts !== null);
 
   const countParams = { ...params.values };
@@ -209,17 +234,39 @@ export function searchJobs(db: Db, query: JobsQuery, scope: SearchScope): JobsPa
   };
 }
 
-/** "Found N jobs" alone (the All filters dialog's "Show N jobs" button). */
-export function countJobs(db: Db, query: JobsQuery, scope: SearchScope): number {
-  const fts = buildFtsQuery(query.q);
-  const params = new Params({ userId: scope.userId, ...(fts ? { fts } : {}) });
-  const where = filterConditions(query, scope, params);
-  const sql = `SELECT COUNT(*) AS total FROM jobs j JOIN companies c ON c.id = j.company_id ${fts ? FTS_JOIN : ''}
+/**
+ * "Found N jobs" alone (the All filters dialog's "Show N jobs" button). With `untrackedOnly`, only the matches Save
+ * all can save.
+ */
+export function countJobs(db: Db, query: JobsQuery, scope: SearchScope, options: MatchOptions = {}): number {
+  const { fts, params, where, from } = matchingSql(query, scope, options);
+  const sql = `SELECT COUNT(*) AS total FROM ${from}
                WHERE ${where.join(' AND ')}`;
   try {
     return (db.prepare(sql).get(params.values) as { total: number }).total;
   } catch (error) {
     if (fts && isFtsSyntaxError(error)) return 0;
+    throw error;
+  }
+}
+
+/**
+ * The ids of the first `limit` matches, in the order the list shows them (its sort key, then the newest id first,
+ * as the pages are cut); the cursor is ignored. [] when SQLite refuses the search, as the list then shows nothing.
+ */
+export function matchingJobIds(db: Db, query: JobsQuery, scope: SearchScope, options: MatchOptions & { limit: number }): number[] {
+  const { fts, params, where, from } = matchingSql(query, scope, options);
+  const order = ordering(query, fts !== null);
+  const limit = params.add(Number.isSafeInteger(options.limit) ? Math.max(0, options.limit) : 0);
+  const sql = `SELECT j.id AS id
+    FROM ${from}
+    WHERE ${where.join('\n      AND ')}
+    ORDER BY ${order.key} ${order.direction}, j.id DESC
+    LIMIT ${limit}`;
+  try {
+    return (db.prepare(sql).all(params.values) as Array<{ id: number }>).map((row) => row.id);
+  } catch (error) {
+    if (fts && isFtsSyntaxError(error)) return [];
     throw error;
   }
 }
