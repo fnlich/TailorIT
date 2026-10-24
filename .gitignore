@@ -18,6 +18,11 @@ e2e/artifacts/
 .env.*
 !.env.example
 
+# Google credentials: the service account key the Google Sheet import reads (GOOGLE_SERVICE_ACCOUNT_KEY_FILE)
+service-account-key.json
+*.service-account.json
+google-oauth-credentials.json
+
 # the user's Simplify screenshots contain personal data
 e2e/reference/
 
