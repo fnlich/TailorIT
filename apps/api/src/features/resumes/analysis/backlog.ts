@@ -250,7 +250,7 @@ export function createResumeAnalysisBacklog(deps: AppDeps): ResumeAnalysisBacklo
     if (reconcile(ai, nowMs) || (sql.active.get()?.n ?? 0) > 0) return null;
     const gateAnswer = gate.allowed();
     if (!gateAnswer.ok) return pause(gateAnswer.reason);
-    if (budget.nextAtMs() > nowMs) return pause('the hourly limit (AI_RESUME_ANALYSIS_PER_HOUR) is reached');
+    if (budget.nextAtMs(nowMs) > nowMs) return pause('the hourly limit (AI_RESUME_ANALYSIS_PER_HOUR) is reached');
     pausedFor = '';
     for (const row of sql.candidates.all(iso(nowMs), RESUME_ANALYSIS_VERSION)) {
       // Claude read this text for this account already: copied, nothing asked.
@@ -270,7 +270,7 @@ export function createResumeAnalysisBacklog(deps: AppDeps): ResumeAnalysisBacklo
       try {
         if ((sql.active.get()?.n ?? 0) > 0) return true;
         const nowMs = deps.now().getTime();
-        if (budget.nextAtMs() > nowMs) return false;
+        if (budget.nextAtMs(nowMs) > nowMs) return false;
         return Boolean(sql.anyDue.get(iso(nowMs), RESUME_ANALYSIS_VERSION));
       } catch (error) {
         log.warn('[resume-analysis] could not tell whether a reading is due', error);

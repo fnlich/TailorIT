@@ -24,6 +24,7 @@ import {
   ResumeAnalysisOutputSchema,
   resumeAnalysisPrompt,
 } from '../src/features/resumes/analysis/prompt';
+import { createResumeAnalysisBacklog } from '../src/features/resumes/analysis/backlog';
 import { analysisHashOf, skillLists, storeAiResumeAnalysis } from '../src/features/resumes/analysis/store';
 import { resumesFeature } from '../src/features/resumes/index';
 import { insertResume } from '../src/features/resumes/repository';
@@ -705,6 +706,20 @@ describe("Claude's reading of uploads (the backlog)", () => {
     ctx!.setNow(at(60 * MINUTE + 1000));
     expect(workers().backlog.tick()).toEqual(expect.any(String));
     await requireAi(ctx!.deps).waitFor(backlogRow(second)!.task_id!, 20_000);
+  });
+
+  it.each(['0', '2'])('starts a reading on a clock that moves while it steps (AI_RESUME_ANALYSIS_PER_HOUR=%s)', async (perHour) => {
+    context({ AI_RESUME_ANALYSIS_PER_HOUR: perHour });
+    const me = await signIn(ctx!, 'clock@example.com');
+    const upload = addUpload(me.account.id, RESUME_TEXT, 'One');
+    // As a real clock does, every reading is a millisecond after the one before: the step's and the budget's differ.
+    let ms = ctx!.deps.now().getTime();
+    const backlog = createResumeAnalysisBacklog({ ...ctx!.deps, now: () => new Date((ms += 1)) });
+    expect(backlog.pending()).toBe(true);
+    const taskId = backlog.tick();
+    expect(taskId).toEqual(expect.any(String));
+    await requireAi(ctx!.deps).waitFor(taskId!, 20_000);
+    expect(backlogRow(upload)).toMatchObject({ state: 'done' });
   });
 
   it('pending(): a reading in flight, or one due that the budget allows (other background AI yields to it)', async () => {

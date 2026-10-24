@@ -322,7 +322,7 @@ function backlog(deps: AppDeps, service: Pick<JobAnalysisServiceInternals, 'enqu
     const gateAnswer = gate.allowed();
     if (!gateAnswer.ok) return waiting('paused', gateAnswer.retryAtMs, gateAnswer.reason);
     if (restUntil > nowMs) return waiting('unavailable', restUntil, restReason);
-    const nextAt = budget.nextAtMs();
+    const nextAt = budget.nextAtMs(nowMs);
     if (nextAt > nowMs) return waiting('hourly_cap', nextAt);
     if (refusedUntil > nowMs) return waiting('refused', refusedUntil);
     if (resumeReadingFirst(nowMs)) return waiting('resume_first');

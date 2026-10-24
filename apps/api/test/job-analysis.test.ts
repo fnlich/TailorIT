@@ -575,6 +575,14 @@ describe('the add-time backlog', () => {
     expect(logLines(context).some((line) => /AI backlog paused: the Claude usage limit is close/.test(line))).toBe(true);
   });
 
+  it.each(['0', '2'])('starts work on a clock that moves while a step runs (AI_JOB_ANALYSIS_PER_HOUR=%s)', async (perHour) => {
+    const { ctx: context, analysis } = await setup({ AI_JOB_ANALYSIS_PER_HOUR: perHour });
+    // As a real clock does, every reading is a millisecond after the one before: the step's and the budget's differ.
+    let ms = TEST_NOW.getTime();
+    const backlog = createJobAnalysisBacklog({ ...context.deps, now: () => new Date((ms += 1)) }, analysis);
+    expect(await finish(context, backlog.tick())).toBe('succeeded');
+  });
+
   it('yields while a resume refine is due', async () => {
     const { ctx: context, analysis } = await setup();
     const db = context.deps.db;

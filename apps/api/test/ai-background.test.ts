@@ -135,21 +135,21 @@ describe('the hourly budget', () => {
   it('allows at most N starts in any rolling hour, and says when the next one may start', () => {
     let now = 0;
     const budget = createHourlyBudget(2, () => now);
-    expect(budget.nextAtMs()).toBe(0);
+    expect(budget.nextAtMs(now)).toBe(0);
     expect(budget.take()).toBe(true);
     now = 10 * MINUTE;
     expect(budget.take()).toBe(true);
     now = 20 * MINUTE;
     expect(budget.take()).toBe(false);
     expect(budget.take()).toBe(false); // a refusal counts nothing
-    expect(budget.nextAtMs()).toBe(60 * MINUTE);
+    expect(budget.nextAtMs(now)).toBe(60 * MINUTE);
     now = 60 * MINUTE - 1;
     expect(budget.take()).toBe(false);
     now = 60 * MINUTE; // the first start is an hour old
-    expect(budget.nextAtMs()).toBe(now);
+    expect(budget.nextAtMs(now)).toBe(now);
     expect(budget.take()).toBe(true);
     expect(budget.take()).toBe(false);
-    expect(budget.nextAtMs()).toBe(70 * MINUTE);
+    expect(budget.nextAtMs(now)).toBe(70 * MINUTE);
     now = 0; // the clock went back: starts "from the future" are dropped
     expect(budget.take()).toBe(true);
   });
@@ -158,7 +158,26 @@ describe('the hourly budget', () => {
     const now = 5 * MINUTE;
     const budget = createHourlyBudget(0, () => now);
     for (let i = 0; i < 500; i += 1) expect(budget.take()).toBe(true);
-    expect(budget.nextAtMs()).toBe(now);
+    expect(budget.nextAtMs(now)).toBe(now);
+  });
+
+  it("answers as of the caller's reading of the clock, not a later one", () => {
+    // A real clock moves between the caller's reading and the budget's: room now must not read as a time to come.
+    let clock = 0;
+    const ticking = () => (clock += 1);
+    for (const perHour of [0, 2]) {
+      const budget = createHourlyBudget(perHour, ticking);
+      const now = ticking();
+      expect(budget.nextAtMs(now)).toBe(now);
+      expect(budget.take()).toBe(true);
+      const later = ticking();
+      expect(budget.nextAtMs(later)).toBe(later);
+    }
+    // Full: the first take's hour, whatever the clock read since.
+    const budget = createHourlyBudget(1, ticking);
+    const first = clock + 1;
+    expect(budget.take()).toBe(true);
+    expect(budget.nextAtMs(ticking())).toBe(first + 60 * MINUTE);
   });
 });
 

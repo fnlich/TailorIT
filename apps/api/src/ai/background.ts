@@ -8,7 +8,7 @@ import type { AiService } from './queue';
 //   - the gate stays shut while any hold is active, and while the CLI's last usage reading is not plain "allowed"
 //     (e.g. "allowed_warning": the window is nearly used up), until that window resets;
 //   - an hourly budget caps how many tasks a backlog starts (AI_RESUME_ANALYSIS_PER_HOUR, AI_JOB_ANALYSIS_PER_HOUR).
-// Both only answer questions; the workers decide what to do (wait until `retryAtMs` or `nextAtMs()`).
+// Both only answer questions; the workers decide what to do (wait until `retryAtMs` or `nextAtMs(now)`).
 
 /** How long a usage warning that gives no reset time keeps background work waiting, from when it was seen. */
 export const WARNING_PAUSE_MS = 30 * 60_000;
@@ -67,8 +67,12 @@ export function createBackgroundGate(deps: Pick<AppDeps, 'services' | 'now'>): B
 export interface HourlyBudget {
   /** Counts one task when the last hour has room for it, and says so; false (nothing counted) when it has not. */
   take(): boolean;
-  /** When `take()` can next succeed (epoch ms): now when it already can. */
-  nextAtMs(): number;
+  /**
+   * When `take()` can next succeed (epoch ms), as of `atMs`: `atMs` itself when it already can. `atMs` is the caller's
+   * own reading of the clock, the one it compares the answer with: a reading taken here would be a moment later than
+   * the caller's, and an answer of "now" would look like a time still to come (a full hour).
+   */
+  nextAtMs(atMs: number): number;
 }
 
 /**
@@ -87,11 +91,11 @@ export function createHourlyBudget(perHour: number, now: () => number): HourlyBu
       taken.push(at);
       return true;
     },
-    nextAtMs() {
-      const at = now();
-      if (perHour <= 0) return at;
-      const recent = lastHour(at);
-      return recent.length < perHour ? at : recent[0]! + HOUR_MS;
+    nextAtMs(atMs) {
+      if (perHour <= 0) return atMs;
+      // Read without dropping anything: a take a moment after the caller's reading is not one from the future.
+      const recent = taken.filter((t) => t > atMs - HOUR_MS && t <= atMs);
+      return recent.length < perHour ? atMs : recent[0]! + HOUR_MS;
     },
   };
 }
