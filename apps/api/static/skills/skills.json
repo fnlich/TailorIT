@@ -3,7 +3,14 @@
     {
       "skill": "Bash",
       "priority": 1,
-      "category": "Languages"
+      "category": "Languages",
+      "aliases": [
+        "Awk",
+        "awk/sed",
+        "Linux Shell",
+        "Sed",
+        "Shell Scripting"
+      ]
     },
     {
       "skill": "C#",
@@ -16,14 +23,6 @@
       "category": "Languages"
     },
     {
-      "skill": "CSS",
-      "priority": 1,
-      "category": "Languages",
-      "aliases": [
-        "CSS3"
-      ]
-    },
-    {
       "skill": "Elixir",
       "priority": 1,
       "category": "Languages"
@@ -31,7 +30,10 @@
     {
       "skill": "Go",
       "priority": 1,
-      "category": "Languages"
+      "category": "Languages",
+      "aliases": [
+        "Go Test"
+      ]
     },
     {
       "skill": "Groovy",
@@ -43,13 +45,23 @@
       "priority": 1,
       "category": "Languages",
       "aliases": [
+        "BEM",
+        "CSS",
+        "CSS Grid",
+        "CSS Modules",
+        "CSS3",
+        "Flexbox",
         "HTML5"
       ]
     },
     {
       "skill": "Java",
       "priority": 1,
-      "category": "Languages"
+      "category": "Languages",
+      "aliases": [
+        "Jakarta EE",
+        "JDBC"
+      ]
     },
     {
       "skill": "JavaScript",
@@ -59,7 +71,10 @@
     {
       "skill": "Kotlin",
       "priority": 1,
-      "category": "Languages"
+      "category": "Languages",
+      "aliases": [
+        "Kotlin Multiplatform"
+      ]
     },
     {
       "skill": "Lua",
@@ -112,14 +127,15 @@
       "category": "Languages"
     },
     {
-      "skill": "Shell Scripting",
-      "priority": 1,
-      "category": "Languages"
-    },
-    {
       "skill": "SQL",
       "priority": 1,
-      "category": "Languages"
+      "category": "Languages",
+      "aliases": [
+        "PL/SQL",
+        "RDBMS",
+        "Stored Procedures",
+        "T-SQL"
+      ]
     },
     {
       "skill": "Swift",
@@ -152,19 +168,12 @@
       "category": "Languages"
     },
     {
-      "skill": "PL/SQL",
-      "priority": 5,
-      "category": "Languages"
-    },
-    {
       "skill": "R",
       "priority": 5,
-      "category": "Languages"
-    },
-    {
-      "skill": "T-SQL",
-      "priority": 5,
-      "category": "Languages"
+      "category": "Languages",
+      "aliases": [
+        "RStudio"
+      ]
     },
     {
       "skill": "VB.NET",
@@ -174,7 +183,11 @@
     {
       "skill": "Ruby on Rails",
       "priority": 1,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "ActiveJob",
+        "Rails"
+      ]
     },
     {
       "skill": "Angular",
@@ -199,12 +212,10 @@
     {
       "skill": "Django",
       "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Django REST Framework",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Django REST Framework"
+      ]
     },
     {
       "skill": "Emotion",
@@ -250,12 +261,15 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "NestJS",
+      "skill": "Module Federation",
       "priority": 2,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Webpack Module Federation"
+      ]
     },
     {
-      "skill": "NextAuth.js",
+      "skill": "NestJS",
       "priority": 2,
       "category": "Frameworks and Libraries"
     },
@@ -270,24 +284,17 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Rails",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "React",
       "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "React Hook Form",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "React Router",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Formik",
+        "React Hook Form",
+        "React Router",
+        "React Testing Library",
+        "Redux",
+        "Redux Toolkit"
+      ]
     },
     {
       "skill": "Reactive Programming",
@@ -295,49 +302,20 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Redux",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Redux Toolkit",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Spring",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Spring Batch",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Spring Boot",
       "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Spring Data",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Spring MVC",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Spring Security",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Spring WebFlux",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Spring",
+        "Spring Batch",
+        "Spring Cloud",
+        "Spring Data",
+        "Spring Integration",
+        "Spring Kafka",
+        "Spring MVC",
+        "Spring Security",
+        "Spring WebFlux"
+      ]
     },
     {
       "skill": "Symfony",
@@ -347,22 +325,47 @@
     {
       "skill": "Vue.js",
       "priority": 2,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Pinia",
+        "Vue Test Utils",
+        "Vuex"
+      ]
     },
     {
-      "skill": "Vuex",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Formik",
+      "skill": "Benchmarking",
       "priority": 3,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Benchmark Automation",
+        "Performance Baselines"
+      ]
+    },
+    {
+      "skill": "Firebase",
+      "priority": 3,
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Cloud Firestore",
+        "Crashlytics",
+        "Firebase Mobile SDK",
+        "Firebase Realtime Database",
+        "Firestore"
+      ]
     },
     {
       "skill": "TanStack Query",
       "priority": 3,
       "category": "Frameworks and Libraries"
+    },
+    {
+      "skill": "Cost Optimization",
+      "priority": 4,
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Cloud Billing Analysis",
+        "FinOps"
+      ]
     },
     {
       "skill": "Istio",
@@ -377,22 +380,13 @@
     {
       "skill": ".NET",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": ".NET Core",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "A/B Experiment Analysis",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "ActiveJob",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        ".NET Core",
+        "ASP.NET",
+        "ASP.NET Core",
+        "Entity Framework"
+      ]
     },
     {
       "skill": "Actix Web",
@@ -413,27 +407,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "AKS",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Alembic",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Alerta",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Alerting",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Alertmanager",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -519,7 +498,10 @@
     {
       "skill": "Apache Spark",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "PySpark"
+      ]
     },
     {
       "skill": "Apache Struts",
@@ -557,11 +539,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "App Signing",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "AppArmor",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -577,21 +554,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Argon2",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "ASP.NET",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "ASP.NET Core",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Assembly",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -602,19 +564,13 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Async I/O",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Async Programming",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Async/Await",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Async I/O",
+        "Async/Await"
+      ]
     },
     {
       "skill": "Audit Readiness",
@@ -623,16 +579,6 @@
     },
     {
       "skill": "Automation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Awk",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "awk/sed",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -657,17 +603,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Backlog Grooming",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Backpressure",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Backup and Recovery",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -697,11 +633,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Bcrypt",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Beego",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -712,37 +643,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Behavior-Driven Development",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "BEM",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Benchmark Automation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Benchmarking",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "BFF Pattern",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "BGP Basics",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "BI Tools",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -757,16 +658,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Blackbox Exporter",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Blue-Green",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Bluetooth Low Energy",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -777,27 +668,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Bot Protection",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Branching Strategy",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Browser DevTools",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Bug Reproduction",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Bulkhead Pattern",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -814,12 +685,10 @@
     {
       "skill": "Business Intelligence",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "C4 Model",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "BI Tools"
+      ]
     },
     {
       "skill": "cAdvisor",
@@ -837,29 +706,17 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Canary Analysis",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "CAP Theorem",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Capacitor",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Capacity Forecasting",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Capacity Planning",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Capacity Forecasting"
+      ]
     },
     {
       "skill": "CatBoost",
@@ -872,34 +729,20 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "CDC",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "CDN",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "CDN Integration"
+      ]
     },
     {
       "skill": "Celery",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Celery Beat",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "CentOS",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Certificate Management",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Celery Beat"
+      ]
     },
     {
       "skill": "Certificate Pinning",
@@ -909,12 +752,18 @@
     {
       "skill": "Cgroups",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Control Groups"
+      ]
     },
     {
       "skill": "Change Data Capture",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "CDC"
+      ]
     },
     {
       "skill": "Change Management",
@@ -922,19 +771,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Changelog Management",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Changelog Writing",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Chaos Engineering",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Chaos Testing"
+      ]
     },
     {
       "skill": "Chart.js",
@@ -948,11 +790,6 @@
     },
     {
       "skill": "Chroma",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "CIDR",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -1004,7 +841,10 @@
     {
       "skill": "Code Signing",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "App Signing"
+      ]
     },
     {
       "skill": "CodeIgniter",
@@ -1013,11 +853,6 @@
     },
     {
       "skill": "CoffeeScript",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Command Pattern",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -1032,11 +867,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Component Libraries",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Compression",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -1044,7 +874,12 @@
     {
       "skill": "Concurrency",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Mutex",
+        "Parallelism",
+        "Threading"
+      ]
     },
     {
       "skill": "Configuration Management",
@@ -1067,37 +902,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Containerization",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Contract Mocking",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Control Groups",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Conventional Commits",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Copilot",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Cordova",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Core Data",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -1122,22 +932,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Cost Optimization",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Couchbase",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "CPU Profiling",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Crashlytics",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -1149,17 +944,18 @@
     {
       "skill": "Cron",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Cron Jobs",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Cron Jobs"
+      ]
     },
     {
       "skill": "Cross-Browser Compatibility",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Cross-Device Testing"
+      ]
     },
     {
       "skill": "Cross-functional Leadership",
@@ -1172,29 +968,13 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "CSP",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "CSP Headers",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "CSRF Prevention",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "CSRF Protection",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "CSRF Tokens",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "CSRF Prevention",
+        "CSRF Tokens"
+      ]
     },
     {
       "skill": "Cucumber",
@@ -1204,12 +984,11 @@
     {
       "skill": "CUDA",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "CUDA Optimization",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "CUDA Optimization",
+        "GPU Computing"
+      ]
     },
     {
       "skill": "curl",
@@ -1237,44 +1016,18 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Data Catalog",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Data Cleaning",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Data Drift Detection",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Data Governance",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Data Lineage",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Data Masking",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Data Modeling",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Data Validation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Data Catalog",
+        "Data Lineage"
+      ]
     },
     {
       "skill": "Data Versioning",
@@ -1289,7 +1042,10 @@
     {
       "skill": "Databricks",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Databricks SQL"
+      ]
     },
     {
       "skill": "DataGrip",
@@ -1322,19 +1078,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Debian",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Debugging",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Decorator Pattern",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Bug Reproduction"
+      ]
     },
     {
       "skill": "Deep Linking",
@@ -1343,11 +1092,6 @@
     },
     {
       "skill": "Defect Triage",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "DeFi",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -1369,17 +1113,18 @@
     {
       "skill": "Dependency Injection",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "IoC"
+      ]
     },
     {
       "skill": "Dependency Management",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Dependency Scanning",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Package Management"
+      ]
     },
     {
       "skill": "Deprecation Strategy",
@@ -1387,24 +1132,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Deserialization",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Design Docs",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Design Systems",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "DevSecOps",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Component Libraries"
+      ]
     },
     {
       "skill": "DHCP",
@@ -1442,11 +1175,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "DRY",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "DuckDB",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -1459,12 +1187,10 @@
     {
       "skill": "eBPF",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "eBPF Basics",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "eBPF Basics"
+      ]
     },
     {
       "skill": "Echo",
@@ -1487,22 +1213,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Email Delivery Systems",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Ember",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Engineering Practices",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Entity Framework",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -1517,11 +1233,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "ERD",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Erlang",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -1532,22 +1243,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Error Budgets",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "ETag",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "etcd",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Event Hub",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -1557,37 +1253,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Eventual Consistency",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Experiment Tracking",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Explain Analyze",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Expo",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Extreme Programming",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "F#",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Factory Pattern",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -1607,11 +1278,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Fallback Strategy",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Fastify",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -1624,7 +1290,15 @@
     {
       "skill": "Fault Tolerance",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Bulkhead Pattern",
+        "Circuit Breaker",
+        "Circuit Breaker Pattern",
+        "Fallback Strategy",
+        "Resilience Engineering",
+        "Retry Logic"
+      ]
     },
     {
       "skill": "Feature Flags",
@@ -1647,11 +1321,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "FIDO2 Awareness",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "File Permissions",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -1662,39 +1331,17 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "FinOps",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Firebase",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Firewall Rules",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Flame Graphs",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Flexbox",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Fluent Bit",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Fluentd",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Fluent Bit"
+      ]
     },
     {
       "skill": "Fly.io",
@@ -1727,16 +1374,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "FTP",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "FTP/SFTP",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Full-Text Search",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -1744,7 +1381,12 @@
     {
       "skill": "Functional Programming",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Higher-Order Functions",
+        "Immutability",
+        "Pure Functions"
+      ]
     },
     {
       "skill": "Gatling",
@@ -1764,12 +1406,10 @@
     {
       "skill": "GDPR",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "GDPR Awareness",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "GDPR Awareness"
+      ]
     },
     {
       "skill": "Generics",
@@ -1784,12 +1424,10 @@
     {
       "skill": "GNU Make",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "GoF Patterns",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Makefile"
+      ]
     },
     {
       "skill": "Google Artifact Registry",
@@ -1814,7 +1452,10 @@
     {
       "skill": "Google Secret Manager",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Secret Manager"
+      ]
     },
     {
       "skill": "Google Vertex AI",
@@ -1823,11 +1464,6 @@
     },
     {
       "skill": "Google Workflows",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "GPU Computing",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -1889,7 +1525,10 @@
     {
       "skill": "HashiCorp Vault",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Vault"
+      ]
     },
     {
       "skill": "Hashing",
@@ -1912,11 +1551,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "HCL",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Heroku",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -1924,7 +1558,10 @@
     {
       "skill": "Hibernate",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "JPA"
+      ]
     },
     {
       "skill": "HiBob",
@@ -1934,15 +1571,13 @@
     {
       "skill": "High Availability",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Multi-region"
+      ]
     },
     {
       "skill": "Highcharts",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Higher-Order Functions",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -1952,44 +1587,18 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "HSTS",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "HTTP",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "HTTP/1.1",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "HTTP/2",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "HTTP/3",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "HTTP/HTTPS",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "HTTPS",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "HuggingFace",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "HSTS",
+        "HTTP/1.1",
+        "HTTP/2",
+        "HTTP/3",
+        "HTTP/HTTPS",
+        "HTTPS",
+        "QUIC"
+      ]
     },
     {
       "skill": "Hugo",
@@ -1999,12 +1608,10 @@
     {
       "skill": "i18n",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "IAST",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "l10n"
+      ]
     },
     {
       "skill": "IBM Db2",
@@ -2022,11 +1629,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Identity and Access Management",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Image Optimization",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -2037,29 +1639,17 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "IMAP",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Immutability",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "In-App Purchases",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Incremental Static Regeneration",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Inference Optimization",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Quantization"
+      ]
     },
     {
       "skill": "Ingress",
@@ -2067,14 +1657,13 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Input Sanitization",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Input Validation",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Input Sanitization",
+        "Request Validation"
+      ]
     },
     {
       "skill": "Insomnia",
@@ -2089,20 +1678,13 @@
     {
       "skill": "Intrusion Detection",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Intrusion Prevention",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Intrusion Prevention"
+      ]
     },
     {
       "skill": "io_uring",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "IoC",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2117,16 +1699,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "IPv4",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "IPv6",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "ISO 27001",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -2137,27 +1709,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Jakarta EE",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "JanusGraph",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "JAX",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "JDBC",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Jetpack Compose",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2187,11 +1744,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "JPA",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "jq",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -2207,27 +1759,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Just-in-Time Access",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "K3s",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "K6",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "K9s",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "K9s/Lens",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2242,17 +1774,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Key Rotation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Kind",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "KISS",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2263,11 +1785,6 @@
     },
     {
       "skill": "Knex.js",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Knowledge Base Maintenance",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2292,17 +1809,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "kubectl",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Kubeflow",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Kustomize",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2312,17 +1819,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "l10n",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "LabVIEW",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Leader Election",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2332,19 +1829,23 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Lean Software Development",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Least Privilege",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Access Reviews",
+        "Just-in-Time Access",
+        "Privileged Access Controls"
+      ]
     },
     {
       "skill": "Legacy Modernization",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Monolith Modernization",
+        "Strangler Fig"
+      ]
     },
     {
       "skill": "Less",
@@ -2357,22 +1858,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Lift-and-Shift",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Lighthouse",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Linode",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Linting",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2399,30 +1890,22 @@
     {
       "skill": "Log Aggregation",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Log Rotation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Log Rotation"
+      ]
     },
     {
       "skill": "Log4j",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Logback",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Logback",
+        "SLF4J"
+      ]
     },
     {
       "skill": "Logs",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Loki",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2442,22 +1925,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Makefile",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Mapbox GL JS",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "MapStruct",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "MariaDB",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2489,7 +1962,10 @@
     {
       "skill": "Matplotlib",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Seaborn"
+      ]
     },
     {
       "skill": "Maven",
@@ -2507,22 +1983,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Memory Profiling",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Mercurial",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Merge Conflict Resolution",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Message Consumers",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2539,15 +2000,13 @@
     {
       "skill": "MFA/2FA",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "TOTP"
+      ]
     },
     {
       "skill": "Micronaut",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Migrations",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2557,17 +2016,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Minikube",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "MLflow",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Mob Programming",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2584,25 +2033,15 @@
     {
       "skill": "Mocking",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Mocking Frameworks",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Model Drift Detection",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Mocking Frameworks",
+        "Spying",
+        "Stubbing"
+      ]
     },
     {
       "skill": "Model Serving",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Module Federation",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2617,11 +2056,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Monolith Modernization",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "MQTT",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -2632,29 +2066,17 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Multi-region",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Multipart Upload Handling",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Mutex",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Mutual TLS",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Namespaces",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Linux Namespaces"
+      ]
     },
     {
       "skill": "NAT",
@@ -2664,7 +2086,10 @@
     {
       "skill": "NATS",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "NATS JetStream"
+      ]
     },
     {
       "skill": "Netty",
@@ -2673,11 +2098,6 @@
     },
     {
       "skill": "Nexus Repository",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Nginix",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2693,11 +2113,6 @@
     },
     {
       "skill": "NLTK",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Node Exporter",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2718,11 +2133,6 @@
     },
     {
       "skill": "Nx",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Observer Pattern",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2749,12 +2159,10 @@
     {
       "skill": "ONNX",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "ONNX Runtime",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "ONNX Runtime"
+      ]
     },
     {
       "skill": "OOP",
@@ -2779,7 +2187,10 @@
     {
       "skill": "OpenID Connect",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "OIDC"
+      ]
     },
     {
       "skill": "OpenLayers",
@@ -2792,42 +2203,20 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "OpenVPN",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Opsgenie",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Output Encoding",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "OWASP",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "OWASP Top 10",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Package Management",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "OWASP"
+      ]
     },
     {
       "skill": "Packer",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Packet Analysis",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2842,22 +2231,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Parallelism",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Parcel",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Parquet",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Partitioning",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2869,7 +2248,12 @@
     {
       "skill": "Password Hashing",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Argon2",
+        "Bcrypt",
+        "Password Storage"
+      ]
     },
     {
       "skill": "Patroni",
@@ -2877,22 +2261,15 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "PCI DSS Awareness",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "PCI-DSS",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "PCI DSS Awareness"
+      ]
     },
     {
       "skill": "PDF Generation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "PEFT",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -2914,22 +2291,18 @@
     {
       "skill": "PII Handling",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Pinia",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "PKCE",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Data Masking"
+      ]
     },
     {
       "skill": "PKI",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Certificate Management"
+      ]
     },
     {
       "skill": "Play Framework",
@@ -2967,27 +2340,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "POP3",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "PostCSS",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "PostGIS",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Postman",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Postmortem Analysis",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3014,7 +2372,12 @@
     {
       "skill": "Progressive Web Apps",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "PWA",
+        "Service Workers",
+        "Workbox"
+      ]
     },
     {
       "skill": "Prolog",
@@ -3027,29 +2390,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Prompt Evaluation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Promtail",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Protobuf",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Protocol Buffers",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Proxy Pattern",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Protocol Buffers"
+      ]
     },
     {
       "skill": "Pulumi",
@@ -3057,17 +2403,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Pure Functions",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Push Notifications",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "PWA",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3078,11 +2414,6 @@
     },
     {
       "skill": "Pyramid",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "PySpark",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3102,11 +2433,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Quantization",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Quarkus",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -3118,11 +2444,6 @@
     },
     {
       "skill": "Racket",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Raft/Paxos",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3139,17 +2460,10 @@
     {
       "skill": "Rate Limiting",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "RDBMS",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Read Replicas",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Throttling"
+      ]
     },
     {
       "skill": "Realm",
@@ -3187,11 +2501,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Refresh Token Flows",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Regex",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -3209,12 +2518,13 @@
     {
       "skill": "Release Management",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Release Planning",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Changelog Management",
+        "Changelog Writing",
+        "Release Planning",
+        "Semantic Versioning"
+      ]
     },
     {
       "skill": "Remix",
@@ -3232,49 +2542,17 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Repository Pattern",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Request Validation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Resilience Engineering",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Resque",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Retrieval-Augmented Generation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Retry Logic",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Reverse Proxy",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Reverse Proxy Configuration",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "RFC Writing",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Reverse Proxy Configuration"
+      ]
     },
     {
       "skill": "Ribbon",
@@ -3283,11 +2561,6 @@
     },
     {
       "skill": "Risk Management",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "RLHF Awareness",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3332,19 +2605,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "RStudio",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Runbook Automation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Runbooks",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Runbook Automation"
+      ]
     },
     {
       "skill": "RxJS",
@@ -3352,17 +2618,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "SAFe Awareness",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "SaltStack",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SameSite Cookies",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3373,21 +2629,6 @@
     },
     {
       "skill": "SAS",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SBOM",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SBOM Management",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Scalable Systems Design",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3412,37 +2653,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Seaborn",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Seccomp",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Secret Manager",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Secret Rotation",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Secret Scoping",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Sed",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Semantic Versioning",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3452,14 +2663,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Sequence Diagrams",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Serialization",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Deserialization"
+      ]
     },
     {
       "skill": "Serilog",
@@ -3469,27 +2678,28 @@
     {
       "skill": "Server-Sent Events",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "SSE"
+      ]
     },
     {
       "skill": "Server-Side Rendering",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Service Level Indicators",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "SSR"
+      ]
     },
     {
       "skill": "Service Level Objectives",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Service Workers",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Error Budgets",
+        "Service Level Indicators",
+        "SLO/SLI"
+      ]
     },
     {
       "skill": "Session Management",
@@ -3499,12 +2709,11 @@
     {
       "skill": "SFTP",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Shadow DOM",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "FTP",
+        "FTP/SFTP"
+      ]
     },
     {
       "skill": "Sidecar Pattern",
@@ -3537,27 +2746,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Singleton Pattern",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Site Reliability Engineering",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SLF4J",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SLO/SLI",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SLSA Awareness",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3569,35 +2758,33 @@
     {
       "skill": "SMTP",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Email Delivery Systems",
+        "IMAP",
+        "POP3",
+        "SMTP Integration"
+      ]
     },
     {
       "skill": "SOAP",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SOAP Web Services",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SOC 2 Awareness",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "SOAP Web Services",
+        "WSDL/SOAP"
+      ]
     },
     {
       "skill": "SOC2",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "SOC 2 Awareness"
+      ]
     },
     {
       "skill": "Socket Programming",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Software Composition Analysis",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3612,11 +2799,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Spanner",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Spark Java",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -3627,37 +2809,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Spying",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SSE",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SSG",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "SSH",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SSL",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SSL/TLS",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "SSR",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3674,12 +2826,19 @@
     {
       "skill": "Static Analysis",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Code Quality Gates",
+        "Linting"
+      ]
     },
     {
       "skill": "Static Site Generation",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "SSG"
+      ]
     },
     {
       "skill": "Statistics",
@@ -3688,16 +2847,6 @@
     },
     {
       "skill": "STOMP",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Stored Procedures",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Story Estimation",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3712,34 +2861,18 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Strangler Fig",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Strategy Pattern",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Stubbing",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Styled Components",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Subnets",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Subnetting",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "CIDR",
+        "Subnets"
+      ]
     },
     {
       "skill": "Superset",
@@ -3792,14 +2925,15 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "TCP",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "TCP/IP",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "IPv4",
+        "IPv6",
+        "TCP",
+        "UDP"
+      ]
     },
     {
       "skill": "TeamCity",
@@ -3814,22 +2948,14 @@
     {
       "skill": "Technical Design",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Technical Discovery",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Technical Planning",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Template Method",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "C4 Model",
+        "Design Docs",
+        "Sequence Diagrams",
+        "Technical Discovery",
+        "Technical Planning"
+      ]
     },
     {
       "skill": "Template Rendering",
@@ -3847,22 +2973,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Threading",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Three.js",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
     {
       "skill": "Thrift",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Throttling",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3877,27 +2993,18 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Timescale Continuous Aggregates",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "TLS",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "TLS/SSL",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Mutual TLS",
+        "SSL",
+        "SSL/TLS",
+        "TLS/SSL"
+      ]
     },
     {
       "skill": "TMOS",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Token Introspection",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3908,11 +3015,6 @@
     },
     {
       "skill": "Tornado",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "TOTP",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -3929,7 +3031,11 @@
     {
       "skill": "Transaction Management",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "ACID",
+        "ACID Compliance"
+      ]
     },
     {
       "skill": "Transactions",
@@ -3944,7 +3050,10 @@
     {
       "skill": "Trino",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Presto"
+      ]
     },
     {
       "skill": "Triton Inference Server",
@@ -3977,21 +3086,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Ubuntu",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "UDP",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "UTXO",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "uWSGI",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -4003,11 +3097,6 @@
     },
     {
       "skill": "Vapor",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Vault",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -4044,7 +3133,11 @@
     {
       "skill": "VPN",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "OpenVPN",
+        "WireGuard"
+      ]
     },
     {
       "skill": "VS Code",
@@ -4057,17 +3150,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "WASM",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Waterfall",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "WCAG Compliance",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -4077,24 +3160,20 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Web Application Firewalls",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Web Components",
       "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "Web3",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Shadow DOM"
+      ]
     },
     {
       "skill": "WebAssembly",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "WASM"
+      ]
     },
     {
       "skill": "WebGL",
@@ -4117,11 +3196,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "WireGuard",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "WireMock",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -4129,7 +3203,10 @@
     {
       "skill": "Wireshark",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Packet Analysis"
+      ]
     },
     {
       "skill": "Wolfram Language",
@@ -4137,17 +3214,7 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Workbox",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Wrike",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "WSDL/SOAP",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -4164,7 +3231,10 @@
     {
       "skill": "XSS Prevention",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Output Encoding"
+      ]
     },
     {
       "skill": "XState",
@@ -4173,11 +3243,6 @@
     },
     {
       "skill": "xUnit",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "YAGNI",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -4227,49 +3292,42 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Performance Baselines",
-      "priority": 3,
-      "category": "Software Architecture & Design"
-    },
-    {
       "skill": "Performance Profiling",
       "priority": 3,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "CPU Profiling",
+        "Flame Graphs",
+        "Memory Profiling"
+      ]
     },
     {
       "skill": "Architecture Decision Records",
       "priority": 4,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "ADR Writing",
-      "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "ADR Writing"
+      ]
     },
     {
       "skill": "Caching",
       "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "Caching Layers",
-      "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "Caching Strategies",
-      "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "Caching Strategy",
-      "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "Caching Layers",
+        "Caching Strategies",
+        "Caching Strategy",
+        "ETag",
+        "HTTP Caching"
+      ]
     },
     {
       "skill": "Clean Architecture",
       "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "Hexagonal Architecture"
+      ]
     },
     {
       "skill": "CQRS",
@@ -4277,54 +3335,51 @@
       "category": "Software Architecture & Design"
     },
     {
-      "skill": "DDD",
-      "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
       "skill": "Design Patterns",
       "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "Distributed Locking",
-      "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "Builder Pattern",
+        "Command Pattern",
+        "Decorator Pattern",
+        "Factory Pattern",
+        "GoF Patterns",
+        "Observer Pattern",
+        "Proxy Pattern",
+        "Repository Pattern",
+        "Singleton Pattern",
+        "Strategy Pattern",
+        "Template Method"
+      ]
     },
     {
       "skill": "Distributed Systems",
       "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "CAP Theorem",
+        "Distributed Locking",
+        "Eventual Consistency",
+        "Leader Election",
+        "Raft/Paxos"
+      ]
     },
     {
       "skill": "Domain-Driven Design",
       "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "Event-Driven",
-      "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "DDD"
+      ]
     },
     {
       "skill": "Event-driven architecture",
       "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "Event-Driven Services",
-      "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "Hexagonal Architecture",
-      "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "HTTP Caching",
-      "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "Event-Driven",
+        "Event-Driven Services"
+      ]
     },
     {
       "skill": "Lakehouse Architecture",
@@ -4332,29 +3387,21 @@
       "category": "Software Architecture & Design"
     },
     {
-      "skill": "Microservice architecture",
-      "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
       "skill": "Microservices",
       "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "Microservices architecture",
-      "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "Microservice architecture",
+        "Microservices architecture"
+      ]
     },
     {
       "skill": "Monorepo",
       "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
-      "skill": "Monorepo Management",
-      "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "Monorepo Management"
+      ]
     },
     {
       "skill": "Multi-Tenant Architecture",
@@ -4367,19 +3414,24 @@
       "category": "Software Architecture & Design"
     },
     {
-      "skill": "Scalability Analysis",
-      "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
       "skill": "Software architecture",
       "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "Scalability Analysis",
+        "Scalable Systems Design",
+        "System architecture"
+      ]
     },
     {
       "skill": "SOLID Principles",
       "priority": 5,
-      "category": "Software Architecture & Design"
+      "category": "Software Architecture & Design",
+      "aliases": [
+        "DRY",
+        "KISS",
+        "YAGNI"
+      ]
     },
     {
       "skill": "Solid.js",
@@ -4395,16 +3447,12 @@
       "category": "Software Architecture & Design"
     },
     {
-      "skill": "System architecture",
-      "priority": 5,
-      "category": "Software Architecture & Design"
-    },
-    {
       "skill": "AWS IAM",
       "priority": 4,
       "category": "Security",
       "aliases": [
-        "IAM"
+        "IAM",
+        "Identity and Access Management"
       ]
     },
     {
@@ -4425,7 +3473,10 @@
     {
       "skill": "AWS Secrets Manager",
       "priority": 4,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Secrets Manager"
+      ]
     },
     {
       "skill": "AWS Security Hub",
@@ -4442,7 +3493,8 @@
       "priority": 4,
       "category": "Security",
       "aliases": [
-        "WAF"
+        "WAF",
+        "Web Application Firewalls"
       ]
     },
     {
@@ -4468,12 +3520,10 @@
     {
       "skill": "Cloud Armor",
       "priority": 4,
-      "category": "Security"
-    },
-    {
-      "skill": "Google Cloud Armor WAF",
-      "priority": 4,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Google Cloud Armor WAF"
+      ]
     },
     {
       "skill": "Google IAM",
@@ -4481,39 +3531,42 @@
       "category": "Security"
     },
     {
-      "skill": "ABAC",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Abuse Case Analysis",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
       "skill": "Abuse Prevention",
       "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Access Reviews",
-      "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Bot Protection"
+      ]
     },
     {
       "skill": "API Security",
       "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Secure API",
+        "Secure API verification",
+        "Secure APIs",
+        "Webhook Security"
+      ]
     },
     {
       "skill": "Application Security",
       "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Secure Coding",
+        "Secure Configuration Review",
+        "Secure SDLC",
+        "Security Champions Programs"
+      ]
     },
     {
       "skill": "Attribute-Based Access Control",
       "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "ABAC"
+      ]
     },
     {
       "skill": "Auth0 SDK",
@@ -4531,11 +3584,6 @@
       "category": "Security"
     },
     {
-      "skill": "Bearer Token Authentication",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
       "skill": "Biometric Auth",
       "priority": 5,
       "category": "Security"
@@ -4543,7 +3591,11 @@
     {
       "skill": "Content Security Policy",
       "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "CSP",
+        "CSP Headers"
+      ]
     },
     {
       "skill": "Cybersecurity",
@@ -4551,34 +3603,22 @@
       "category": "Security"
     },
     {
-      "skill": "DAST",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Data Encryption",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
       "skill": "Disaster Recovery",
       "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Backup and Recovery"
+      ]
     },
     {
       "skill": "Encryption",
       "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Encryption at Rest",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Encryption in Transit",
-      "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Data Encryption",
+        "Encryption at Rest",
+        "Encryption in Transit"
+      ]
     },
     {
       "skill": "Hardware Security Modules",
@@ -4591,34 +3631,17 @@
       "category": "Security"
     },
     {
-      "skill": "OAuth",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
       "skill": "OAuth 2.0",
       "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "OAuth2",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "OIDC",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Privileged Access Controls",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "README Authoring",
-      "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Bearer Token Authentication",
+        "OAuth",
+        "OAuth2",
+        "PKCE",
+        "Refresh Token Flows",
+        "Token Introspection"
+      ]
     },
     {
       "skill": "Role-Based Access Control",
@@ -4634,77 +3657,31 @@
       "category": "Security"
     },
     {
-      "skill": "SAST",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "SAST/DAST",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Secrets Detection",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
       "skill": "Secrets Management",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Secrets Manager",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Secure API",
       "priority": 5,
       "category": "Security",
       "aliases": [
-        "Secure APIs"
+        "Key Rotation",
+        "Secret Rotation",
+        "Secret Scoping",
+        "Secrets Detection"
       ]
-    },
-    {
-      "skill": "Secure API verification",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Secure Coding",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Secure Configuration Review",
-      "priority": 5,
-      "category": "Security"
     },
     {
       "skill": "Secure Cookie Management",
       "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Secure SDLC",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Security Champions Programs",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Security Incident Triage",
-      "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "SameSite Cookies"
+      ]
     },
     {
       "skill": "Security Monitoring",
       "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Threat Hunting Basics"
+      ]
     },
     {
       "skill": "Security Research",
@@ -4712,44 +3689,40 @@
       "category": "Security"
     },
     {
-      "skill": "Threat Hunting Basics",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
       "skill": "Threat Modeling",
       "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Vulnerability Analysis",
-      "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Abuse Case Analysis"
+      ]
     },
     {
       "skill": "Vulnerability Scanning",
       "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "Vulnerability Analysis"
+      ]
     },
     {
       "skill": "WebAuthn Awareness",
       "priority": 5,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "FIDO2 Awareness"
+      ]
     },
     {
-      "skill": "Webhook Security",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
-      "skill": "Spring Cloud",
-      "priority": 2,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Cloud platforms",
+      "skill": "Cloud Computing",
       "priority": 3,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Cloud architecture",
+        "Cloud infrastructure",
+        "Cloud platforms",
+        "Cloud services",
+        "Cloud-Native Development"
+      ]
     },
     {
       "skill": "Google Cloud Platform",
@@ -4833,7 +3806,10 @@
     {
       "skill": "AWS",
       "priority": 4,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Aws Services"
+      ]
     },
     {
       "skill": "AWS App Runner",
@@ -4917,11 +3893,6 @@
       "category": "Cloud and Infrastructure"
     },
     {
-      "skill": "Aws Services",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
       "skill": "AWS Step Functions",
       "priority": 4,
       "category": "Cloud and Infrastructure"
@@ -4952,11 +3923,6 @@
       "category": "Cloud and Infrastructure"
     },
     {
-      "skill": "Azure Bicep",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
       "skill": "Azure Container Apps",
       "priority": 4,
       "category": "Cloud and Infrastructure"
@@ -4969,12 +3935,10 @@
     {
       "skill": "Azure Functions",
       "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Azure Functions Durable",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Azure Functions Durable"
+      ]
     },
     {
       "skill": "Azure Load Balancer",
@@ -4999,7 +3963,10 @@
     {
       "skill": "Azure Resource Manager",
       "priority": 4,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Azure Bicep"
+      ]
     },
     {
       "skill": "Azure Virtual Machines",
@@ -5007,22 +3974,7 @@
       "category": "Cloud and Infrastructure"
     },
     {
-      "skill": "Cloud architecture",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Cloud Billing Analysis",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
       "skill": "Cloud CDN",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Cloud Computing",
       "priority": 4,
       "category": "Cloud and Infrastructure"
     },
@@ -5037,11 +3989,6 @@
       "category": "Cloud and Infrastructure"
     },
     {
-      "skill": "Cloud infrastructure",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
       "skill": "Cloud Load Balancing",
       "priority": 4,
       "category": "Cloud and Infrastructure"
@@ -5049,20 +3996,13 @@
     {
       "skill": "Cloud Migration",
       "priority": 4,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Lift-and-Shift"
+      ]
     },
     {
       "skill": "Cloud Run",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Cloud services",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Cloud-Native Development",
       "priority": 4,
       "category": "Cloud and Infrastructure"
     },
@@ -5079,17 +4019,10 @@
     {
       "skill": "Elastic Load Balancing",
       "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Hybrid Cloud",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Immutable Infrastructure",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Amazon ALB"
+      ]
     },
     {
       "skill": "Infrastructure",
@@ -5099,7 +4032,10 @@
     {
       "skill": "Infrastructure Automation",
       "priority": 4,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Immutable Infrastructure"
+      ]
     },
     {
       "skill": "Load Balancing",
@@ -5109,17 +4045,11 @@
     {
       "skill": "Multi-cloud",
       "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Multi-Cloud Strategy",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Amazon ALB",
-      "priority": 5,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Hybrid Cloud",
+        "Multi-Cloud Strategy"
+      ]
     },
     {
       "skill": "Amazon EMR",
@@ -5134,22 +4064,18 @@
     {
       "skill": "Serverless",
       "priority": 5,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Serverless Architecture",
-      "priority": 5,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Serverless Architecture"
+      ]
     },
     {
       "skill": "Vercel",
       "priority": 5,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "Vercel Edge Functions",
-      "priority": 5,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Vercel Edge Functions"
+      ]
     },
     {
       "skill": "Microsoft SQL Server",
@@ -5162,7 +4088,10 @@
     {
       "skill": "SQL Alchemy",
       "priority": 1,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Alembic"
+      ]
     },
     {
       "skill": "Amazon DynamoDB",
@@ -5179,9 +4108,12 @@
       "category": "Databases and Storage"
     },
     {
-      "skill": "Azure SQL Database",
+      "skill": "Azure SQL",
       "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Azure SQL Database"
+      ]
     },
     {
       "skill": "BigQuery",
@@ -5191,17 +4123,10 @@
     {
       "skill": "Cassandra",
       "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Cassandra Query Language",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Cloud Firestore",
-      "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Cassandra Query Language"
+      ]
     },
     {
       "skill": "CouchDB",
@@ -5209,24 +4134,26 @@
       "category": "Databases and Storage"
     },
     {
-      "skill": "Cypher Query Language",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
       "skill": "Database Design",
       "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Data Modeling",
+        "Database schema design",
+        "Denormalization",
+        "ERD",
+        "Normalization",
+        "PostgreSQL schema design",
+        "Schema Design"
+      ]
     },
     {
       "skill": "Database Migration",
       "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Database schema design",
-      "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Migrations"
+      ]
     },
     {
       "skill": "Database Seeding",
@@ -5234,32 +4161,7 @@
       "category": "Databases and Storage"
     },
     {
-      "skill": "Denormalization",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
       "skill": "Elasticsearch",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Firebase Realtime Database",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Firestore",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Index Optimization",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Index Tuning",
       "priority": 3,
       "category": "Databases and Storage"
     },
@@ -5271,15 +4173,14 @@
     {
       "skill": "Indexing",
       "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Index Optimization",
+        "Index Tuning"
+      ]
     },
     {
       "skill": "InfluxDB",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Logical Replication",
       "priority": 3,
       "category": "Databases and Storage"
     },
@@ -5291,32 +4192,28 @@
     {
       "skill": "MongoDB",
       "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "MongoDB Aggregation",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Mongoose",
-      "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "MongoDB Aggregation",
+        "Mongoose"
+      ]
     },
     {
       "skill": "MySQL",
       "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "MariaDB",
+        "Pivotal MySQL"
+      ]
     },
     {
       "skill": "Neo4j",
       "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Normalization",
-      "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Cypher Query Language"
+      ]
     },
     {
       "skill": "NoSQL",
@@ -5326,25 +4223,13 @@
     {
       "skill": "Oracle Database",
       "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Oracle DB",
-      "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Oracle DB"
+      ]
     },
     {
       "skill": "ORM",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Pivotal MySQL",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Postgres SQL",
       "priority": 3,
       "category": "Databases and Storage"
     },
@@ -5353,68 +4238,48 @@
       "priority": 3,
       "category": "Databases and Storage",
       "aliases": [
-        "Postgres"
+        "PostGIS",
+        "Postgres",
+        "Postgres SQL"
       ]
-    },
-    {
-      "skill": "PostgreSQL schema design",
-      "priority": 3,
-      "category": "Databases and Storage"
     },
     {
       "skill": "Prisma",
       "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Prisma Migrate",
-      "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Prisma Migrate"
+      ]
     },
     {
       "skill": "Query Optimization",
       "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Query Planning",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Query Tuning",
-      "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Explain Analyze",
+        "Query Planning",
+        "Query Tuning"
+      ]
     },
     {
       "skill": "Redis",
       "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Redis Cluster",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Redis Sentinel",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Redis Streams",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "RedisInsight",
-      "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Redis Cluster",
+        "Redis Sentinel",
+        "Redis Streams",
+        "RedisInsight"
+      ]
     },
     {
       "skill": "Replication",
       "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Logical Replication",
+        "Read Replicas"
+      ]
     },
     {
       "skill": "Reverse ETL",
@@ -5427,11 +4292,6 @@
       "category": "Databases and Storage"
     },
     {
-      "skill": "Schema Design",
-      "priority": 3,
-      "category": "Databases and Storage"
-    },
-    {
       "skill": "Schema Registry",
       "priority": 3,
       "category": "Databases and Storage"
@@ -5439,7 +4299,10 @@
     {
       "skill": "Schema Validation",
       "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Schema Validation Testing"
+      ]
     },
     {
       "skill": "Sequelize",
@@ -5449,7 +4312,10 @@
     {
       "skill": "Sharding",
       "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Partitioning"
+      ]
     },
     {
       "skill": "Solr",
@@ -5459,7 +4325,10 @@
     {
       "skill": "TimescaleDB",
       "priority": 3,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Timescale Continuous Aggregates"
+      ]
     },
     {
       "skill": "TypeORM",
@@ -5488,15 +4357,13 @@
     {
       "skill": "Azure Blob Storage",
       "priority": 4,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Blob Storage"
+      ]
     },
     {
       "skill": "Azure Data Factory",
-      "priority": 4,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Azure SQL",
       "priority": 4,
       "category": "Databases and Storage"
     },
@@ -5508,7 +4375,10 @@
     {
       "skill": "Cloud Spanner",
       "priority": 4,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Spanner"
+      ]
     },
     {
       "skill": "Cloud SQL",
@@ -5518,16 +4388,6 @@
     {
       "skill": "Cloud Storage",
       "priority": 4,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "ACID",
-      "priority": 5,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "ACID Compliance",
-      "priority": 5,
       "category": "Databases and Storage"
     },
     {
@@ -5547,16 +4407,6 @@
       ]
     },
     {
-      "skill": "Databricks SQL",
-      "priority": 5,
-      "category": "Databases and Storage"
-    },
-    {
-      "skill": "Presto",
-      "priority": 5,
-      "category": "Databases and Storage"
-    },
-    {
       "skill": "SQLite",
       "priority": 5,
       "category": "Databases and Storage"
@@ -5572,7 +4422,11 @@
     {
       "skill": "Terraform",
       "priority": 3,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "HCL",
+        "Terragrunt"
+      ]
     },
     {
       "skill": "Ansible",
@@ -5605,27 +4459,34 @@
     {
       "skill": "Azure DevOps",
       "priority": 4,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "Azure Pipelines"
+      ]
     },
     {
       "skill": "Azure Kubernetes Service",
       "priority": 4,
-      "category": "DevOps and CI/CD"
-    },
-    {
-      "skill": "Azure Pipelines",
-      "priority": 4,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "AKS"
+      ]
     },
     {
       "skill": "Blue-Green Deployment",
       "priority": 4,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "Blue-Green"
+      ]
     },
     {
       "skill": "Canary Deployment",
       "priority": 4,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "Canary Analysis"
+      ]
     },
     {
       "skill": "Chef",
@@ -5635,7 +4496,10 @@
     {
       "skill": "CI/CD",
       "priority": 4,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "Mobile CI/CD"
+      ]
     },
     {
       "skill": "Cloud Build",
@@ -5645,32 +4509,28 @@
     {
       "skill": "Docker",
       "priority": 4,
-      "category": "DevOps and CI/CD"
-    },
-    {
-      "skill": "Docker Compose",
-      "priority": 4,
-      "category": "DevOps and CI/CD"
-    },
-    {
-      "skill": "Dockerfile",
-      "priority": 4,
-      "category": "DevOps and CI/CD"
-    },
-    {
-      "skill": "Flux",
-      "priority": 4,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "Containerization",
+        "Docker Compose",
+        "Dockerfile"
+      ]
     },
     {
       "skill": "Flux CD",
       "priority": 4,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "Flux"
+      ]
     },
     {
       "skill": "GitLab CI/CD",
       "priority": 4,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "GitLab CI"
+      ]
     },
     {
       "skill": "Google Kubernetes Engine",
@@ -5683,17 +4543,23 @@
     {
       "skill": "Helm",
       "priority": 4,
-      "category": "DevOps and CI/CD"
-    },
-    {
-      "skill": "Helmfile",
-      "priority": 4,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "Helmfile"
+      ]
     },
     {
       "skill": "Kubernetes",
       "priority": 4,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "K3s",
+        "K9s",
+        "K9s/Lens",
+        "kubectl",
+        "Kustomize",
+        "Minikube"
+      ]
     },
     {
       "skill": "OpenShift",
@@ -5723,15 +4589,13 @@
     {
       "skill": "DevOps",
       "priority": 5,
-      "category": "DevOps and CI/CD"
+      "category": "DevOps and CI/CD",
+      "aliases": [
+        "DevSecOps"
+      ]
     },
     {
       "skill": "GitHub Actions",
-      "priority": 5,
-      "category": "DevOps and CI/CD"
-    },
-    {
-      "skill": "GitLab CI",
       "priority": 5,
       "category": "DevOps and CI/CD"
     },
@@ -5751,9 +4615,14 @@
       "category": "DevOps and CI/CD"
     },
     {
-      "skill": "Database Observability",
+      "skill": "Observability",
       "priority": 3,
-      "category": "Observability and Monitoring"
+      "category": "Observability and Monitoring",
+      "aliases": [
+        "Database Observability",
+        "Golden Signals Monitoring",
+        "Metrics Collection"
+      ]
     },
     {
       "skill": "AWS CloudTrail",
@@ -5786,12 +4655,10 @@
     {
       "skill": "Datadog",
       "priority": 4,
-      "category": "Observability and Monitoring"
-    },
-    {
-      "skill": "Datadog APM",
-      "priority": 4,
-      "category": "Observability and Monitoring"
+      "category": "Observability and Monitoring",
+      "aliases": [
+        "Datadog APM"
+      ]
     },
     {
       "skill": "ELK Stack",
@@ -5801,17 +4668,13 @@
     {
       "skill": "Grafana",
       "priority": 4,
-      "category": "Observability and Monitoring"
-    },
-    {
-      "skill": "Grafana Mimir",
-      "priority": 4,
-      "category": "Observability and Monitoring"
-    },
-    {
-      "skill": "Grafana Tempo",
-      "priority": 4,
-      "category": "Observability and Monitoring"
+      "category": "Observability and Monitoring",
+      "aliases": [
+        "Grafana Mimir",
+        "Grafana Tempo",
+        "Loki",
+        "Promtail"
+      ]
     },
     {
       "skill": "New Relic",
@@ -5821,7 +4684,12 @@
     {
       "skill": "Prometheus",
       "priority": 4,
-      "category": "Observability and Monitoring"
+      "category": "Observability and Monitoring",
+      "aliases": [
+        "Alertmanager",
+        "Blackbox Exporter",
+        "Node Exporter"
+      ]
     },
     {
       "skill": "VictoriaMetrics",
@@ -5844,21 +4712,6 @@
       "category": "Observability and Monitoring"
     },
     {
-      "skill": "Golden Signals Monitoring",
-      "priority": 5,
-      "category": "Observability and Monitoring"
-    },
-    {
-      "skill": "Metrics Collection",
-      "priority": 5,
-      "category": "Observability and Monitoring"
-    },
-    {
-      "skill": "Observability",
-      "priority": 5,
-      "category": "Observability and Monitoring"
-    },
-    {
       "skill": "OpenTelemetry",
       "priority": 5,
       "category": "Observability and Monitoring",
@@ -5868,11 +4721,6 @@
     },
     {
       "skill": "PagerDuty",
-      "priority": 5,
-      "category": "Observability and Monitoring"
-    },
-    {
-      "skill": "REST API monitoring",
       "priority": 5,
       "category": "Observability and Monitoring"
     },
@@ -5889,32 +4737,37 @@
     {
       "skill": "Synthetic Monitoring",
       "priority": 5,
-      "category": "Observability and Monitoring"
-    },
-    {
-      "skill": "Go Test",
-      "priority": 1,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Python test automation",
-      "priority": 1,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "SQL Injection",
-      "priority": 1,
-      "category": "Testing and Quality"
+      "category": "Observability and Monitoring",
+      "aliases": [
+        "REST API monitoring"
+      ]
     },
     {
       "skill": "SQL Injection Prevention",
       "priority": 1,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "SQL Injection"
+      ]
+    },
+    {
+      "skill": "Test Automation",
+      "priority": 1,
+      "category": "Testing and Quality",
+      "aliases": [
+        "Automated testing",
+        "Python test automation"
+      ]
     },
     {
       "skill": "Blockchain",
       "priority": 2,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "DeFi",
+        "UTXO",
+        "Web3"
+      ]
     },
     {
       "skill": "Chai",
@@ -5952,11 +4805,6 @@
       "category": "Testing and Quality"
     },
     {
-      "skill": "React Testing Library",
-      "priority": 2,
-      "category": "Testing and Quality"
-    },
-    {
       "skill": "Selenium",
       "priority": 2,
       "category": "Testing and Quality"
@@ -5964,7 +4812,14 @@
     {
       "skill": "Supply Chain Security",
       "priority": 2,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Dependency Scanning",
+        "SBOM",
+        "SBOM Management",
+        "SLSA Awareness",
+        "Software Composition Analysis"
+      ]
     },
     {
       "skill": "TestNG",
@@ -5977,19 +4832,16 @@
       "category": "Testing and Quality"
     },
     {
-      "skill": "Vue Test Utils",
-      "priority": 2,
-      "category": "Testing and Quality"
-    },
-    {
       "skill": "Performance Testing",
       "priority": 3,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Schema Validation Testing",
-      "priority": 3,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Load Testing",
+        "Scalability Testing",
+        "Soak Testing",
+        "Spike Testing",
+        "Stress Testing"
+      ]
     },
     {
       "skill": "Puppeteer",
@@ -5999,52 +4851,53 @@
     {
       "skill": "A/B Testing",
       "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "A/B Experiment Analysis"
+      ]
     },
     {
       "skill": "Acceptance Testing",
       "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "User Acceptance Testing"
+      ]
     },
     {
       "skill": "Accessibility Testing",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Accessibility Testing Automation",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Accessibility Testing Automation",
+        "Mobile Accessibility",
+        "WCAG Compliance"
+      ]
     },
     {
       "skill": "API Testing",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Automated testing",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "API automation",
+        "REST API testing"
+      ]
     },
     {
       "skill": "Boundary Testing",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Chaos Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Edge case testing"
+      ]
     },
     {
       "skill": "Code Coverage",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Code Quality Gates",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Coverage Analysis"
+      ]
     },
     {
       "skill": "Component Testing",
@@ -6059,42 +4912,28 @@
     {
       "skill": "Contract Testing",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Coverage Analysis",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Cross-Device Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Contract Mocking"
+      ]
     },
     {
       "skill": "Data Quality Monitoring",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Dynamic Application Security Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "E2E Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Edge case testing",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Data Validation"
+      ]
     },
     {
       "skill": "End-to-End Testing",
       "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "E2E Testing",
+        "Web application testing",
+        "Web testing"
+      ]
     },
     {
       "skill": "Flaky Tests",
@@ -6104,15 +4943,13 @@
     {
       "skill": "Functional Testing",
       "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Manual functional testing"
+      ]
     },
     {
       "skill": "Fuzz Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Golden File Testing",
       "priority": 5,
       "category": "Testing and Quality"
     },
@@ -6123,16 +4960,6 @@
     },
     {
       "skill": "Jasmine",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Load Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Manual functional testing",
       "priority": 5,
       "category": "Testing and Quality"
     },
@@ -6152,34 +4979,21 @@
       "category": "Testing and Quality"
     },
     {
-      "skill": "Product Quality",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Property Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
       "skill": "Property-Based Testing",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Quality Assurance Process",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Property Testing"
+      ]
     },
     {
       "skill": "Regression Testing",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "REST API testing",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Sanity Testing",
+        "Smoke Testing"
+      ]
     },
     {
       "skill": "Risk-based testing",
@@ -6187,64 +5001,37 @@
       "category": "Testing and Quality"
     },
     {
-      "skill": "Sanity Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Scalability Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Security Regression Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
       "skill": "Security testing",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Smoke Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "DAST",
+        "Dynamic Application Security Testing",
+        "IAST",
+        "SAST",
+        "SAST/DAST",
+        "Security Regression Testing",
+        "Static Application Security Testing"
+      ]
     },
     {
       "skill": "Snapshot Testing",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Soak Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Golden File Testing"
+      ]
     },
     {
       "skill": "Software testing",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Spike Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Static Application Security Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Stress Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Test Automation",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Product Quality",
+        "Quality Assurance Process",
+        "Test Pyramid",
+        "Testing"
+      ]
     },
     {
       "skill": "Test Containers",
@@ -6254,17 +5041,10 @@
     {
       "skill": "Test Data Management",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Test Fixtures",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Test Pyramid",
-      "priority": 5,
-      "category": "Testing and Quality"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Test Fixtures"
+      ]
     },
     {
       "skill": "Test-Driven Development",
@@ -6273,11 +5053,6 @@
       "aliases": [
         "TDD"
       ]
-    },
-    {
-      "skill": "Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
     },
     {
       "skill": "Unit Testing",
@@ -6290,50 +5065,24 @@
       "category": "Testing and Quality"
     },
     {
-      "skill": "User Acceptance Testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
       "skill": "User experience testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Visual Regression",
       "priority": 5,
       "category": "Testing and Quality"
     },
     {
       "skill": "Visual Regression Testing",
       "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Web application testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Web testing",
-      "priority": 5,
-      "category": "Testing and Quality"
-    },
-    {
-      "skill": "Spring Integration",
-      "priority": 2,
-      "category": "APIs and Integration"
+      "category": "Testing and Quality",
+      "aliases": [
+        "Visual Regression"
+      ]
     },
     {
       "skill": "Amazon API Gateway",
       "priority": 4,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "API gateway",
-      "priority": 4,
       "category": "APIs and Integration",
       "aliases": [
+        "API gateway",
         "API Gateways"
       ]
     },
@@ -6345,7 +5094,10 @@
     {
       "skill": "Azure API Management",
       "priority": 4,
-      "category": "APIs and Integration"
+      "category": "APIs and Integration",
+      "aliases": [
+        "API management"
+      ]
     },
     {
       "skill": "Analytics Integration",
@@ -6353,29 +5105,17 @@
       "category": "APIs and Integration"
     },
     {
-      "skill": "API automation",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "API Contracts",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
       "skill": "API design",
       "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "API development",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "API Documentation",
-      "priority": 5,
-      "category": "APIs and Integration"
+      "category": "APIs and Integration",
+      "aliases": [
+        "API development",
+        "API Versioning",
+        "APIs",
+        "Backend APIs",
+        "HTTP APIs",
+        "Search APIs"
+      ]
     },
     {
       "skill": "API integration",
@@ -6386,37 +5126,12 @@
       ]
     },
     {
-      "skill": "API management",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "API Versioning",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
       "skill": "Apigee",
       "priority": 5,
       "category": "APIs and Integration"
     },
     {
-      "skill": "APIs",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
       "skill": "AsyncAPI",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "Backend APIs",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "CDN Integration",
       "priority": 5,
       "category": "APIs and Integration"
     },
@@ -6431,75 +5146,40 @@
     {
       "skill": "gRPC",
       "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "gRPC Services",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "HTTP APIs",
-      "priority": 5,
-      "category": "APIs and Integration"
+      "category": "APIs and Integration",
+      "aliases": [
+        "gRPC Services"
+      ]
     },
     {
       "skill": "OpenAPI",
       "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "OpenAPI Specification",
-      "priority": 5,
-      "category": "APIs and Integration"
+      "category": "APIs and Integration",
+      "aliases": [
+        "API Contracts",
+        "API Documentation",
+        "OpenAPI Specification",
+        "Swagger"
+      ]
     },
     {
       "skill": "REST",
       "priority": 5,
       "category": "APIs and Integration",
       "aliases": [
-        "REST API"
+        "REST API",
+        "REST API Development",
+        "RESTful API",
+        "RESTful services"
       ]
-    },
-    {
-      "skill": "REST API Development",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "RESTful API",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "RESTful services",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "Search APIs",
-      "priority": 5,
-      "category": "APIs and Integration"
     },
     {
       "skill": "Service Mesh",
       "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "Service Mesh Integration",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "SMTP Integration",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "Swagger",
-      "priority": 5,
-      "category": "APIs and Integration"
+      "category": "APIs and Integration",
+      "aliases": [
+        "Service Mesh Integration"
+      ]
     },
     {
       "skill": "Webhooks",
@@ -6507,24 +5187,23 @@
       "category": "APIs and Integration"
     },
     {
-      "skill": "WebSocket Protocol",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "WebSocket Servers",
-      "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
       "skill": "WebSockets",
       "priority": 5,
-      "category": "APIs and Integration"
+      "category": "APIs and Integration",
+      "aliases": [
+        "WebSocket Protocol",
+        "WebSocket Servers"
+      ]
     },
     {
       "skill": "Agile Development",
       "priority": 5,
-      "category": "Engineering Practices & Methodology"
+      "category": "Engineering Practices & Methodology",
+      "aliases": [
+        "Extreme Programming",
+        "Lean Software Development",
+        "SAFe Awareness"
+      ]
     },
     {
       "skill": "ATDD",
@@ -6534,12 +5213,19 @@
     {
       "skill": "BDD",
       "priority": 5,
-      "category": "Engineering Practices & Methodology"
+      "category": "Engineering Practices & Methodology",
+      "aliases": [
+        "Behavior-Driven Development"
+      ]
     },
     {
       "skill": "Incident Response",
       "priority": 5,
-      "category": "Engineering Practices & Methodology"
+      "category": "Engineering Practices & Methodology",
+      "aliases": [
+        "Postmortem Analysis",
+        "Security Incident Triage"
+      ]
     },
     {
       "skill": "Kanban",
@@ -6549,7 +5235,10 @@
     {
       "skill": "Pair Programming",
       "priority": 5,
-      "category": "Engineering Practices & Methodology"
+      "category": "Engineering Practices & Methodology",
+      "aliases": [
+        "Mob Programming"
+      ]
     },
     {
       "skill": "Root Cause Analysis",
@@ -6559,22 +5248,22 @@
     {
       "skill": "Scrum",
       "priority": 5,
-      "category": "Engineering Practices & Methodology"
-    },
-    {
-      "skill": "Sprint Planning",
-      "priority": 5,
-      "category": "Engineering Practices & Methodology"
+      "category": "Engineering Practices & Methodology",
+      "aliases": [
+        "Backlog Grooming",
+        "Sprint Planning",
+        "Story Estimation"
+      ]
     },
     {
       "skill": "Technical Documentation",
       "priority": 5,
-      "category": "Engineering Practices & Methodology"
-    },
-    {
-      "skill": "Spring Kafka",
-      "priority": 2,
-      "category": "Data Engineering & Streaming"
+      "category": "Engineering Practices & Methodology",
+      "aliases": [
+        "Knowledge Base Maintenance",
+        "README Authoring",
+        "RFC Writing"
+      ]
     },
     {
       "skill": "Data Formats (JSON/XML)",
@@ -6582,14 +5271,13 @@
       "category": "Data Engineering & Streaming"
     },
     {
-      "skill": "ETL Orchestration",
-      "priority": 3,
-      "category": "Data Engineering & Streaming"
-    },
-    {
       "skill": "ETL Pipelines",
       "priority": 3,
-      "category": "Data Engineering & Streaming"
+      "category": "Data Engineering & Streaming",
+      "aliases": [
+        "ETL Orchestration",
+        "File Processing Pipelines"
+      ]
     },
     {
       "skill": "AWS EventBridge",
@@ -6604,12 +5292,18 @@
     {
       "skill": "Azure Event Hubs",
       "priority": 4,
-      "category": "Data Engineering & Streaming"
+      "category": "Data Engineering & Streaming",
+      "aliases": [
+        "Event Hub"
+      ]
     },
     {
       "skill": "Azure Service Bus",
       "priority": 4,
-      "category": "Data Engineering & Streaming"
+      "category": "Data Engineering & Streaming",
+      "aliases": [
+        "Service Bus"
+      ]
     },
     {
       "skill": "Cloud IoT integration",
@@ -6658,7 +5352,8 @@
       "priority": 5,
       "category": "Data Engineering & Streaming",
       "aliases": [
-        "Kafka"
+        "Kafka",
+        "Kafka Streams"
       ]
     },
     {
@@ -6672,37 +5367,17 @@
       "category": "Data Engineering & Streaming"
     },
     {
-      "skill": "File Processing Pipelines",
-      "priority": 5,
-      "category": "Data Engineering & Streaming"
-    },
-    {
-      "skill": "Kafka Streams",
-      "priority": 5,
-      "category": "Data Engineering & Streaming"
-    },
-    {
-      "skill": "NATS JetStream",
-      "priority": 5,
-      "category": "Data Engineering & Streaming"
-    },
-    {
       "skill": "Pub/Sub",
       "priority": 5,
-      "category": "Data Engineering & Streaming"
-    },
-    {
-      "skill": "Pub/Sub Patterns",
-      "priority": 5,
-      "category": "Data Engineering & Streaming"
+      "category": "Data Engineering & Streaming",
+      "aliases": [
+        "Message Consumers",
+        "Pub/Sub Patterns",
+        "Queuing"
+      ]
     },
     {
       "skill": "RabbitMQ",
-      "priority": 5,
-      "category": "Data Engineering & Streaming"
-    },
-    {
-      "skill": "Service Bus",
       "priority": 5,
       "category": "Data Engineering & Streaming"
     },
@@ -6720,11 +5395,6 @@
       "skill": "Value Stream Mapping",
       "priority": 5,
       "category": "Data Engineering & Streaming"
-    },
-    {
-      "skill": "Keras",
-      "priority": 2,
-      "category": "AI/ML & Data Science"
     },
     {
       "skill": "LangChain",
@@ -6759,12 +5429,18 @@
     {
       "skill": "TensorFlow",
       "priority": 2,
-      "category": "AI/ML & Data Science"
+      "category": "AI/ML & Data Science",
+      "aliases": [
+        "Keras"
+      ]
     },
     {
       "skill": "Hugging Face Transformers",
       "priority": 3,
-      "category": "AI/ML & Data Science"
+      "category": "AI/ML & Data Science",
+      "aliases": [
+        "HuggingFace"
+      ]
     },
     {
       "skill": "Sentence Transformers",
@@ -6773,11 +5449,6 @@
     },
     {
       "skill": "AI/ML",
-      "priority": 5,
-      "category": "AI/ML & Data Science"
-    },
-    {
-      "skill": "Blob Storage",
       "priority": 5,
       "category": "AI/ML & Data Science"
     },
@@ -6794,7 +5465,10 @@
     {
       "skill": "Embeddings",
       "priority": 5,
-      "category": "AI/ML & Data Science"
+      "category": "AI/ML & Data Science",
+      "aliases": [
+        "Vector Embeddings"
+      ]
     },
     {
       "skill": "Feature Engineering",
@@ -6804,7 +5478,12 @@
     {
       "skill": "Fine-Tuning",
       "priority": 5,
-      "category": "AI/ML & Data Science"
+      "category": "AI/ML & Data Science",
+      "aliases": [
+        "LoRA Fine-Tuning",
+        "PEFT",
+        "RLHF Awareness"
+      ]
     },
     {
       "skill": "Jupyter",
@@ -6822,19 +5501,12 @@
       "category": "AI/ML & Data Science"
     },
     {
-      "skill": "LLM Observability",
-      "priority": 5,
-      "category": "AI/ML & Data Science"
-    },
-    {
       "skill": "LocalStorage",
       "priority": 5,
-      "category": "AI/ML & Data Science"
-    },
-    {
-      "skill": "LoRA Fine-Tuning",
-      "priority": 5,
-      "category": "AI/ML & Data Science"
+      "category": "AI/ML & Data Science",
+      "aliases": [
+        "SessionStorage"
+      ]
     },
     {
       "skill": "MLOps",
@@ -6844,15 +5516,15 @@
     {
       "skill": "Model Monitoring",
       "priority": 5,
-      "category": "AI/ML & Data Science"
+      "category": "AI/ML & Data Science",
+      "aliases": [
+        "Data Drift Detection",
+        "LLM Observability",
+        "Model Drift Detection"
+      ]
     },
     {
       "skill": "Natural Language Processing",
-      "priority": 5,
-      "category": "AI/ML & Data Science"
-    },
-    {
-      "skill": "Password Storage",
       "priority": 5,
       "category": "AI/ML & Data Science"
     },
@@ -6869,17 +5541,18 @@
     {
       "skill": "Prompt Engineering",
       "priority": 5,
-      "category": "AI/ML & Data Science"
+      "category": "AI/ML & Data Science",
+      "aliases": [
+        "Prompt Evaluation"
+      ]
     },
     {
       "skill": "RAG",
       "priority": 5,
-      "category": "AI/ML & Data Science"
-    },
-    {
-      "skill": "SessionStorage",
-      "priority": 5,
-      "category": "AI/ML & Data Science"
+      "category": "AI/ML & Data Science",
+      "aliases": [
+        "Retrieval-Augmented Generation"
+      ]
     },
     {
       "skill": "spaCy",
@@ -6887,17 +5560,7 @@
       "category": "AI/ML & Data Science"
     },
     {
-      "skill": "Terragrunt",
-      "priority": 5,
-      "category": "AI/ML & Data Science"
-    },
-    {
       "skill": "Vector",
-      "priority": 5,
-      "category": "AI/ML & Data Science"
-    },
-    {
-      "skill": "Vector Embeddings",
       "priority": 5,
       "category": "AI/ML & Data Science"
     },
@@ -6929,14 +5592,14 @@
     {
       "skill": "Git",
       "priority": 5,
-      "category": "Version Control & Collaboration"
-    },
-    {
-      "skill": "Git Flow",
-      "priority": 5,
       "category": "Version Control & Collaboration",
       "aliases": [
-        "GitFlow"
+        "Branching Strategy",
+        "Conventional Commits",
+        "Git Flow",
+        "GitFlow",
+        "Merge Conflict Resolution",
+        "Pull Requests"
       ]
     },
     {
@@ -6950,16 +5613,6 @@
       "category": "Version Control & Collaboration"
     },
     {
-      "skill": "Pull Requests",
-      "priority": 5,
-      "category": "Version Control & Collaboration"
-    },
-    {
-      "skill": "Network Latency",
-      "priority": 4,
-      "category": "Operating Systems & Platforms"
-    },
-    {
       "skill": "Network Security",
       "priority": 4,
       "category": "Operating Systems & Platforms"
@@ -6967,42 +5620,38 @@
     {
       "skill": "Network Troubleshooting",
       "priority": 4,
-      "category": "Operating Systems & Platforms"
+      "category": "Operating Systems & Platforms",
+      "aliases": [
+        "Network Latency"
+      ]
     },
     {
       "skill": "Linux",
       "priority": 5,
-      "category": "Operating Systems & Platforms"
+      "category": "Operating Systems & Platforms",
+      "aliases": [
+        "Alpine Linux",
+        "CentOS",
+        "Debian",
+        "Linux Administration",
+        "Red Hat Enterprise Linux",
+        "Ubuntu",
+        "Unix/Linux"
+      ]
     },
     {
       "skill": "Nginx",
       "priority": 5,
-      "category": "Operating Systems & Platforms"
-    },
-    {
-      "skill": "NGINX Unit",
-      "priority": 5,
-      "category": "Operating Systems & Platforms"
+      "category": "Operating Systems & Platforms",
+      "aliases": [
+        "Nginix",
+        "NGINX Unit"
+      ]
     },
     {
       "skill": "Unix",
       "priority": 5,
       "category": "Operating Systems & Platforms"
-    },
-    {
-      "skill": "Unix/Linux",
-      "priority": 5,
-      "category": "Operating Systems & Platforms"
-    },
-    {
-      "skill": "CSS Grid",
-      "priority": 1,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "CSS Modules",
-      "priority": 1,
-      "category": "Frontend & UI/UX Development"
     },
     {
       "skill": "ESLint",
@@ -7012,7 +5661,11 @@
     {
       "skill": "Next.js",
       "priority": 2,
-      "category": "Frontend & UI/UX Development"
+      "category": "Frontend & UI/UX Development",
+      "aliases": [
+        "Incremental Static Regeneration",
+        "NextAuth.js"
+      ]
     },
     {
       "skill": "Prettier",
@@ -7022,27 +5675,19 @@
     {
       "skill": "Sass",
       "priority": 2,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "SASS/SCSS",
-      "priority": 2,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "SCSS",
-      "priority": 2,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "Tailwind",
-      "priority": 2,
-      "category": "Frontend & UI/UX Development"
+      "category": "Frontend & UI/UX Development",
+      "aliases": [
+        "SASS/SCSS",
+        "SCSS"
+      ]
     },
     {
       "skill": "Tailwind CSS",
       "priority": 2,
-      "category": "Frontend & UI/UX Development"
+      "category": "Frontend & UI/UX Development",
+      "aliases": [
+        "Tailwind"
+      ]
     },
     {
       "skill": "Vite",
@@ -7055,27 +5700,15 @@
       "category": "Frontend & UI/UX Development"
     },
     {
-      "skill": "Webpack Module Federation",
-      "priority": 2,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "Alpine Linux",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
       "skill": "Backend for Frontend",
       "priority": 5,
-      "category": "Frontend & UI/UX Development"
+      "category": "Frontend & UI/UX Development",
+      "aliases": [
+        "BFF Pattern"
+      ]
     },
     {
       "skill": "Build Caching",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "Builder Pattern",
       "priority": 5,
       "category": "Frontend & UI/UX Development"
     },
@@ -7086,16 +5719,6 @@
     },
     {
       "skill": "Canvas API",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "Circuit Breaker",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "Circuit Breaker Pattern",
       "priority": 5,
       "category": "Frontend & UI/UX Development"
     },
@@ -7125,21 +5748,6 @@
       "category": "Frontend & UI/UX Development"
     },
     {
-      "skill": "Linux Administration",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "Linux Namespaces",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "Linux Shell",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
       "skill": "Liquibase",
       "priority": 5,
       "category": "Frontend & UI/UX Development"
@@ -7163,22 +5771,7 @@
       "category": "Frontend & UI/UX Development"
     },
     {
-      "skill": "Queuing",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "QUIC",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
       "skill": "Radix UI",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "Red Hat Enterprise Linux",
       "priority": 5,
       "category": "Frontend & UI/UX Development"
     },
@@ -7215,12 +5808,10 @@
     {
       "skill": "Svelte",
       "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "SvelteKit",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
+      "category": "Frontend & UI/UX Development",
+      "aliases": [
+        "SvelteKit"
+      ]
     },
     {
       "skill": "tmux",
@@ -7229,11 +5820,6 @@
     },
     {
       "skill": "UI/UX",
-      "priority": 5,
-      "category": "Frontend & UI/UX Development"
-    },
-    {
-      "skill": "UIKit",
       "priority": 5,
       "category": "Frontend & UI/UX Development"
     },
@@ -7248,14 +5834,12 @@
       "category": "Mobile Development"
     },
     {
-      "skill": "Kotlin Multiplatform",
-      "priority": 1,
-      "category": "Mobile Development"
-    },
-    {
       "skill": "React Native",
       "priority": 2,
-      "category": "Mobile Development"
+      "category": "Mobile Development",
+      "aliases": [
+        "Expo"
+      ]
     },
     {
       "skill": "Mobile Performance Optimization",
@@ -7263,32 +5847,27 @@
       "category": "Mobile Development"
     },
     {
-      "skill": "App Store Deployment",
-      "priority": 4,
-      "category": "Mobile Development"
-    },
-    {
-      "skill": "Google Play Deployment",
-      "priority": 4,
-      "category": "Mobile Development"
-    },
-    {
-      "skill": "Mobile CI/CD",
-      "priority": 4,
-      "category": "Mobile Development"
-    },
-    {
       "skill": "Android",
-      "priority": 5,
+      "priority": 4,
       "category": "Mobile Development",
       "aliases": [
-        "Android SDK"
+        "Android Development",
+        "Android SDK",
+        "Google Play Deployment",
+        "Jetpack Compose"
       ]
     },
     {
-      "skill": "Android Development",
-      "priority": 5,
-      "category": "Mobile Development"
+      "skill": "iOS Development",
+      "priority": 4,
+      "category": "Mobile Development",
+      "aliases": [
+        "App Store Deployment",
+        "Core Data",
+        "SwiftUI",
+        "TestFlight",
+        "UIKit"
+      ]
     },
     {
       "skill": "BIOS/UEFI",
@@ -7296,22 +5875,7 @@
       "category": "Mobile Development"
     },
     {
-      "skill": "Firebase Mobile SDK",
-      "priority": 5,
-      "category": "Mobile Development"
-    },
-    {
       "skill": "Flutter",
-      "priority": 5,
-      "category": "Mobile Development"
-    },
-    {
-      "skill": "iOS Development",
-      "priority": 5,
-      "category": "Mobile Development"
-    },
-    {
-      "skill": "Mobile Accessibility",
       "priority": 5,
       "category": "Mobile Development"
     },
@@ -7328,25 +5892,13 @@
     {
       "skill": "Mobile app testing",
       "priority": 5,
-      "category": "Mobile Development"
-    },
-    {
-      "skill": "Mobile UI Testing",
-      "priority": 5,
-      "category": "Mobile Development"
+      "category": "Mobile Development",
+      "aliases": [
+        "Mobile UI Testing"
+      ]
     },
     {
       "skill": "Nagios",
-      "priority": 5,
-      "category": "Mobile Development"
-    },
-    {
-      "skill": "SwiftUI",
-      "priority": 5,
-      "category": "Mobile Development"
-    },
-    {
-      "skill": "TestFlight",
       "priority": 5,
       "category": "Mobile Development"
     }

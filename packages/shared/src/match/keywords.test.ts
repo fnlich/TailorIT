@@ -90,7 +90,7 @@ describe('matchKeywords', () => {
   });
 
   it('expands spellings with built-in synonyms', () => {
-    expect(spellingsOf({ term: 'GCP', synonyms: [] })).toEqual(['GCP', 'Google Cloud', 'Google Cloud Platform']);
+    expect(spellingsOf({ term: 'GCP', synonyms: [] })).toEqual(['GCP', 'Google Cloud Platform', 'Google Cloud']);
   });
 });
 
@@ -142,8 +142,10 @@ describe('extractKeywords', () => {
 
   it('merges spellings of one thing, labelled by the spelling the posting first uses', () => {
     const result = extractKeywords('Postgres tuning. Also PostgreSQL replication. K8s too.', VOCAB);
-    expect(result.high).toEqual([{ term: 'Postgres', synonyms: ['PostgreSQL'] }]);
-    expect(result.low).toEqual([{ term: 'K8s', synonyms: ['Kubernetes'] }]);
+    expect(result.high.map((group) => group.term)).toEqual(['Postgres']);
+    expect(result.high[0]!.synonyms).toContain('PostgreSQL');
+    expect(result.low.map((group) => group.term)).toEqual(['K8s']);
+    expect(result.low[0]!.synonyms).toContain('Kubernetes');
   });
 
   it('reads a title as a name: an everyday word opening it still counts', () => {

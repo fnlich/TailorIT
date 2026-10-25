@@ -19,16 +19,25 @@ export function createSkillsRouter(deps: AppDeps): Router {
   router.get('/', (req, res) => {
     const { type } = parseInput(SkillsQuerySchema, req.query, 'query');
     const library = getSkillLibrary();
-    // Every spelling, aliases included: "GCP" and "HTML5" are what people write, so the picker still offers them.
-    const names = type === 'hard' ? library.spellings.map((record) => record.skill) : [...library.soft];
-    const seen = new Set(names.map((name) => skillIndexKey(name)));
+    // Main skills only: an alias is the same skill ("ASP.NET Core" of ".NET"), and offering both invites a resume to
+    // list both. `aliases` lets the picker find a main skill by another spelling; a typed alias is still known (POST).
+    const names = type === 'hard' ? library.hard.map((record) => record.skill) : [...library.soft];
+    const known = type === 'hard' ? library.spellings.map((record) => record.skill) : names;
+    const seen = new Set(known.map((name) => skillIndexKey(name)));
     for (const row of userSkillRows(deps, userOf(req).id, type)) {
       const key = skillIndexKey(row.skill);
       if (seen.has(key)) continue;
       seen.add(key);
       names.push(row.skill);
     }
-    const body: SkillsResponse = { type, skills: names };
+    const body: SkillsResponse =
+      type === 'hard'
+        ? {
+            type,
+            skills: names,
+            aliases: Object.fromEntries(library.hard.filter((entry) => entry.aliases.length > 0).map((entry) => [entry.skill, [...entry.aliases]])),
+          }
+        : { type, skills: names };
     res.json(body);
   });
 

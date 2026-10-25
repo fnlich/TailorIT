@@ -226,11 +226,16 @@ export const ResumeTemplatePreviewQuerySchema = z.object({
 export const SKILL_TYPES = ['hard', 'soft'] as const;
 export type SkillType = (typeof SKILL_TYPES)[number];
 
-/** GET /api/skills?type= : the library (skills.json) overlaid with the user's own. */
+/**
+ * GET /api/skills?type= : the library (skills.json) overlaid with the user's own. Hard skills are the main skills only;
+ * `aliases` gives each one's other spellings ("ASP.NET Core" of ".NET"), so a picker can find a main skill by them. An
+ * alias is still a known skill when typed (POST /api/skills answers it in its own spelling).
+ */
 export const SkillsQuerySchema = z.object({ type: queryEnum(SKILL_TYPES).transform((value) => value ?? 'hard') });
 export const SkillsResponseSchema = z.object({
   type: z.enum(SKILL_TYPES),
   skills: z.array(z.string()),
+  aliases: z.record(z.string(), z.array(z.string())).optional(),
 });
 export type SkillsResponse = z.infer<typeof SkillsResponseSchema>;
 

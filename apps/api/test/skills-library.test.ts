@@ -1,15 +1,23 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
-import { extractKeywords, findSoftSkills, HARD_SKILL_CATEGORIES, softKey, softSkillScanner, synonymKey } from '@tailorit/shared';
+import {
+  extractKeywords,
+  findSoftSkills,
+  HARD_SKILL_CATEGORIES,
+  LIBRARY_SYNONYMS,
+  softKey,
+  softSkillScanner,
+  synonymKey,
+} from '@tailorit/shared';
 import { renderSkillCategory, skillIndexKey } from '@tailorit/render';
 import { staticDir } from '../src/core/paths';
 import { getSkillLibrary } from '../src/core/skills-vocabulary';
 import { getResumeEngine } from '../src/features/resumes/engine';
 import { createTestContext, type TestContext } from './helpers';
 
-// The skill library (static/skills/skills.json): one entry per hard skill, the other spellings people write it as
-// listed on it as `aliases`, sorted so the file reads as a catalogue, and no duplicates. These tests keep it that way:
-// a failure says what to fix in the file.
+// The skill library (static/skills/skills.json): one main skill per family, the rest of the family listed on it as
+// `aliases` (its other spellings, versions, modules and companions), sorted so the file reads as a catalogue, and no
+// duplicates. These tests keep it that way: a failure says what to fix in the file.
 
 interface FileEntry {
   skill: string;
@@ -116,11 +124,17 @@ describe('aliases', () => {
   const aliases = FILE.hard.flatMap((entry) => (entry.aliases ?? []).map((alias) => ({ alias, entry })));
 
   it('there are some, so these tests mean something', () => {
-    expect(FILE.hard).toHaveLength(1441);
-    expect(aliases).toHaveLength(51);
+    expect(FILE.hard).toHaveLength(967);
+    expect(aliases).toHaveLength(525);
   });
 
-  it('are the same keyword as their entry: list them together in TERM_SYNONYMS (packages/shared/src/match/terms.ts)', () => {
+  it('are written into the matcher as generated (run npm run skills:synonyms after changing them)', () => {
+    expect(LIBRARY_SYNONYMS).toEqual(
+      FILE.hard.filter((entry) => (entry.aliases ?? []).length > 0).map((entry) => [entry.skill, ...entry.aliases!]),
+    );
+  });
+
+  it('are the same keyword as their entry', () => {
     for (const { alias, entry } of aliases) expect(synonymKey(alias), `"${alias}" and "${entry.skill}"`).toBe(synonymKey(entry.skill));
   });
 

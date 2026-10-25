@@ -19,22 +19,26 @@ async function setup(): Promise<{ agent: TestAgent; other: TestAgent }> {
 const add = (agent: TestAgent, body: object) => agent.post('/api/skills').set('Origin', ORIGIN).send(body);
 
 describe('/api/skills', () => {
-  it('lists the library (1,492 hard spellings of 1,441 skills, 1,245 soft skills)', async () => {
+  it('lists the library (967 main hard skills, 1,245 soft skills)', async () => {
     const { agent } = await setup();
     const hard = SkillsResponseSchema.parse((await agent.get('/api/skills')).body);
     expect(hard.type).toBe('hard');
-    expect(hard.skills).toHaveLength(1492);
+    expect(hard.skills).toHaveLength(967);
     expect(hard.skills).toContain('PostgreSQL');
     const soft = SkillsResponseSchema.parse((await agent.get('/api/skills?type=soft')).body);
     expect(soft.skills).toHaveLength(1245);
   });
 
-  it('offers a skill by every spelling people write: an alias follows its entry, so "GCP" and "HTML5" are still found', async () => {
+  it('offers only the main skill of a family, with its other spellings for the picker to search by', async () => {
     const { agent } = await setup();
-    const { skills } = SkillsResponseSchema.parse((await agent.get('/api/skills')).body);
-    for (const spelling of ['GCP', 'HTML5', 'CSS3', 'Kafka', 'S3', 'TDD', 'Postgres']) expect(skills).toContain(spelling);
-    const at = skills.indexOf('Apache Kafka');
-    expect(skills.slice(at, at + 2)).toEqual(['Apache Kafka', 'Kafka']);
+    const { skills, aliases } = SkillsResponseSchema.parse((await agent.get('/api/skills')).body);
+    for (const main of ['.NET', 'Spring Boot', 'React', 'Google Cloud Platform', 'Apache Kafka']) expect(skills).toContain(main);
+    for (const alias of ['ASP.NET Core', '.NET Core', 'Spring Security', 'Redux', 'GCP', 'Kafka', 'HTML5']) expect(skills).not.toContain(alias);
+    expect(aliases?.['.NET']).toEqual(expect.arrayContaining(['.NET Core', 'ASP.NET', 'ASP.NET Core']));
+    expect(aliases?.['React']).toEqual(expect.arrayContaining(['Redux', 'React Router']));
+    expect(aliases?.['Jest']).toBeUndefined();
+    const soft = SkillsResponseSchema.parse((await agent.get('/api/skills?type=soft')).body);
+    expect(soft.aliases).toBeUndefined();
   });
 
   it("answers an alias in its own spelling and its entry's heading, without adding it", async () => {
@@ -44,7 +48,8 @@ describe('/api/skills', () => {
     expect(AddSkillResponseSchema.parse(kafka.body)).toEqual({ added: false, skill: 'Kafka', type: 'hard', category: 'Data Engineering & Streaming' });
     expect((await add(agent, { type: 'hard', skill: 'gcp' })).body).toEqual({ added: false, skill: 'GCP', type: 'hard', category: 'Cloud and Infrastructure' });
     expect((await add(agent, { type: 'hard', skill: 'html5' })).body).toMatchObject({ added: false, skill: 'HTML5', category: 'Languages' });
-    expect((await agent.get('/api/skills')).body.skills).toHaveLength(1492);
+    expect((await add(agent, { type: 'hard', skill: 'asp.net core' })).body).toMatchObject({ added: false, skill: 'ASP.NET Core' });
+    expect((await agent.get('/api/skills')).body.skills).toHaveLength(967);
   });
 
   it("answers a skill the library has in the library's spelling, without adding it", async () => {
@@ -72,7 +77,7 @@ describe('/api/skills', () => {
     expect((await agent.get('/api/skills?type=soft')).body.skills).toContain('Bridge building');
     const theirs = (await other.get('/api/skills')).body.skills as string[];
     expect(theirs).not.toContain('Kibana dashboards');
-    expect(theirs).toHaveLength(1492);
+    expect(theirs).toHaveLength(967);
   });
 
   it('validates the body', async () => {

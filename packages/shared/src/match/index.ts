@@ -2,6 +2,7 @@
 // scanner, certifications and industries, a posting's facets, the resume fit, and the experience-level check.
 export * from './schemas';
 export * from './terms';
+export * from './library-synonyms';
 export * from './evidence';
 export * from './keywords';
 export * from './soft';

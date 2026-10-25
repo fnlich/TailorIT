@@ -1,4 +1,5 @@
 import { escapeRegExp } from '../format/text';
+import { LIBRARY_SYNONYMS } from './library-synonyms';
 
 // How a keyword is found in text. One rule for the job match and the keyword extractor (free_tailor's `termPattern`,
 // `config/conceptTools.ts`): a term counts only as a whole word or phrase, any run of spaces matches any other, and
@@ -98,11 +99,12 @@ export function maskFalseFriends(text: string): string {
 }
 
 /**
- * Spellings of one thing, canonical first: TailorIT's closed list. Two spellings in one group are one keyword for the
- * extractor and the match ("K8s" on a resume satisfies "Kubernetes" in a posting). Words that are also everyday
- * English ("node", "rails") are deliberately left out, because the match reads terms over two characters in any case.
+ * Spellings of one thing, canonical first: TailorIT's closed list of the ones the skill library does not hold as an entry
+ * and its aliases ("K8s", "JS", "Golang"). Two spellings in one group are one keyword for the extractor and the match
+ * ("K8s" on a resume satisfies "Kubernetes" in a posting). Words that are also everyday English ("node", "rails") are
+ * deliberately left out, because the match reads terms over two characters in any case.
  */
-export const TERM_SYNONYMS: ReadonlyArray<readonly string[]> = [
+const CURATED_SYNONYMS: ReadonlyArray<readonly string[]> = [
   ['Kubernetes', 'K8s'],
   ['JavaScript', 'JS', 'ECMAScript', 'ES6'],
   ['TypeScript', 'TS'],
@@ -127,7 +129,7 @@ export const TERM_SYNONYMS: ReadonlyArray<readonly string[]> = [
   ['CSS', 'CSS3'],
   ['Python', 'Python3'],
   ['MongoDB', 'Mongo'],
-  ['Amazon S3', 'S3', 'AWS S3'],
+  ['Amazon S3', 'S3'],
   ['Amazon EC2', 'EC2'],
   ['Apache Kafka', 'Kafka'],
   ['Apache Spark', 'Spark'],
@@ -147,49 +149,44 @@ export const TERM_SYNONYMS: ReadonlyArray<readonly string[]> = [
   ['Business Intelligence', 'BI'],
   ['Google Kubernetes Engine', 'GKE'],
   ['Amazon EKS', 'EKS'],
-  ['Amazon DynamoDB', 'DynamoDB', 'AWS DynamoDB'],
+  ['Amazon DynamoDB', 'DynamoDB'],
   ['Elasticsearch', 'Elastic Search'],
-  // The skill library's aliases (apps/api/static/skills/skills.json): each alias is listed with its entry here, so
-  // it is the same keyword. Spellings of one name:
-  ['ArgoCD', 'Argo CD'],
-  ['Auto Scaling', 'Auto-scaling'],
-  ['Actix Web', 'Actix-web'],
-  ['Git Flow', 'GitFlow'],
-  ['Micro Frontends', 'Micro-frontends'],
-  ['Solid.js', 'SolidJS'],
-  ['API gateway', 'API Gateways'],
-  ['API integration', 'API integrations'],
-  ['Secure API', 'Secure APIs'],
-  // A vendor's product and its short name, where the short name is not an everyday word or another product's:
-  ['AWS CloudFormation', 'CloudFormation'],
-  ['Amazon CloudFront', 'CloudFront'],
-  ['Amazon ECS', 'AWS ECS', 'ECS'],
-  ['Amazon RDS', 'AWS RDS', 'RDS'],
-  ['Amazon Route 53', 'Route53'],
-  ['AWS CloudTrail', 'CloudTrail'],
-  ['Amazon ElastiCache', 'ElastiCache'],
-  ['Amazon Kinesis', 'Kinesis'],
-  ['Amazon SQS', 'SQS'],
-  ['Amazon SNS', 'SNS'],
-  ['Apache Avro', 'Avro'],
-  ['Apache Flink', 'Flink'],
-  // The same, though the short name is also an everyday word, another vendor's product or a generic idea. A resume that
-  // writes the short name is read as having the skill, so a posting that asks for it may be matched too loosely
-  // ("beam search", "express interest", a Google IAM role):
-  ['AWS Lambda', 'Lambda'],
-  ['Apache Beam', 'Beam'],
-  ['Amazon VPC', 'VPC'],
-  ['AWS IAM', 'IAM'],
-  ['AWS CDK', 'CDK'],
-  ['AWS WAF', 'WAF'],
-  ['Amazon Aurora', 'Aurora'],
-  ['Express.js', 'Express'],
-  // A technology and the same with its kind of artifact after it:
-  ['REST', 'REST API'],
-  ['GraphQL', 'GraphQL API'],
-  ['Android', 'Android SDK'],
-  ['OpenTelemetry', 'OpenTelemetry SDK'],
 ];
+
+/**
+ * Groups that share a spelling (by `matchKey`) made one, in order: an earlier group's spellings first, so its first
+ * spelling stays the canonical one. Exported for the tests.
+ */
+export function mergeSynonymGroups(groups: ReadonlyArray<readonly string[]>): string[][] {
+  const merged: Array<string[] | null> = [];
+  const owner = new Map<string, number>();
+  for (const group of groups) {
+    const spellings = group.map(collapse).filter(Boolean);
+    const owners = [...new Set(spellings.map((spelling) => owner.get(matchKey(spelling))).filter((index) => index !== undefined))];
+    const target = owners.length > 0 ? Math.min(...owners) : merged.push([]) - 1;
+    const into = merged[target]!;
+    // Groups this one joins fold into the earliest of them, in their own order.
+    for (const index of owners.sort((a, b) => a - b)) {
+      if (index === target) continue;
+      for (const spelling of merged[index]!) {
+        if (!into.some((known) => matchKey(known) === matchKey(spelling))) into.push(spelling);
+        owner.set(matchKey(spelling), target);
+      }
+      merged[index] = null;
+    }
+    for (const spelling of spellings) {
+      if (!into.some((known) => matchKey(known) === matchKey(spelling))) into.push(spelling);
+      owner.set(matchKey(spelling), target);
+    }
+  }
+  return merged.filter((group): group is string[] => group !== null && group.length > 1);
+}
+
+/**
+ * Every group the extractor and the match use: the skill library's (each entry with its aliases, generated from
+ * skills.json into library-synonyms.ts; the entry's name is canonical) merged with the curated ones above.
+ */
+export const TERM_SYNONYMS: ReadonlyArray<readonly string[]> = mergeSynonymGroups([...LIBRARY_SYNONYMS, ...CURATED_SYNONYMS]);
 
 function collapse(value: string): string {
   return value.replace(/\s+/g, ' ').trim();

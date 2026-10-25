@@ -1,14 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { staticDir } from './paths';
 
-// The skill library (static/skills/skills.json, from free_tailor v4.2's data and tidied since): hard skills, one entry
-// each, with a priority (1 to 5), a category and the other spellings people write it as (`aliases`), and soft skills.
-// Read once per process. The vocabulary for keyword extraction and matching is the hard names; the resume editor's
+// The skill library (static/skills/skills.json, from free_tailor v4.2's data and tidied since): hard skills, one main
+// skill per family, with a priority (1 to 5), a category and the rest of its family (`aliases`), and soft skills. Read
+// once per process. The vocabulary for keyword extraction and matching is the main skills' names; the resume editor's
 // library adds each user's own skills on top (user_skills).
 //
-// An alias is a spelling of its entry's skill: "Kafka" of "Apache Kafka". It is the same keyword (TERM_SYNONYMS in
-// packages/shared lists it with its entry, which a test checks), it is filed under its entry's heading by the render
-// gate, and the skill picker still offers it, as people write it on resumes.
+// An alias is another spelling, a version, a module or a companion of its main skill: "Kafka" of "Apache Kafka",
+// "ASP.NET Core" of ".NET", "Redux" of "React". Listing both on one resume says the same thing twice, so an alias is the
+// same keyword (packages/shared/src/match/library-synonyms.ts, generated from the file by `npm run skills:synonyms`),
+// it is filed under its main skill's heading by the render gate, and the skill picker offers the main skill only
+// (finding it by its aliases too); an alias typed in is still a known skill.
 
 export interface HardSkill {
   skill: string;

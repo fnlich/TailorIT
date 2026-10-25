@@ -109,11 +109,23 @@ const PANES = [
   { value: 'preview' as const, label: 'Preview' },
 ];
 
-const SkillLibrary = memo(function SkillLibrary({ skills }: { skills: readonly string[] }) {
+const NO_ALIASES: Readonly<Record<string, string[]>> = {};
+
+/**
+ * The main skills only. A skill's other spellings are its option's label, which the browser shows and searches too,
+ * so typing "ASP.NET Core" suggests ".NET" instead of a second skill that means the same.
+ */
+const SkillLibrary = memo(function SkillLibrary({
+  skills,
+  aliases,
+}: {
+  skills: readonly string[];
+  aliases: Readonly<Record<string, string[]>>;
+}) {
   return (
     <datalist id={LIBRARY_LIST_ID}>
       {skills.map((skill) => (
-        <option key={skill} value={skill} />
+        <option key={skill} value={skill} label={aliases[skill]?.join(', ')} />
       ))}
     </datalist>
   );
@@ -191,7 +203,8 @@ export function ResumeEditor({
     staleTime: 30 * 60_000,
   });
   const libraryData = libraryQuery.data;
-  const library = useMemo(() => [...(libraryData ?? []), ...ownSkills], [libraryData, ownSkills]);
+  const library = useMemo(() => [...(libraryData?.skills ?? []), ...ownSkills], [libraryData, ownSkills]);
+  const libraryAliases = libraryData?.aliases ?? NO_ALIASES;
 
   const update: UpdateDraft = useCallback((recipe, options) => {
     setDraft((current) => recipe(current));
@@ -594,7 +607,7 @@ export function ResumeEditor({
         <p className="sr-only" aria-live="polite">
           {announce}
         </p>
-        <SkillLibrary skills={library} />
+        <SkillLibrary skills={library} aliases={libraryAliases} />
 
         {saveError && (
           <Notice tone="error" title="The resume was not saved" className="mb-4">

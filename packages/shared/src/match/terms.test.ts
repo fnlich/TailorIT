@@ -5,6 +5,7 @@ import {
   countTerm,
   maskFalseFriends,
   matchKey,
+  mergeSynonymGroups,
   synonymKey,
   synonymsOf,
   TERM_SYNONYMS,
@@ -130,13 +131,48 @@ describe('synonyms', () => {
     }
   });
 
-  it("leaves apart a generic name and a vendor's product that is not it, and one vendor's product from another's", () => {
+  it("folds a family into its main skill: versions, modules and companions (the skill library's aliases)", () => {
+    for (const [member, main] of [
+      ['ASP.NET Core', '.NET'],
+      ['.NET Core', '.NET'],
+      ['Spring Security', 'Spring Boot'],
+      ['Spring', 'Spring Boot'],
+      ['Redux', 'React'],
+      ['React Router', 'React'],
+      ['Django REST Framework', 'Django'],
+      ['HTTP/2', 'HTTP'],
+      ['Ubuntu', 'Linux'],
+      ['Load Testing', 'Performance Testing'],
+      ['Singleton Pattern', 'Design Patterns'],
+      ['Microservices architecture', 'Microservices'],
+    ] as const) {
+      expect(synonymKey(member), `${member} and ${main}`).toBe(synonymKey(main));
+    }
+  });
+
+  it("keeps apart different products, a generic name and a vendor's product that is not it, and everyday words", () => {
     expect(synonymKey('SQL')).not.toBe(synonymKey('Azure SQL'));
     expect(synonymKey('DevOps')).not.toBe(synonymKey('Azure DevOps'));
     expect(synonymKey('IAM')).not.toBe(synonymKey('Google IAM'));
-    expect(synonymKey('Secrets Manager')).not.toBe(synonymKey('AWS Secrets Manager'));
-    expect(synonymKey('API gateway')).not.toBe(synonymKey('Amazon API Gateway'));
-    expect(synonymKey('Blob Storage')).not.toBe(synonymKey('Azure Blob Storage'));
+    expect(synonymKey('MySQL')).not.toBe(synonymKey('PostgreSQL'));
+    expect(synonymKey('Jest')).not.toBe(synonymKey('Mocha'));
+    expect(synonymKey('Docker')).not.toBe(synonymKey('Kubernetes'));
+    expect(synonymKey('AWS Lambda')).not.toBe(synonymKey('Amazon S3'));
+    // Words of ordinary prose: in a group, "any kind of" on a resume would read as Kubernetes.
+    expect(synonymKey('Kind')).not.toBe(synonymKey('Kubernetes'));
+    expect(synonymKey('Ingress')).not.toBe(synonymKey('Kubernetes'));
+    expect(synonymKey('Triggers')).not.toBe(synonymKey('SQL'));
+    expect(synonymKey('Promises')).not.toBe(synonymKey('Async Programming'));
+    expect(synonymKey('Paging')).not.toBe(synonymKey('Pagination'));
+  });
+
+  it("merges groups that share a spelling, the earliest group's first spelling staying canonical", () => {
+    expect(mergeSynonymGroups([['Kubernetes', 'kubectl'], ['Go'], ['Kubernetes', 'K8s'], ['JS', 'JavaScript'], ['K8s', 'k8s cluster']])).toEqual([
+      ['Kubernetes', 'kubectl', 'K8s', 'k8s cluster'],
+      ['JS', 'JavaScript'],
+    ]);
+    // A later group joining two earlier ones folds them into the first.
+    expect(mergeSynonymGroups([['A1', 'B1'], ['C1', 'D1'], ['B1', 'C1']])).toEqual([['A1', 'B1', 'C1', 'D1']]);
   });
 
   it('keeps unrelated terms apart and case-folds long ones', () => {
@@ -146,8 +182,9 @@ describe('synonyms', () => {
   });
 
   it('lists a group canonical first', () => {
-    expect(synonymsOf('k8s')).toEqual(['Kubernetes', 'K8s', 'k8s']);
-    expect(synonymsOf('Terraform')).toEqual(['Terraform']);
+    expect(synonymsOf('k8s')[0]).toBe('Kubernetes');
+    expect(synonymsOf('k8s')).toEqual(expect.arrayContaining(['K8s', 'kubectl', 'k8s']));
+    expect(synonymsOf('Ansible')).toEqual(['Ansible']);
   });
 
   it('lists alphanumeric runs', () => {

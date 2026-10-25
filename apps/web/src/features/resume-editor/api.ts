@@ -416,9 +416,19 @@ export async function fetchThumbnail(id: string, kind: 'built' | 'uploaded', sig
   return { kind: 'html', html: preview.html, page: preview.page };
 }
 
-export async function fetchSkills(type: SkillType, signal?: AbortSignal): Promise<string[]> {
+/** The library a skill box suggests from: the main skills, and each one's other spellings (aliases). */
+export interface SkillLibraryList {
+  skills: string[];
+  /** Main skill -> its other spellings ("ASP.NET Core" of ".NET"). Empty for soft skills. */
+  aliases: Record<string, string[]>;
+}
+
+export async function fetchSkills(type: SkillType, signal?: AbortSignal): Promise<SkillLibraryList> {
   const answer = await api.get('/api/skills', { query: { type }, signal });
-  return Array.isArray(answer) ? strings(answer) : strings(rec(answer).skills);
+  if (Array.isArray(answer)) return { skills: strings(answer), aliases: {} };
+  const aliases: Record<string, string[]> = {};
+  for (const [skill, spellings] of Object.entries(rec(rec(answer).aliases))) aliases[skill] = strings(spellings);
+  return { skills: strings(rec(answer).skills), aliases };
 }
 
 /** POST /api/skills: a skill the library lacks, kept for this user; resolves to the spelling stored. */

@@ -311,7 +311,7 @@ The normalizer lives in shared, following ft rules:
 - **DOCX**: one simple layout, labelled "Word (simple layout)".
 - **Stage A** uses marker-based section finding and gives exact parity on the 19 built-ins. **Stage B** adds the loop heuristics and gives parity on all 26.
 - **Goldens:** `tools/ft-golden` requires free_tailor's compiled `backend/dist` read-only, with `DB_DIR` forced to `TailorIT\.cache` (asserted). It renders 6 fixtures × 26 templates × layout × switches × order (about 600 cases), compared by markup, pixel diff (≤0.1%) and PDF page count.
-- **Skills:** `skills.json` (1,441 hard skills, with 51 aliases / 1,245 soft; 1,492 hard spellings in all) is loaded in memory and overlaid with per-user `user_skills`. Nothing is written to a shared library.
+- **Skills:** `skills.json` (967 main hard skills holding 525 aliases, 1,492 spellings in all / 1,245 soft) is loaded in memory and overlaid with per-user `user_skills`. Nothing is written to a shared library.
 
 ### 5. Cover letters and templates
 
@@ -995,38 +995,36 @@ details, every new endpoint, and what was built differently from the v2 plan.
 - `job_sources` is not rebuilt: a sheet import is a `csv` source with `config.sheet`. Resume ZIP builds are kept in
   memory, their files under `<DATA_DIR>/resume-zips/`.
 
-**Skill library** (`apps/api/static/skills/skills.json`, tidied after the v2 work packages; its README says how to edit it)
-- **One entry per skill, sorted.** Hard skills went from 1,492 entries to 1,441, each with `skill`, `priority` (1 to 5),
-  `category` and, where there are any, `aliases`: the other spellings people write it as (`Kafka` of `Apache Kafka`,
-  `HTML5` of `HTML`, `GCP` of `Google Cloud Platform`, `Lambda` of `AWS Lambda`). The list is sorted by heading (the order of
-  `HARD_SKILL_CATEGORIES`), priority and name; it was by priority and name. Soft skills went from 1,247 to 1,245:
-  `Problem-solving` and `Big-picture thinking` are gone, since the soft scanner reads a hyphen and a space as one and
-  `Problem Solving` and `Big Picture Thinking` already stand for both.
-- **Nothing is lost.** An alias is the same keyword as its entry (it is listed with it in `TERM_SYNONYMS`; a spelling
-  of one skill used to count as a second keyword when a posting wrote both), it is filed under its entry's heading by
-  the render gate, and the skill picker still offers all 1,492 spellings (`GET /api/skills` lists an alias right after
-  its entry; `POST /api/skills` answers one in its own spelling). Checked against the library before the change: every
-  spelling is still detected with the same label, the 144 recorded and seeded postings name the same skills and soft
-  skills (two list `GraphQL` once, where they listed it as `GraphQL` and `GraphQL API`), and free_tailor's 1,161 golden
-  renders still match.
-- **Merged on purpose** (47 skills, 51 aliases): spellings of one name (`ArgoCD`/`Argo CD`, `Solid.js`/`SolidJS`),
-  spellings the synonym table already folded (`Postgres`, `Kafka`, `S3`, `RBAC`...), a vendor's product with its short
-  name (`Amazon SQS`/`SQS`, `AWS CloudFormation`/`CloudFormation`), a technology with its kind of artifact
-  (`REST`/`REST API`, `Android`/`Android SDK`), and, in a second round at the owner's request, short names that are an
-  everyday word or also name another vendor's product (`AWS Lambda`/`Lambda`, `Apache Beam`/`Beam`, `Amazon VPC`/`VPC`,
-  `AWS IAM`/`IAM`, `AWS CDK`/`CDK`, `AWS WAF`/`WAF`, `Amazon Aurora`/`Aurora`, `Express.js`/`Express`). **The cost
-  of that second kind:** a resume that writes only the short name is read as having the skill, so a posting that asks for
-  the long one can be matched too loosely (`beam search`, `express interest`, a Google IAM role).
-  **Kept apart:** a generic name and one vendor's product of that kind (`SQL`/`Azure SQL`, `DevOps`/`Azure DevOps`,
-  `Secrets Manager`/`AWS Secrets Manager`, `API gateway`/`Amazon API Gateway`, `API management`, `Blob Storage`, `Service Bus`,
-  `Secret Manager`), and `Google IAM` from `AWS IAM`.
-- **Seven spellings change heading**, because the two spellings of one skill had been filed under different headings and
-  now follow their entry: `HTML5` (Frameworks and Libraries to Languages), `CSS3` (Databases and Storage to Languages),
-  `Argo CD` (to DevOps and CI/CD), `Auto-scaling` and `CDK` (to Cloud and Infrastructure), `GKE` (to DevOps and CI/CD) and
-  `TDD` (Engineering Practices & Methodology to Testing and Quality).
-- `RESUME_SKILLS_STAMP` is 3, so every resume is read again once (rules at once; Claude again for uploads, in the
-  background). The file is written with LF line ends, as the repository stores it (its hash in the golden manifest was
-  taken from a CRLF copy before).
+**Skill library** (`apps/api/static/skills/skills.json`, tidied after the v2 work packages; its README holds the rule and how to edit it)
+- **One main skill per family.** Two skills that would say the same thing twice on one resume are one: `.NET` is the
+  main skill and `.NET Core`, `ASP.NET`, `ASP.NET Core` and `Entity Framework` are its aliases. An alias is another
+  spelling or wording, a version or edition (`HTTP/2`, `Ubuntu`), a module, extension or standard companion of a
+  framework or tool (`Spring Security` of `Spring Boot`, `Redux` of `React`, `Docker Compose` of `Docker`), or an item of
+  a list the main skill sums up (nine design patterns, five kinds of performance testing, five "Cloud ..." phrasings).
+  Alternatives, different tools, a cloud's separate services, and languages against their frameworks stay separate, and
+  no everyday word (`Kind`, `Triggers`, `Promises`, `Paging`, `Ingress`, `Logs`) joins a family. Hard skills: 1,492
+  entries in free_tailor's file, now 967 main skills holding 525 aliases (the same 1,492 spellings; the entries the owner
+  deleted by hand came back as aliases). Soft skills: 1,245 (`Problem-solving` and `Big-picture thinking` were the same
+  entries as `Problem Solving` and `Big Picture Thinking` to the soft scanner).
+- **Sorted** by heading (the order of `HARD_SKILL_CATEGORIES`), priority (1 first) and name; free_tailor's was by priority
+  and name. Written with LF line ends, as the repository stores it (the golden manifest's hash was of a CRLF copy).
+- **Matching.** An alias is the same keyword as its main skill: the families are generated from the file into
+  `packages/shared/src/match/library-synonyms.ts` (`npm run skills:synonyms`; the shared package imports no JSON), and
+  `TERM_SYNONYMS` merges them with the curated groups (`K8s`, `JS`, `Golang`...), the main skill's name canonical. A
+  posting that asks for `ASP.NET Core` is met by a resume that says `.NET`; one that names a skill and its alias counts one
+  keyword (22 of the 144 recorded and seeded postings list fewer keywords; one gains a keyword the 15-keyword cap had cut
+  off). The cost of folding a short name that is also an everyday word or another vendor's product (`Spring`, `Express`,
+  `Beam`, `Lambda`, `IAM`) is a looser match: a resume that writes only the short name meets a posting that asks for the
+  long one.
+- **The skill picker** (`GET /api/skills`) offers the main skills only, with `aliases` (main skill to its aliases) for the
+  search: the editor's `<datalist>` puts them in each option's label, which the browser shows and searches, so typing
+  "ASP.NET Core" suggests `.NET`. An alias typed in is still known (`POST /api/skills` answers it in its own spelling).
+- **Grouped skills:** an alias is filed under its main skill's heading, so 179 of the 1,492 spellings changed heading
+  (`CSS Grid` to Languages with `HTML`, `Spring Cloud` to Frameworks and Libraries with `Spring Boot`, `Firestore` with
+  `Firebase`...). free_tailor's 1,161 golden renders still match: no fixture skill moved.
+- Checked against free_tailor's library and the code before the tidy: every one of the 1,492 spellings is still known
+  and detected with the same label, and the soft skills found in the postings are the same. `RESUME_SKILLS_STAMP` is 4,
+  so every resume is read again once (rules at once; Claude again for uploads, in the background).
 
 **Resumes (WP2, WP3, WP9)**
 - Every write path (create, upload, JSON import, edit, both duplicates, the AI editable copy, the demo seed) stores

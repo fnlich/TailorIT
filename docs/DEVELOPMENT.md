@@ -85,12 +85,13 @@ background work (return a stop function), `commands` adds CLI commands. The cent
   blocked: embed fonts/images as data URIs. Tests and CLI commands that render must `await getPdfService(deps).close()`.
 - **Mail/auth** (`src/core/auth`, `src/core/mail`): sessions, accounts (`getAccount`), admin promotion.
 - **Skill library** (`src/core/skills-vocabulary.ts`): `getSkillLibrary()` → `{hard, soft, vocabulary, spellings, byKey}`
-  from `static/skills/skills.json` (read once). `hard` has one entry per skill; its `aliases` are the other spellings
-  people write it as, and `spellings` lists every name and alias (an alias under its entry's heading and priority).
-  Use `vocabulary` (the entries' names) for keyword extraction and matching: an alias must also be listed with its
-  entry in `TERM_SYNONYMS` (`packages/shared/src/match/terms.ts`), which makes it the same keyword. Use `spellings`
-  where a name is looked up (the render gate's headings, the skill picker). The file's README says how to edit it, and
-  `test/skills-library.test.ts` checks the layout, the order and that nothing is listed twice.
+  from `static/skills/skills.json` (read once). `hard` has one main skill per family; its `aliases` are the rest of the
+  family (other spellings, versions, modules, companions), and `spellings` lists every name and alias (an alias under its
+  main skill's heading and priority). Use `vocabulary` (the main skills' names) for keyword extraction and matching: an
+  alias is the same keyword through `packages/shared/src/match/library-synonyms.ts`, generated from the file by
+  `npm run skills:synonyms` (run it after changing an alias). Use `spellings` where a name is looked up (the render
+  gate's headings, `POST /api/skills`). The file's README holds the rule and the steps;
+  `test/skills-library.test.ts` checks the layout, the order, that nothing is listed twice and that the module is current.
 
 ### Tests
 - Vitest + supertest. `createTestContext()` (`test/helpers.ts`): in-memory migrated DB, temp DATA_DIR, frozen clock
