@@ -111,6 +111,8 @@ export interface ResumeDraft {
 
 /** The template a resume with none chosen is drawn with. */
 export const FALLBACK_TEMPLATE_ID = 'default';
+/** Its name, for where the template list cannot be read. */
+export const FALLBACK_TEMPLATE_NAME = 'Professional Two-Column';
 
 let rowSequence = 0;
 

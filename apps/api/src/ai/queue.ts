@@ -74,7 +74,8 @@ declare module '../core/context' {
 }
 
 const PRIORITY: Record<AiPriority, number> = { interactive: 1, background: 0 };
-const MAX_ACTIVE_PER_USER_KIND = 2;
+/** Exported: the copy line leaves an account's second place to copies asked for alone. */
+export const MAX_ACTIVE_PER_USER_KIND = 2;
 const KEEP_FINISHED_MS = 30 * 24 * 60 * 60_000;
 const PRUNE_EVERY_MS = 6 * 60 * 60_000;
 const TEST_TIMEOUT_MS = 90_000;

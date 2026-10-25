@@ -8,7 +8,7 @@ import { CheckIcon, MinusIcon } from '@/components/ui/icons';
 import { Notice } from '@/components/ui/Notice';
 import { RadioGroup } from '@/components/ui/RadioGroup';
 import { Select, type SelectOption } from '@/components/ui/Select';
-import type { TemplateInfo } from '../api';
+import { printsClassicOnly, type TemplateInfo } from '../api';
 import { SettingsCard } from './parts';
 
 /**
@@ -33,8 +33,6 @@ export function TemplateSettings({
   if (status === 'ready' && !selected && selectedId) {
     options.unshift({ value: selectedId, label: `${selectedId} (no longer available)`, disabled: true });
   }
-  const atsOnly = selected && selected.printsSections.length > 0 && !selected.printsSections.includes('projects');
-
   return (
     <SettingsCard title="Template" description="How the resume looks. The preview redraws as soon as you pick one.">
       <Field label="Design template" id="resume-template">
@@ -66,7 +64,7 @@ export function TemplateSettings({
             <Capability on={selected.supportsStrengths} yes="Strengths section" no="No Strengths section" />
             <Capability on={selected.supportsSoftSkills} yes="Soft Skills section" no="No Soft Skills section" />
           </div>
-          {atsOnly && (
+          {printsClassicOnly(selected) && (
             <Notice tone="info">
               {selected.name} prints the classic sections only: projects, languages, awards and sections of your own are kept
               with the resume but not printed with it.

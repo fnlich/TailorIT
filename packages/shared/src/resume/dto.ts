@@ -118,19 +118,62 @@ export const ResumeBulkDeleteResponseSchema = z.object({
 });
 export type ResumeBulkDeleteResponse = z.infer<typeof ResumeBulkDeleteResponseSchema>;
 
-/** POST /api/resumes/upload?parse=1: `parse` also starts an AI import ("Make an editable copy"). */
+/**
+ * POST /api/resumes/upload?parse=1: `parse` also asks for an AI import ("Make an editable copy"). The router also reads
+ * `templateId`, `layout` and `batch` leniently: `batch` (ResumeCopyBatchIdSchema) marks one of several files of one
+ * Upload dialog, whose copy waits in the copy line instead of starting at once.
+ */
 export const ResumeUploadQuerySchema = z.object({ parse: queryBoolean });
 export const ResumeUploadResponseSchema = z.object({
   resume: ResumeSummarySchema,
-  /** The import task when `parse` was asked for (poll GET /api/ai/tasks/:id). */
+  /**
+   * The import task when `parse` was asked for (poll GET /api/ai/tasks/:id). Always null with `batch`: GET
+   * /api/resumes/copies follows those copies.
+   */
   taskId: z.string().nullable(),
   /**
    * Why the editable copy asked for could not start (AI busy or off, text that cannot be read), as a sentence to show.
-   * The upload is kept either way. Null or absent when the copy started or was not asked for.
+   * The upload is kept either way. Null or absent when the copy started or was not asked for. With `batch`, a copy
+   * refused when asked is a failed row of GET /api/resumes/copies instead: this is set only when the copy could not be
+   * put in line at all.
    */
   copyError: z.string().nullable().optional(),
 });
 export type ResumeUploadResponse = z.infer<typeof ResumeUploadResponseSchema>;
+
+/** One Upload dialog's id for its runs of several files (the browser makes it): their copies share one notice. */
+export const ResumeCopyBatchIdSchema = z.string().regex(/^[A-Za-z0-9-]{8,64}$/);
+
+/** An editable copy of one upload in the line of several: waiting, being made, made, not made, or stopped. */
+export const RESUME_COPY_STATES = ['waiting', 'making', 'ready', 'failed', 'stopped'] as const;
+export type ResumeCopyState = (typeof RESUME_COPY_STATES)[number];
+
+export const ResumeCopySchema = z.object({
+  id: z.string(),
+  batchId: z.string(),
+  /** The upload's label when the copy was asked for. */
+  label: z.string(),
+  state: z.enum(RESUME_COPY_STATES),
+  /** The copy made (a built resume); null until ready, and once that resume is deleted. */
+  resumeId: z.string().nullable(),
+  /** Why it was not made (failed only), as a sentence to show. */
+  error: z.string().nullable(),
+  /** Try again may make it: stopped, or failed for any reason but unreadable text or a deleted upload. */
+  retryable: z.boolean(),
+});
+export type ResumeCopy = z.infer<typeof ResumeCopySchema>;
+
+/** Why copies in line wait: AI off, an AI pause (usage limit, or another), or a usage warning (the gate). */
+export const RESUME_COPY_PAUSES = ['off', 'limit', 'hold', 'warning'] as const;
+export const ResumeCopiesPauseSchema = z.object({ reason: z.enum(RESUME_COPY_PAUSES), until: IsoDateTime.nullable() });
+export type ResumeCopiesPause = z.infer<typeof ResumeCopiesPauseSchema>;
+
+/** GET /api/resumes/copies, and the answer of POST /api/resumes/copies/:batchId/{stop,retry,dismiss}. */
+export const ResumeCopiesResponseSchema = z.object({
+  items: z.array(ResumeCopySchema),
+  paused: ResumeCopiesPauseSchema.nullable(),
+});
+export type ResumeCopiesResponse = z.infer<typeof ResumeCopiesResponseSchema>;
 
 /** POST /api/resumes/import-json: a file downloaded from TailorIT (or free_tailor), already parsed by the browser. */
 export const ResumeImportJsonBodySchema = z.object({

@@ -27,6 +27,7 @@ export {
 export {
   createAiService,
   describeHealth,
+  MAX_ACTIVE_PER_USER_KIND,
   type AiService,
   type AiTaskContext,
   type AiTaskHandler,

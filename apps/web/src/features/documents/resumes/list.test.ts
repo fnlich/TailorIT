@@ -17,6 +17,7 @@ import {
   sortResumes,
   templateNameOf,
   uploadedTitle,
+  uploadsFinishedToast,
   uploadTitle,
   withKnownReading,
   yearsLabel,
@@ -115,6 +116,47 @@ describe('Resumes tab', () => {
     expect(uploadedTitle(1)).toBe('1 resume uploaded');
     expect(notUploadedText(2)).toBe('2 files were not uploaded.');
     expect(notUploadedText(1)).toBe('1 file was not uploaded.');
+  });
+
+  it('sums up an upload run: one file, several, several with editable copies, some not uploaded', () => {
+    const stored = (count: number, taskId: string | null = null) =>
+      Array.from({ length: count }, (_, index) => ({ taskId, label: `Resume_${index + 1}` }));
+    expect(uploadsFinishedToast({ mode: 'single', uploaded: [], notUploaded: 1, copies: true })).toBeNull();
+    expect(uploadsFinishedToast({ mode: 'multi', uploaded: [], notUploaded: 3, copies: true })).toBeNull();
+
+    // One file: its copy being made, else its label.
+    expect(uploadsFinishedToast({ mode: 'single', uploaded: stored(1, 't1'), notUploaded: 0, copies: true })).toEqual({
+      title: 'Resume uploaded',
+      description: 'An editable copy is being made from it.',
+    });
+    expect(uploadsFinishedToast({ mode: 'single', uploaded: stored(1), notUploaded: 0, copies: false })).toEqual({
+      title: 'Resume uploaded',
+      description: 'Resume_1',
+    });
+
+    // Several without copies, as before.
+    expect(uploadsFinishedToast({ mode: 'multi', uploaded: stored(7), notUploaded: 0, copies: false })).toEqual({
+      title: '7 resumes uploaded',
+      description: 'Their skills show on each resume.',
+    });
+    expect(uploadsFinishedToast({ mode: 'multi', uploaded: stored(3), notUploaded: 2, copies: false })).toEqual({
+      title: '3 resumes uploaded',
+      description: '2 files were not uploaded.',
+    });
+
+    // Several with copies: where they are followed, after what was not uploaded.
+    expect(uploadsFinishedToast({ mode: 'multi', uploaded: stored(3), notUploaded: 0, copies: true })).toEqual({
+      title: '3 resumes uploaded',
+      description: 'Follow their editable copies at the top of this page.',
+    });
+    expect(uploadsFinishedToast({ mode: 'multi', uploaded: stored(1), notUploaded: 0, copies: true })).toEqual({
+      title: '1 resume uploaded',
+      description: 'Follow its editable copy at the top of this page.',
+    });
+    expect(uploadsFinishedToast({ mode: 'multi', uploaded: stored(1), notUploaded: 2, copies: true })).toEqual({
+      title: '1 resume uploaded',
+      description: '2 files were not uploaded. Follow its editable copy at the top of this page.',
+    });
   });
 });
 

@@ -4,9 +4,10 @@ import { expect, test, type Page, type Route } from '@playwright/test';
  * Work package R2: the resume editor and Documents › Resumes against a stand-in for the resume API (page.route), so
  * every behaviour is checked the same way whatever the stored data: the chooser's filters and details, all fifteen
  * section kinds and custom sections, reordering, the switches, Grouped / Plain, Write with AI and Undo, the preview,
- * leaving with changes, saving; the tab's two views, search, filter, menus, rename, default, upload and bulk delete.
- * Nothing reaches the real API: the session cookie is a placeholder (the page gate only checks that one exists) and
- * every /api call is answered here, so the spec does not depend on the API's state or data.
+ * leaving with changes, saving; the tab's two views, search, filter, menus, rename, default, upload (one file or
+ * several, with their editable copies) and bulk delete. Nothing reaches the real API: the session cookie is a
+ * placeholder (the page gate only checks that one exists) and every /api call is answered here, so the spec does not
+ * depend on the API's state or data.
  */
 
 const ORIGIN = process.env.E2E_BASE_URL ?? 'http://localhost:3100';
@@ -74,6 +75,22 @@ interface Summary {
   analysis?: Json | null;
 }
 
+/** GET /api/resumes/copies' item (ResumeCopy): the editable copy of one of several uploads, in the server's line. */
+interface Copy {
+  id: string;
+  batchId: string;
+  label: string;
+  state: 'waiting' | 'making' | 'ready' | 'failed' | 'stopped';
+  resumeId: string | null;
+  error: string | null;
+  retryable: boolean;
+}
+
+/** The Upload dialog's batch id as the server takes it (ResumeCopyBatchIdSchema). */
+const BATCH_ID = /^[A-Za-z0-9-]{8,64}$/;
+/** Why a copy in the line was not made: the server's sentence for a failed AI request. */
+const COPY_FAILED = 'The AI request failed. Please try again.';
+
 interface FakeOptions {
   empty?: boolean;
   /** Readings on the list's resumes and GET /api/resumes/:id/analysis for the upload. */
@@ -84,6 +101,8 @@ interface FakeOptions {
   busyOnce?: string[];
   /** An upload asking for an editable copy is kept, but the copy cannot start: this sentence. */
   copyError?: string;
+  /** Uploads (by label) whose editable copy in the line of several fails the first time it is made. */
+  copyFailOnce?: string[];
 }
 
 const UPLOAD_SKILLS = ['React', 'TypeScript', 'Node.js', 'GraphQL', 'Redux', 'Jest', 'Webpack', 'CSS', 'HTML', 'Git', 'Docker', 'AWS'];
@@ -110,19 +129,31 @@ class FakeApi {
   readonly documents = new Map<string, Json>();
   readonly calls: Array<{ method: string; path: string; body: unknown }> = [];
   readonly tasks = new Map<string, { kind: string; result: unknown; polls: number }>();
-  /** Every upload as it arrived: the file's name, the name typed (title) and whether a copy was asked for. */
-  readonly uploads: Array<{ fileName: string; title: string | null; parse: boolean }> = [];
+  /**
+   * Every upload as it arrived: the file's name, the name typed (title), whether a copy was asked for, and the
+   * template and batch sent with it (null when not sent).
+   */
+  readonly uploads: Array<{ fileName: string; title: string | null; parse: boolean; templateId: string | null; batch: string | null }> = [];
+  /** The editable copies of several uploads (GET /api/resumes/copies), in the order they were asked for. */
+  readonly copies: Copy[] = [];
+  /** While set, the copy being made stays so (each GET /api/resumes/copies otherwise finishes it). */
+  holdCopies = false;
+  /** GET /api/ai/tasks/:id calls: the copies of several files are followed without them. */
+  taskPolls = 0;
   /** Readings the AI has finished (GET …/analysis answers the AI's reading from then on). */
   readonly readingsDone = new Set<string>();
   maxUploadsInFlight = 0;
   private uploadsInFlight = 0;
   private readonly busyOnce: Set<string>;
+  private readonly copyFailOnce: Set<string>;
+  private copiesMade = 0;
   private sequence = 0;
 
   constructor(private readonly options: FakeOptions = {}) {
     const now = Date.now();
     const at = (ago: number) => new Date(now - ago).toISOString();
     this.busyOnce = new Set(options.busyOnce ?? []);
+    this.copyFailOnce = new Set(options.copyFailOnce ?? []);
     this.resumes = options.empty
       ? []
       : [
@@ -158,6 +189,48 @@ class FakeApi {
 
   calledWith(method: string, path: RegExp) {
     return this.calls.filter((call) => call.method === method && path.test(call.path));
+  }
+
+  /**
+   * Each GET /api/resumes/copies moves the line on: the copy being made is made (unless `holdCopies`), failing the
+   * first time for a label in `copyFailOnce`, and a copy made joins the list as a built resume; then, with none being
+   * made, the first one waiting starts.
+   */
+  private advanceCopies() {
+    const making = this.copies.find((copy) => copy.state === 'making');
+    if (making && !this.holdCopies) {
+      if (this.copyFailOnce.delete(making.label)) {
+        making.state = 'failed';
+        making.error = COPY_FAILED;
+        making.retryable = true;
+      } else {
+        this.copiesMade += 1;
+        const id = `r-copy-${this.copiesMade}`;
+        const stamp = new Date().toISOString();
+        this.resumes.unshift({ id, kind: 'built', label: `Copy of ${making.label}`, title: null, templateId: null, templateName: null, isDefault: false, fileKind: null, nameOnResume: '', createdAt: stamp, updatedAt: stamp, lastEditedAt: null });
+        making.state = 'ready';
+        making.resumeId = id;
+      }
+    }
+    if (this.copies.some((copy) => copy.state === 'making')) return;
+    const next = this.copies.find((copy) => copy.state === 'waiting');
+    if (next) next.state = 'making';
+  }
+
+  /** Stop the rest, Try again and Dismiss for one batch, as the server does them (one being made is left alone). */
+  private changeCopies(batchId: string, action: 'stop' | 'retry' | 'dismiss') {
+    for (const copy of this.copies.filter((item) => item.batchId === batchId)) {
+      if (action === 'stop' && copy.state === 'waiting') {
+        copy.state = 'stopped';
+        copy.retryable = true;
+      } else if (action === 'retry' && copy.retryable) {
+        copy.state = 'waiting';
+        copy.error = null;
+        copy.retryable = false;
+      } else if (action === 'dismiss' && copy.state !== 'waiting' && copy.state !== 'making') {
+        this.copies.splice(this.copies.indexOf(copy), 1);
+      }
+    }
   }
 
   async install(page: Page) {
@@ -197,6 +270,7 @@ class FakeApi {
       return json(route, 200, { id: 'acct', email: 'r2@tailorit.dev', name: 'r2', avatarUrl: null, role: 'user', defaultResumeId: resumeId, createdAt: new Date().toISOString() });
     });
     await page.route('**/api/ai/tasks/**', (route) => {
+      this.taskPolls += 1;
       const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '');
       const task = this.tasks.get(id);
       if (!task) return json(route, 404, { error: { code: 'not_found', message: 'That task was not found.' } });
@@ -244,10 +318,12 @@ class FakeApi {
       }
       if (path === '/api/resumes/upload') {
         const parse = url.searchParams.get('parse') === '1';
+        const templateId = url.searchParams.get('templateId');
+        const batch = url.searchParams.get('batch');
         const raw = request.postData() ?? '';
         const fileName = /filename="([^"]+)"/.exec(raw)?.[1] ?? 'resume.pdf';
         const title = /name="title"\r\n\r\n([^\r\n]*)/.exec(raw)?.[1] ?? null;
-        this.uploads.push({ fileName, title, parse });
+        this.uploads.push({ fileName, title, parse, templateId, batch });
         this.uploadsInFlight += 1;
         this.maxUploadsInFlight = Math.max(this.maxUploadsInFlight, this.uploadsInFlight);
         try {
@@ -265,11 +341,28 @@ class FakeApi {
           this.sequence += 1;
           const resume: Summary = { id: `r-up-${this.sequence}`, kind: 'uploaded', label, title, templateId: null, templateName: null, isDefault: false, fileKind: 'pdf', nameOnResume: '', createdAt: stamp, updatedAt: stamp, lastEditedAt: null };
           this.resumes.unshift(resume);
+          // One of several files (a valid batch): its copy waits in the line that GET /api/resumes/copies follows.
+          if (parse && batch && BATCH_ID.test(batch)) {
+            this.copies.push({ id: `copy-${this.sequence}`, batchId: batch, label, state: 'waiting', resumeId: null, error: null, retryable: false });
+            return await json(route, 201, { resume, taskId: null, copyError: null });
+          }
           if (parse && this.options.copyError) return await json(route, 201, { resume, taskId: null, copyError: this.options.copyError });
           return await json(route, 201, { resume, taskId: parse ? this.task('resume_import', { resumeId: 'r-default' }) : null, copyError: null });
         } finally {
           this.uploadsInFlight -= 1;
         }
+      }
+      // The copy line's view and buttons, before `one` below would take "copies" for a resume id.
+      if (path === '/api/resumes/copies' && method === 'GET') {
+        this.advanceCopies();
+        return json(route, 200, { items: this.copies, paused: null });
+      }
+      const copies = /^\/api\/resumes\/copies\/([^/]+)\/(stop|retry|dismiss)$/.exec(path);
+      if (copies && method === 'POST') {
+        const batchId = decodeURIComponent(copies[1] ?? '');
+        if (!BATCH_ID.test(batchId)) return json(route, 400, { error: { code: 'validation_failed', message: 'The batch id is not valid.' } });
+        this.changeCopies(batchId, copies[2] as 'stop' | 'retry' | 'dismiss');
+        return json(route, 200, { items: this.copies, paused: null });
       }
       const reading = /^\/api\/resumes\/([^/]+)\/analysis$/.exec(path);
       if (reading) {
@@ -710,11 +803,17 @@ test.describe('Documents › Resumes', () => {
     await dialog.getByLabel('Resume file').setInputFiles({ name: 'old.doc', mimeType: 'application/msword', buffer: Buffer.from('doc') });
     await dialog.getByRole('button', { name: 'Upload', exact: true }).click();
     await expect(dialog).toContainText('Old Word files (.doc) cannot be read. Save it as .docx or PDF and upload that.');
+    // Nothing was stored, so the choice can still change.
+    await expect(copy).toBeEnabled();
+    await expect(dialog.getByText('This choice applies to every file of this upload.')).toHaveCount(0);
 
     await dialog.getByRole('button', { name: 'Remove the file' }).click();
     await dialog.getByLabel('Resume file').setInputFiles({ name: 'John_Doe_Finance.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
     await copy.click();
     await expect(copy).toBeChecked();
+    // Ticked: the template the copy starts on, Professional Two-Column unless another is picked.
+    await expect(dialog.getByRole('combobox', { name: 'Template for the copy', exact: true })).toHaveText('Professional Two-Column');
+    await expect(dialog).toContainText('The copy starts on this template. You can switch it later in the editor.');
     await dialog.getByRole('button', { name: 'Upload', exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText('Your editable copy is ready')).toBeVisible({ timeout: 15_000 });
@@ -723,6 +822,7 @@ test.describe('Documents › Resumes', () => {
       ['old.doc', 'old', false],
       ['John_Doe_Finance.pdf', 'John_Doe_Finance', true],
     ]);
+    expect(api.uploads[1]).toMatchObject({ templateId: 'default', batch: null });
   });
 
   test('upload several files', async ({ page }) => {
@@ -735,11 +835,19 @@ test.describe('Documents › Resumes', () => {
       .getByLabel('Resume file')
       .setInputFiles([pdf('Alice_Resume.pdf'), pdf('Busy_Resume.pdf'), pdf('Carol_Resume.pdf'), { name: 'old.doc', mimeType: 'application/msword', buffer: Buffer.from('doc') }]);
 
-    // Several files: each is named after its file, and no AI copy is offered.
+    // Several files: each is named after its file, and an AI copy of each is offered, unticked.
     const rows = dialog.getByRole('list', { name: 'Files to upload' }).getByRole('listitem');
     await expect(rows).toHaveCount(4);
     await expect(dialog.getByPlaceholder('Ex. John_Doe_Finance')).toHaveCount(0);
-    await expect(dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' })).toHaveCount(0);
+    const copy = dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' });
+    await expect(copy).toBeVisible();
+    await expect(copy).not.toBeChecked();
+    await expect(dialog.getByRole('combobox', { name: 'Template for the copies', exact: true })).toHaveCount(0);
+    await expect(
+      dialog.getByText(
+        'An AI reads each file into a resume you can edit here. The copies are made one at a time after the upload, so they can take a while. The files themselves are kept as uploaded.',
+      ),
+    ).toBeVisible();
     await expect(dialog).toContainText('Each resume is named after its file. You can rename it later.');
     await expect(rows.first()).toContainText('Ready');
 
@@ -760,6 +868,10 @@ test.describe('Documents › Resumes', () => {
     await expect(row('old.doc')).toContainText('Old Word files (.doc) cannot be read.');
     await expect(dialog.getByRole('status').filter({ hasText: 'not uploaded' })).toHaveText('3 uploaded, 1 not uploaded.');
     await expect(dialog.getByRole('button', { name: /^Try again/ })).toHaveCount(0);
+    // Files are uploaded without copies: the rest of this upload goes the same way.
+    await expect(copy).not.toBeChecked();
+    await expect(copy).toBeDisabled();
+    await expect(dialog.getByText('This choice applies to every file of this upload.')).toBeVisible();
     // One toast for the whole upload.
     await expect(page.getByText('3 resumes uploaded')).toBeVisible();
     await expect(page.getByText('1 file was not uploaded.')).toBeVisible();
@@ -767,7 +879,7 @@ test.describe('Documents › Resumes', () => {
     // Two in flight at most; the busy file went again after the wait; no name and no AI copy were asked for.
     expect(api.maxUploadsInFlight).toBe(2);
     expect(api.uploads.filter((upload) => upload.fileName === 'Busy_Resume.pdf')).toHaveLength(2);
-    expect(api.uploads.every((upload) => upload.title === null && !upload.parse)).toBe(true);
+    expect(api.uploads.every((upload) => upload.title === null && !upload.parse && upload.templateId === null && upload.batch === null)).toBe(true);
 
     await dialog.getByRole('button', { name: 'Done' }).click();
     await expect(dialog).toBeHidden();
@@ -775,6 +887,218 @@ test.describe('Documents › Resumes', () => {
     for (const label of ['Alice_Resume', 'Busy_Resume', 'Carol_Resume']) {
       await expect(page.locator('[data-resume-row]').filter({ hasText: label })).toHaveCount(1);
     }
+  });
+
+  test('upload several files with editable copies on the template chosen', async ({ page }) => {
+    const api = await setup(page);
+    await page.goto('/documents?tab=resumes');
+    await page.getByRole('button', { name: 'Upload', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Upload Resume' });
+    const pdf = (name: string) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+    await dialog.getByLabel('Resume file').setInputFiles([pdf('Alice_Resume.pdf'), pdf('Bob_Resume.pdf'), pdf('Carol_Resume.pdf')]);
+
+    // Ticked: the template every copy starts on, Professional Two-Column unless another is picked. On this tab
+    // "Default" means the default resume, so the picker never says it.
+    await dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' }).click();
+    const picker = dialog.getByRole('combobox', { name: 'Template for the copies', exact: true });
+    await expect(picker).toHaveText('Professional Two-Column');
+    await expect(dialog).toContainText('Every copy starts on this template. You can switch any of them later in the editor.');
+    await expect(dialog).not.toContainText('Default');
+    await picker.click();
+    await expect(page.getByRole('option')).toHaveText(['Professional Two-Column', 'Navy Rule', 'Classic Serif', 'ATS Modern Sans']);
+    await page.getByRole('option', { name: 'ATS Modern Sans' }).click();
+    await expect(dialog).toContainText(
+      'ATS Modern Sans prints the classic sections only: projects, languages, awards and sections of your own are kept with the copies but not printed.',
+    );
+    await picker.click();
+    await page.getByRole('option', { name: 'Navy Rule' }).click();
+    await expect(picker).toHaveText('Navy Rule');
+    await expect(dialog).not.toContainText('prints the classic sections only');
+
+    await dialog.getByRole('button', { name: 'Upload 3 files' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('3 resumes uploaded')).toBeVisible();
+    await expect(page.getByText('Follow their editable copies at the top of this page.')).toBeVisible();
+    // Every file asked for its copy on Navy Rule, with the dialog's one batch id.
+    expect(api.uploads).toHaveLength(3);
+    const batch = api.uploads[0]?.batch ?? '';
+    expect(batch).toMatch(/^[0-9a-f]{32}$/);
+    for (const upload of api.uploads) expect(upload).toMatchObject({ parse: true, templateId: 'navy-rule', batch });
+
+    // One notice for the batch at the top of the tab, read again while the copies are made one at a time.
+    const notice = page.locator('[data-copy-batch]');
+    await expect(notice).toHaveCount(1);
+    await expect(notice).toHaveAttribute('data-copy-batch', batch);
+    await expect(notice).toContainText('Making editable copies with AI: 0 of 3 ready.');
+    await expect(notice).toContainText('They are made one at a time, so this can take a while. You can leave this page; they carry on.');
+    // Only the two sentences are announced: the buttons and the details list stay out of the live region.
+    await expect(notice.getByRole('status')).toContainText('Making editable copies with AI:');
+    await expect(notice.getByRole('status').getByRole('button')).toHaveCount(0);
+    await expect(notice.getByRole('button', { name: 'Show details' })).toBeVisible();
+    await expect(notice.getByText('3 editable copies are ready', { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(notice).toContainText('Each one is a new resume you can edit, listed with your resumes. The uploaded files are kept as they are.');
+
+    // Show details: a link to each copy made. Each copy is also a new resume in the list.
+    await notice.getByRole('button', { name: 'Show details' }).click();
+    await expect(notice.getByRole('list', { name: 'Editable copies' }).getByRole('listitem')).toHaveCount(3);
+    await expect(notice.getByRole('status')).toHaveText(/^3 editable copies are ready/);
+    await expect(notice.getByRole('status').getByRole('list')).toHaveCount(0);
+    await expect(notice.getByRole('status').getByRole('button')).toHaveCount(0);
+    expect(api.copies.map((copy) => copy.resumeId).sort()).toEqual(['r-copy-1', 'r-copy-2', 'r-copy-3']);
+    for (const copy of api.copies) {
+      await expect(notice.getByRole('link', { name: `Open the copy of ${copy.label}`, exact: true })).toHaveAttribute('href', `/resumes/${copy.resumeId}`);
+    }
+    await page.getByRole('button', { name: 'List' }).click();
+    for (const copy of api.copies) {
+      await expect(page.locator(`[data-resume-row="${copy.resumeId}"]`)).toContainText(`Copy of ${copy.label}`);
+    }
+
+    // Dismiss: the notice goes, told to the server once; no file's copy was followed as an AI task.
+    await notice.getByRole('button', { name: 'Dismiss' }).click();
+    await expect(notice).toHaveCount(0);
+    expect(api.calledWith('POST', /^\/api\/resumes\/copies\/[0-9a-f]{32}\/dismiss$/)).toHaveLength(1);
+    expect(api.taskPolls).toBe(0);
+  });
+
+  test('the copy choice stays as it was once files are uploaded: Try again and files added later ask for the same copy', async ({ page }) => {
+    const api = await setup(page, { uploadDelayMs: 1500 });
+    await page.goto('/documents?tab=resumes');
+    await page.getByRole('button', { name: 'Upload', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Upload Resume' });
+    const pdf = (name: string) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+    await dialog
+      .getByLabel('Resume file')
+      .setInputFiles([pdf('Alice_Resume.pdf'), pdf('Bob_Resume.pdf'), pdf('Carol_Resume.pdf'), pdf('Dan_Resume.pdf')]);
+    const copy = dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' });
+    await copy.click();
+    const picker = dialog.getByRole('combobox', { name: 'Template for the copies', exact: true });
+    await picker.click();
+    await page.getByRole('option', { name: 'Navy Rule' }).click();
+    await expect(picker).toHaveText('Navy Rule');
+    const kept = dialog.getByText('This choice applies to every file of this upload.');
+    await expect(kept).toHaveCount(0);
+
+    // Stop while the first two are sent: they are stored with their copies, and the other two are not sent.
+    await dialog.getByRole('button', { name: 'Upload 4 files' }).click();
+    await dialog.getByRole('button', { name: 'Stop' }).click();
+    await expect(dialog.getByRole('status').filter({ hasText: 'not uploaded' })).toHaveText('2 uploaded, 2 not uploaded.', { timeout: 15_000 });
+
+    // From now on the box and the template are those of the whole upload.
+    await expect(copy).toBeChecked();
+    await expect(copy).toBeDisabled();
+    await expect(picker).toBeDisabled();
+    await expect(picker).toHaveText('Navy Rule');
+    await expect(kept).toBeVisible();
+
+    // The two not sent and a file added now go with the same copy, template and batch.
+    await dialog.getByLabel('Resume file').setInputFiles([pdf('Erin_Resume.pdf')]);
+    await dialog.getByRole('button', { name: 'Upload 3 files' }).click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    expect(api.uploads.map((upload) => upload.fileName).sort()).toEqual([
+      'Alice_Resume.pdf',
+      'Bob_Resume.pdf',
+      'Carol_Resume.pdf',
+      'Dan_Resume.pdf',
+      'Erin_Resume.pdf',
+    ]);
+    const batch = api.uploads[0]?.batch ?? '';
+    expect(batch).toMatch(/^[0-9a-f]{32}$/);
+    for (const upload of api.uploads) expect(upload).toMatchObject({ parse: true, templateId: 'navy-rule', batch });
+  });
+
+  test('editable copies: Stop the rest, Try again, one that could not be made, and the notice survives a reload', async ({ page }) => {
+    const api = await setup(page, { copyFailOnce: ['Bob_Resume'] });
+    // The first copy stays "being made" until the test lets it finish.
+    api.holdCopies = true;
+    await page.goto('/documents?tab=resumes');
+    await page.getByRole('button', { name: 'Upload', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Upload Resume' });
+    const pdf = (name: string) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+    // Bob's file goes third, so the copy held (the first in line) is never his: the first two files are sent together
+    // and may reach the server in either order.
+    await dialog
+      .getByLabel('Resume file')
+      .setInputFiles([pdf('Alice_Resume.pdf'), pdf('Carol_Resume.pdf'), pdf('Bob_Resume.pdf'), pdf('Dan_Resume.pdf')]);
+    await dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' }).click();
+    await expect(dialog.getByRole('combobox', { name: 'Template for the copies', exact: true })).toHaveText('Professional Two-Column');
+    await dialog.getByRole('button', { name: 'Upload 4 files' }).click();
+    await expect(dialog).toBeHidden();
+
+    // Stop the rest: the three still waiting are stopped; the one being made finishes.
+    const notice = page.locator('[data-copy-batch]');
+    await expect(notice).toContainText('Making editable copies with AI: 0 of 4 ready.');
+    // The buttons are outside the live region, which holds the two sentences only.
+    await expect(notice.getByRole('status')).toContainText('Making editable copies with AI: 0 of 4 ready.');
+    await expect(notice.getByRole('status').getByRole('button')).toHaveCount(0);
+    await notice.getByRole('button', { name: 'Stop the rest' }).click();
+    await expect(notice).toContainText('Making editable copies with AI: 0 of 4 ready. 3 stopped.');
+    await expect(notice).toContainText('The copy being made now will finish; the rest were stopped.');
+    await expect(notice.getByRole('button', { name: 'Stop the rest' })).toHaveCount(0);
+    api.holdCopies = false;
+    await expect(notice.getByText('1 of 4 editable copies are ready', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(notice).toContainText('3 were stopped before they were made. The uploaded files are kept as they are.');
+    // Ended with copies not made: said at once, without its buttons.
+    await expect(notice.getByRole('alert')).toContainText('1 of 4 editable copies are ready');
+    await expect(notice.getByRole('alert').getByRole('button')).toHaveCount(0);
+
+    // Try again puts them back in line. The server keeps the notice, so it is back after a reload.
+    await notice.getByRole('button', { name: 'Try again (3)' }).click();
+    await expect(notice).toContainText('Making editable copies with AI: 1 of 4 ready.');
+    await page.reload();
+    await expect(notice).toContainText(/Making editable copies with AI: \d of 4 ready\./);
+
+    // Bob's copy fails the first time; the other two are made.
+    await expect(notice.getByText('3 of 4 editable copies are ready', { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(notice).toContainText(`1 could not be made: ${COPY_FAILED}`);
+    await notice.getByRole('button', { name: 'Show details' }).click();
+    const bob = notice.locator('[data-copy-row="Bob_Resume"]');
+    await expect(bob).toHaveAttribute('data-copy-state', 'failed');
+    await expect(bob).toContainText(COPY_FAILED);
+    // The details list is not part of the alert, so showing it does not read the alert out again.
+    await expect(notice.getByRole('alert')).toContainText('3 of 4 editable copies are ready');
+    await expect(notice.getByRole('alert').getByRole('list')).toHaveCount(0);
+
+    // Try again (1): that one is made too.
+    await notice.getByRole('button', { name: 'Try again (1)' }).click();
+    await expect(notice.getByText('4 editable copies are ready', { exact: true })).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('a focused "Hide details" stays itself when the copies end: it never turns into "Try again"', async ({ page }) => {
+    const api = await setup(page, { copyFailOnce: ['Bob_Resume'] });
+    // The first copy stays "being made" until the test lets it finish.
+    api.holdCopies = true;
+    await page.goto('/documents?tab=resumes');
+    await page.getByRole('button', { name: 'Upload', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Upload Resume' });
+    const pdf = (name: string) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+    // Either file may be first in line: Bob's copy fails once either way, so the batch ends 1 of 2, with Try again (1).
+    await dialog.getByLabel('Resume file').setInputFiles([pdf('Alice_Resume.pdf'), pdf('Bob_Resume.pdf')]);
+    await dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' }).click();
+    await expect(dialog.getByRole('combobox', { name: 'Template for the copies', exact: true })).toHaveText('Professional Two-Column');
+    await dialog.getByRole('button', { name: 'Upload 2 files' }).click();
+    await expect(dialog).toBeHidden();
+
+    // One copy being made, one waiting. A keyboard user opens the details.
+    const notice = page.locator('[data-copy-batch]');
+    await expect(notice.getByRole('status')).toContainText('Making editable copies with AI: 0 of 2 ready.');
+    await expect(notice.getByRole('button')).toHaveText(['Stop the rest', 'Show details']);
+    await notice.getByRole('button', { name: 'Show details' }).focus();
+    await page.keyboard.press('Enter');
+    const hide = notice.getByRole('button', { name: 'Hide details' });
+    await expect(hide).toBeFocused();
+
+    // The copies end on their own, and the box becomes the finished notice. The buttons are keyed, so the focused one
+    // stays Hide details: React never hands it to Try again (1).
+    api.holdCopies = false;
+    await expect(notice.getByRole('alert')).toContainText('1 of 2 editable copies are ready', { timeout: 15_000 });
+    await expect(notice.getByRole('button')).toHaveText(['Try again (1)', 'Hide details', 'Dismiss']);
+    await expect(hide).toBeFocused();
+
+    // Enter again only folds the details away: nothing is tried again.
+    await page.keyboard.press('Enter');
+    await expect(notice.getByRole('button', { name: 'Show details' })).toBeFocused();
+    await expect(notice.getByRole('list', { name: 'Editable copies' })).toHaveCount(0);
+    expect(api.calledWith('POST', /^\/api\/resumes\/copies\/[0-9a-f]{32}\/retry$/)).toHaveLength(0);
   });
 
   test("an upload's skills", async ({ page }) => {
@@ -830,6 +1154,8 @@ test.describe('Documents › Resumes', () => {
     const dialog = page.getByRole('dialog', { name: 'Upload Resume' });
     await dialog.getByLabel('Resume file').setInputFiles({ name: 'Jane_Doe.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
     await dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' }).click();
+    // The template list is in: the copy is asked for on Professional Two-Column.
+    await expect(dialog.getByRole('combobox', { name: 'Template for the copy', exact: true })).toHaveText('Professional Two-Column');
     await dialog.getByRole('button', { name: 'Upload', exact: true }).click();
 
     // The upload is kept and listed; why the copy could not start stays on the tab until dismissed.
@@ -839,7 +1165,7 @@ test.describe('Documents › Resumes', () => {
     await expect(notice).toContainText('Your upload is kept as it is.');
     await page.getByRole('button', { name: 'List' }).click();
     await expect(page.locator('[data-resume-row]').filter({ hasText: 'Jane_Doe' })).toHaveCount(1);
-    expect(api.uploads).toEqual([{ fileName: 'Jane_Doe.pdf', title: 'Jane_Doe', parse: true }]);
+    expect(api.uploads).toEqual([{ fileName: 'Jane_Doe.pdf', title: 'Jane_Doe', parse: true, templateId: 'default', batch: null }]);
     await notice.getByRole('button', { name: 'Dismiss' }).click();
     await expect(notice).toHaveCount(0);
   });
@@ -862,3 +1188,47 @@ test.describe('Documents › Resumes', () => {
     await expect(page.locator('[data-resume-card="r-upload"] a[href], [data-resume-card="r-upload"] button').first()).toBeFocused();
   });
 });
+
+// A 1366x768 laptop leaves Chrome about 657 px; 1920x1080 at 150 % leaves about 610.
+for (const viewport of [
+  { width: 1366, height: 657 },
+  { width: 1280, height: 610 },
+]) {
+  test.describe(`the upload dialog at ${viewport.width}x${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test('the fields scroll, the buttons stay on the card, and the file list keeps its rows in view', async ({ page }) => {
+      await setup(page);
+      await page.goto('/documents?tab=resumes');
+      await page.getByRole('button', { name: 'Upload', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Upload Resume' });
+      const pdf = (name: string) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+      /** The button is on the white card, and the card is in the window. */
+      const onCard = async (name: string) => {
+        const card = (await dialog.boundingBox())!;
+        const button = (await dialog.getByRole('button', { name, exact: true }).boundingBox())!;
+        expect(button.y, name).toBeGreaterThanOrEqual(card.y);
+        expect(button.y + button.height, name).toBeLessThanOrEqual(card.y + card.height);
+        expect(card.y + card.height).toBeLessThanOrEqual(viewport.height);
+      };
+
+      // One file with its copy on an ATS template: the tallest the one-file dialog gets, with the template's note.
+      await dialog.getByLabel('Resume file').setInputFiles(pdf('Jane_Doe.pdf'));
+      await dialog.getByRole('checkbox', { name: 'Make an editable copy with AI' }).click();
+      await dialog.getByRole('combobox', { name: 'Template for the copy', exact: true }).click();
+      await page.getByRole('option', { name: 'ATS Modern Sans' }).click();
+      await expect(dialog).toContainText('ATS Modern Sans prints the classic sections only');
+      await onCard('Upload');
+      await onCard('Cancel');
+
+      // Six files: the list keeps a row and a half in view at least, and the fields scroll instead.
+      await dialog.getByLabel('Resume file').setInputFiles(['Alice', 'Bob', 'Carol', 'Dan', 'Erin'].map((name) => pdf(`${name}_Resume.pdf`)));
+      await expect(dialog.getByRole('list', { name: 'Files to upload' }).getByRole('listitem')).toHaveCount(6);
+      await expect(dialog).toContainText('kept with the copies but not printed');
+      const list = (await dialog.getByRole('list', { name: 'Files to upload' }).boundingBox())!;
+      expect(list.height).toBeGreaterThanOrEqual(90);
+      await onCard('Upload 6 files');
+      await onCard('Cancel');
+    });
+  });
+}

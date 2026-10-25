@@ -1,6 +1,9 @@
 import { SetDefaultResumeBodySchema, type Account } from '@tailorit/shared/auth';
 import {
+  RESUME_COPY_PAUSES,
+  RESUME_COPY_STATES,
   RESUME_FILE_KINDS,
+  ResumeCopiesResponseSchema,
   ResumeDetailSchema,
   ResumePreviewResponseSchema,
   ResumeSummarySchema,
@@ -11,6 +14,10 @@ import {
   type BulletsRequest,
   type PageBox,
   type ResumeAnalysisBrief,
+  type ResumeCopiesPause,
+  type ResumeCopiesResponse,
+  type ResumeCopy,
+  type ResumeCopyState,
   type ResumeDocument,
   type ResumeFileKind,
   type ResumeSummary,
@@ -34,6 +41,8 @@ export const resumeKeys = {
   detail: (id: string) => ['resumes', 'detail', id] as const,
   /** What TailorIT read from one resume (under `all`, so `invalidateResumes` reads it again). */
   analysis: (id: string) => ['resumes', 'analysis', id] as const,
+  /** The editable copies of several uploads (under `all`, so `invalidateResumes` reads it again). */
+  copies: () => ['resumes', 'copies'] as const,
   templates: () => ['resume-templates'] as const,
   skills: (type: SkillType) => ['skills', type] as const,
 };
@@ -213,6 +222,11 @@ export function readTemplateList(raw: unknown): TemplateInfo[] {
     .filter((item): item is TemplateInfo => item !== null);
 }
 
+/** A template that prints the classic sections only (the ATS ones): projects and the like are kept but not printed. */
+export function printsClassicOnly(template: Pick<TemplateInfo, 'printsSections'>): boolean {
+  return template.printsSections.length > 0 && !template.printsSections.includes('projects');
+}
+
 /** POST /api/resumes/preview's answer. */
 export interface PreviewAnswer {
   html: string;
@@ -282,6 +296,44 @@ export function readImportResult(result: unknown): string | null {
   return strOrNull(rec(result).resumeId);
 }
 
+function leniCopy(raw: unknown): ResumeCopy | null {
+  const r = rec(raw);
+  const id = str(r.id);
+  const batchId = str(r.batchId);
+  if (!id || !batchId || !(RESUME_COPY_STATES as readonly unknown[]).includes(r.state)) return null;
+  return {
+    id,
+    batchId,
+    label: str(r.label) || 'Uploaded resume',
+    state: r.state as ResumeCopyState,
+    resumeId: strOrNull(r.resumeId),
+    error: strOrNull(r.error),
+    retryable: bool(r.retryable),
+  };
+}
+
+function leniPause(value: unknown): ResumeCopiesPause | null {
+  const r = rec(value);
+  if (!(RESUME_COPY_PAUSES as readonly unknown[]).includes(r.reason)) return null;
+  return { reason: r.reason as ResumeCopiesPause['reason'], until: strOrNull(r.until) };
+}
+
+/**
+ * GET /api/resumes/copies (and the answer of Stop the rest, Try again and Dismiss): the editable copies of several
+ * uploads, and why those in line wait. Copies that cannot be read are skipped; a pause for an unknown reason is none.
+ */
+export function readResumeCopies(raw: unknown): ResumeCopiesResponse {
+  const parsed = ResumeCopiesResponseSchema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  noteMismatch('GET /api/resumes/copies', parsed.error.issues.slice(0, 5));
+  const r = rec(raw);
+  const items = Array.isArray(r.items) ? (r.items as unknown[]) : [];
+  return {
+    items: items.map(leniCopy).filter((item): item is ResumeCopy => item !== null),
+    paused: leniPause(r.paused),
+  };
+}
+
 // ------------------------------------------------------------------------------------------------- the calls
 
 const enc = encodeURIComponent;
@@ -349,13 +401,14 @@ export async function setDefaultResume(resumeId: string | null): Promise<Account
 }
 
 /**
- * POST /api/resumes/upload (multipart `file`, optional `title`). `parse` also starts the AI import (an editable copy),
- * made on `templateId` and `layout` when they are given. The upload is kept even when that copy cannot start:
- * `copyError` then says why.
+ * POST /api/resumes/upload (multipart `file`, optional `title`). `parse` also asks for the AI import (an editable
+ * copy), made on `templateId` and `layout` when they are given. Alone it starts at once (`taskId`); with `batch` (the
+ * Upload dialog's id for its runs of several files) it waits in the server's copy line, `taskId` is null and GET
+ * /api/resumes/copies follows it. The upload is kept even when that copy cannot start: `copyError` then says why.
  */
 export async function uploadResume(
   file: File,
-  options: { title?: string; parse?: boolean; templateId?: string; layout?: TechnicalSkillsLayout } = {},
+  options: { title?: string; parse?: boolean; templateId?: string; layout?: TechnicalSkillsLayout; batch?: string } = {},
 ): Promise<{ resume: ResumeSummary | null; taskId: string | null; copyError: string | null }> {
   const form = new FormData();
   form.append('file', file, file.name);
@@ -364,6 +417,7 @@ export async function uploadResume(
     parse: options.parse ? 1 : undefined,
     templateId: options.parse && options.templateId ? options.templateId : undefined,
     layout: options.parse && options.layout ? options.layout : undefined,
+    batch: options.parse && options.batch ? options.batch : undefined,
   };
   const answer = rec(await api.post('/api/resumes/upload', form, { query }));
   return {
@@ -385,6 +439,16 @@ export async function importResumeJson(data: unknown, fileName: string): Promise
 export async function startEditableCopy(id: string): Promise<string> {
   const path = `/api/resumes/${enc(id)}/parse`;
   return readTaskId(await api.post(path, {}), path);
+}
+
+/** GET /api/resumes/copies: the editable copies of several uploads, one batch per Upload dialog. */
+export async function fetchResumeCopies(signal?: AbortSignal): Promise<ResumeCopiesResponse> {
+  return readResumeCopies(await api.get('/api/resumes/copies', { signal }));
+}
+
+/** Stop the rest, Try again or Dismiss for one batch of copies → the copies as they now stand. */
+export async function changeResumeCopies(batchId: string, action: 'stop' | 'retry' | 'dismiss'): Promise<ResumeCopiesResponse> {
+  return readResumeCopies(await api.post(`/api/resumes/copies/${enc(batchId)}/${action}`, {}));
 }
 
 export interface PreviewBody {

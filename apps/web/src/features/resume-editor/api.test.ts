@@ -1,16 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  changeResumeCopies,
+  fetchResumeCopies,
+  printsClassicOnly,
   readBulkDelete,
   readBulletsResult,
   readCreatedId,
   readImportResult,
   readPreview,
+  readResumeCopies,
   readResumeList,
   readResumeView,
   readTemplateList,
   readThumbnail,
   requestBullets,
+  resumeKeys,
   templatePreviewSrc,
+  uploadResume,
 } from './api';
 
 const summary = {
@@ -129,5 +135,84 @@ describe('requestBullets', () => {
     expect(fetch.mock.calls[1]?.[0]).toBe('/api/ai/resume-bullets');
     await expect(requestBullets(body)).resolves.toBe('t2');
     expect(fetch.mock.calls[2]?.[0]).toBe('/api/ai/resume-bullets');
+  });
+});
+
+describe('editable copies', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const json = (status: number, value: unknown) =>
+    new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
+
+  it('uploadResume asks for a copy, its template and its batch only together', async () => {
+    const fetchMock = vi.fn(async () => json(201, { resume: summary, taskId: null, copyError: null }));
+    vi.stubGlobal('fetch', fetchMock);
+    const file = new File(['%PDF'], 'CV.pdf', { type: 'application/pdf' });
+    const batch = '0123456789abcdef0123456789abcdef';
+    await uploadResume(file, { parse: true, templateId: 'navy-rule', batch });
+    await uploadResume(file, { parse: true, batch });
+    await uploadResume(file, { parse: true, templateId: 'navy-rule' });
+    // No copy asked for: neither its template nor its batch goes.
+    await uploadResume(file, { templateId: 'navy-rule', batch });
+    expect(fetchMock.mock.calls.map((call) => String((call as unknown[])[0]))).toEqual([
+      `/api/resumes/upload?parse=1&templateId=navy-rule&batch=${batch}`,
+      `/api/resumes/upload?parse=1&batch=${batch}`,
+      '/api/resumes/upload?parse=1&templateId=navy-rule',
+      '/api/resumes/upload',
+    ]);
+  });
+
+  it('reads the copies view, skipping items it cannot read', async () => {
+    const view = {
+      items: [{ id: 'c1', batchId: 'b1', label: 'Jane_Doe', state: 'waiting', resumeId: null, error: null, retryable: false }],
+      paused: { reason: 'limit', until: '2026-10-24T15:40:00.000Z' },
+    };
+    expect(readResumeCopies(view)).toEqual(view);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const odd = {
+      items: [
+        { id: 'c2', batchId: 'b1', state: 'ready', resumeId: 'r2' },
+        { id: 'c3', batchId: 'b1', label: 'Lost', state: 'lost' },
+        { batchId: 'b1', label: 'No id', state: 'waiting' },
+        { id: 'c4', label: 'No batch', state: 'waiting' },
+        'not a copy',
+        { id: 'c5', batchId: 'b1', label: 'Bob', state: 'failed', error: 'It broke.', retryable: true },
+      ],
+      paused: { reason: 'sleeping', until: null },
+    };
+    expect(readResumeCopies(odd)).toEqual({
+      items: [
+        { id: 'c2', batchId: 'b1', label: 'Uploaded resume', state: 'ready', resumeId: 'r2', error: null, retryable: false },
+        { id: 'c5', batchId: 'b1', label: 'Bob', state: 'failed', resumeId: null, error: 'It broke.', retryable: true },
+      ],
+      paused: null,
+    });
+    expect(readResumeCopies({ items: [], paused: { reason: 'hold', until: 3 } })).toEqual({ items: [], paused: { reason: 'hold', until: null } });
+    expect(readResumeCopies(null)).toEqual({ items: [], paused: null });
+    // The difference is said once.
+    expect(warn.mock.calls.filter(([message]) => String(message).includes('GET /api/resumes/copies'))).toHaveLength(1);
+
+    // Read under the resumes (so a refresh of the resumes reads it again), and changed at the batch's own address.
+    expect(resumeKeys.copies().slice(0, 1)).toEqual([...resumeKeys.all]);
+    const fetchMock = vi.fn(async () => json(200, view));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchResumeCopies()).resolves.toEqual(view);
+    await expect(changeResumeCopies('b 1', 'retry')).resolves.toEqual(view);
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(calls.map(([url, init]) => [url, init.method, init.body])).toEqual([
+      ['/api/resumes/copies', 'GET', undefined],
+      ['/api/resumes/copies/b%201/retry', 'POST', '{}'],
+    ]);
+  });
+
+  it('printsClassicOnly only for a template that prints no projects', () => {
+    expect(printsClassicOnly({ printsSections: ['summary', 'experience', 'education', 'skills'] })).toBe(true);
+    expect(printsClassicOnly({ printsSections: ['summary', 'experience', 'projects', 'languages'] })).toBe(false);
+    // A template whose sections are not known is not said to leave any out.
+    expect(printsClassicOnly({ printsSections: [] })).toBe(false);
   });
 });

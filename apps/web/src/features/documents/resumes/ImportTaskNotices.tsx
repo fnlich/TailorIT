@@ -21,9 +21,10 @@ export interface ImportTask {
 }
 
 /**
- * The editable copies being made (Upload with "Make an editable copy with AI", or "Make editable copy" on an upload):
- * each is polled until it finishes, then offers to open the new resume (or says why it could not be made, or that it
- * was cancelled). A copy that could not even start says so at once.
+ * The editable copies being made (Upload with "Make an editable copy with AI" for one file, or "Make editable copy" on
+ * an upload): each is polled until it finishes, then offers to open the new resume (or says why it could not be made,
+ * or that it was cancelled). A copy that could not even start says so at once. The copies of several files are
+ * followed by EditableCopiesNotices instead.
  */
 export function ImportTaskNotices({ tasks, onDismiss }: { tasks: readonly ImportTask[]; onDismiss: (key: string) => void }) {
   if (tasks.length === 0) return null;

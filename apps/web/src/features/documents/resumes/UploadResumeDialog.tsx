@@ -2,7 +2,7 @@
 
 import { FileArrowUpIcon } from '@phosphor-icons/react/FileArrowUp';
 import type { ResumeSummary } from '@tailorit/shared/resume';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -13,8 +13,10 @@ import { CheckCircleIcon, ClockIcon, FileTextIcon, WarningCircleIcon, XIcon } fr
 import { Input } from '@/components/ui/Input';
 import { Notice } from '@/components/ui/Notice';
 import { Spinner } from '@/components/ui/Spinner';
-import { fetchResumes, resumeKeys, uploadResume } from '../../resume-editor/api';
+import { fetchResumes, fetchTemplates, resumeKeys, uploadResume } from '../../resume-editor/api';
 import { RESUME_FILE_ACCEPT, UPLOAD_MAX_MB } from '../../resume-editor/files';
+import { copyChoiceFixed, copyTemplateChoice, newCopyBatchId } from './copies';
+import { CopyTemplateField } from './CopyTemplateField';
 import { uploadTitle } from './list';
 import {
   MAX_FILES_PER_UPLOAD,
@@ -38,9 +40,13 @@ function sizeText(bytes: number): string {
 
 /**
  * Simplify's "Upload Resume", for one resume or many (PDF, DOC or DOCX up to 5 MB each; dropped or chosen, up to 50
- * at a time). One file works as before: a name for the documents list, and "Make an editable copy with AI" (unticked
- * unless the person ticks it). Several files are each named after their file and never get an AI copy; they go two at
- * a time with a status per file, and the dialog stays open while they are sent. Uploads are kept exactly as they are.
+ * at a time). One file has a name for the documents list, and its editable copy starts at once. Several files are each
+ * named after their file; they go two at a time with a status per file, the dialog stays open while they are sent,
+ * and their copies wait in the server's line, made one at a time and followed by one notice on the Resumes tab. Either
+ * way "Make an editable copy with AI" is unticked unless the person ticks it, and the copies start on the template
+ * picked under it (Professional Two-Column unless another is picked). Once a file of the upload is on the server, the
+ * box and the template stay as they are: Try again and files added later go with the same choice. On a short screen
+ * the form scrolls between the title and the buttons. Uploads are kept exactly as they are.
  * `onUploaded` hears of each stored upload; `onFinished` of the end of each run (Upload, Try again).
  */
 export function UploadResumeDialog({
@@ -83,14 +89,33 @@ function UploadForm({
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [parse, setParse] = useState(false);
+  // The copies of every run of several files in this dialog (Try again included) share one notice.
+  const [batchId] = useState(newCopyBatchId);
+  const [picked, setPicked] = useState<string | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
   const [leftOut, setLeftOut] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const rowList = useRef<HTMLUListElement>(null);
 
+  const templatesQuery = useQuery({
+    queryKey: resumeKeys.templates(),
+    queryFn: ({ signal }) => fetchTemplates(signal),
+    staleTime: 5 * 60_000,
+  });
+  const templates = templatesQuery.data ?? [];
+  const templateStatus = templatesQuery.isPending ? 'loading' : templates.length > 0 ? 'ready' : 'error';
+  // Null until the list is ready: the copy then starts on the server's standard template.
+  const copyTemplate = templateStatus === 'ready' ? copyTemplateChoice(templates, picked) : null;
+
   const upload = useUploadQueue({
-    send: (file, options) => uploadResume(file, options.mode === 'single' ? { title: options.title, parse: options.parse } : {}),
+    send: (file, options) =>
+      uploadResume(file, {
+        title: options.mode === 'single' ? options.title : undefined,
+        parse: options.copy !== null,
+        templateId: options.copy?.templateId ?? undefined,
+        batch: options.mode === 'multi' ? options.copy?.batchId : undefined,
+      }),
     list: () => fetchResumes(),
     knownIds: () => {
       const items = queryClient.getQueryData<ResumeSummary[]>(resumeKeys.list());
@@ -110,6 +135,8 @@ function UploadForm({
   // Several files, or what is left of a run of several: the list of rows. One file: the dialog as it always was.
   const several = rows.length > 1 || counts.done > 0;
   const only = several ? null : (rows[0] ?? null);
+  // A file of this upload is on the server, or may be: the box and the template stay as they are.
+  const choiceFixed = copyChoiceFixed(queue);
 
   useEffect(() => {
     busyRef.current = running;
@@ -169,7 +196,12 @@ function UploadForm({
       return;
     }
     setPickError(null);
-    upload.start(only ? { mode: 'single', title: uploadTitle(name, only.file.name), parse } : { mode: 'multi' });
+    // What the box and the picker show. They cannot change once a file of this upload is on the server, so Try again
+    // and files added later ask for the same copy (in the dialog's one batch) as the files already uploaded.
+    const copy = parse ? { templateId: copyTemplate } : null;
+    upload.start(
+      only ? { mode: 'single', title: uploadTitle(name, only.file.name), copy } : { mode: 'multi', copy: copy && { ...copy, batchId } },
+    );
   };
 
   const submit = (event: FormEvent) => {
@@ -302,80 +334,109 @@ function UploadForm({
       size="lg"
       showClose={!running}
     >
-      <form onSubmit={submit} className="mt-5 flex min-h-0 flex-col gap-5">
-        {several ? (
-          <p className="text-sm leading-5 text-muted-foreground">Each resume is named after its file. You can rename it later.</p>
-        ) : (
-          <Field label="File name" hint="Shown in your documents list. Leave it empty to use the file's own name." optional>
-            <Input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Ex. John_Doe_Finance"
-              maxLength={120}
-              disabled={running}
-            />
-          </Field>
-        )}
-
-        <div
-          onDragOver={(event) => {
-            event.preventDefault();
-            if (!running) setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-          className={clsx(
-            'flex flex-col items-center justify-center gap-2 rounded-[12px] border-2 border-dashed px-4 text-center transition-colors duration-150',
-            several ? 'py-4' : 'py-7',
-            dragging ? 'border-primary bg-primary-50' : 'border-control-strong bg-surface-low',
+      <form onSubmit={submit} className="mt-4 flex min-h-0 flex-col">
+        {/* On a short screen the fields scroll between the title and the buttons, which stay in view with the notices. */}
+        <div className="-mx-6 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 pt-1">
+          {several ? (
+            <p className="text-sm leading-5 text-muted-foreground">Each resume is named after its file. You can rename it later.</p>
+          ) : (
+            <Field label="File name" hint="Shown in your documents list. Leave it empty to use the file's own name." optional>
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Ex. John_Doe_Finance"
+                maxLength={120}
+                disabled={running}
+              />
+            </Field>
           )}
-        >
-          {zone}
-          <p className="text-[13px] text-muted-foreground">{limits}</p>
-          <input
-            ref={input}
-            type="file"
-            multiple
-            accept={RESUME_FILE_ACCEPT}
-            className="sr-only"
-            tabIndex={-1}
-            aria-label="Resume file"
-            onChange={(event) => {
-              take(event.target.files);
-              event.target.value = '';
+
+          <div
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (!running) setDragging(true);
             }}
-          />
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={clsx(
+              'flex flex-col items-center justify-center gap-2 rounded-[12px] border-2 border-dashed px-4 text-center transition-colors duration-150',
+              several ? 'py-4' : 'py-7',
+              dragging ? 'border-primary bg-primary-50' : 'border-control-strong bg-surface-low',
+            )}
+          >
+            {zone}
+            <p className="text-[13px] text-muted-foreground">{limits}</p>
+            <input
+              ref={input}
+              type="file"
+              multiple
+              accept={RESUME_FILE_ACCEPT}
+              className="sr-only"
+              tabIndex={-1}
+              aria-label="Resume file"
+              onChange={(event) => {
+                take(event.target.files);
+                event.target.value = '';
+              }}
+            />
+          </div>
+
+          {several && (
+            // The list gives up height before the fields scroll, but never below two rows (with the line above them,
+            // one and a half), so how each file is doing stays in view.
+            <div className={clsx('flex flex-col gap-2', rows.length > 1 && 'min-h-[7.75rem]')}>
+              {statusLine && (
+                <p role="status" className="text-[13px] leading-5 font-medium text-foreground">
+                  {statusLine}
+                </p>
+              )}
+              <ul ref={rowList} aria-label="Files to upload" className="-mr-1 flex max-h-[min(18rem,40vh)] flex-col gap-2 overflow-y-auto pr-1">
+                {rows.map((row) => (
+                  <FileRow key={row.key} row={row} now={now} onRemove={() => remove(row)} />
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1">
+            <Checkbox
+              checked={parse}
+              onCheckedChange={(checked) => setParse(checked)}
+              disabled={running || choiceFixed}
+              label="Make an editable copy with AI"
+            />
+            <p className="pl-[28px] text-[13px] leading-5 text-muted-foreground">
+              {several
+                ? 'An AI reads each file into a resume you can edit here. The copies are made one at a time after the upload, so they can take a while. The files themselves are kept as uploaded.'
+                : 'An AI reads the file into a resume you can edit here, on any template. The file itself is kept as uploaded.'}
+            </p>
+            {choiceFixed && (
+              <p className="pl-[28px] text-[13px] leading-5 text-muted-foreground">This choice applies to every file of this upload.</p>
+            )}
+            {parse && (
+              <div className="mt-2 pl-[28px]">
+                <CopyTemplateField
+                  several={several}
+                  templates={templates}
+                  status={templateStatus}
+                  value={copyTemplate}
+                  onChange={setPicked}
+                  disabled={running || choiceFixed}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
-        {several && (
-          <div className="flex min-h-0 flex-col gap-2">
-            {statusLine && (
-              <p role="status" className="text-[13px] leading-5 font-medium text-foreground">
-                {statusLine}
-              </p>
-            )}
-            <ul ref={rowList} aria-label="Files to upload" className="-mr-1 flex max-h-[min(18rem,40vh)] flex-col gap-2 overflow-y-auto pr-1">
-              {rows.map((row) => (
-                <FileRow key={row.key} row={row} now={now} onRemove={() => remove(row)} />
-              ))}
-            </ul>
+        {(leftOut || stopNote || failure) && (
+          <div className="mt-5 flex flex-col gap-5">
+            {leftOut && <Notice tone="warning">{leftOut}</Notice>}
+            {stopNote && <Notice tone="warning">{stopNote}</Notice>}
+            {failure && <Notice tone="error">{failure}</Notice>}
           </div>
         )}
 
-        {!several && (
-          <div className="flex flex-col gap-1">
-            <Checkbox checked={parse} onCheckedChange={(checked) => setParse(checked)} disabled={running} label="Make an editable copy with AI" />
-            <p className="pl-[28px] text-[13px] leading-5 text-muted-foreground">
-              An AI reads the file into a resume you can edit here, on any template. The file itself is kept as uploaded.
-            </p>
-          </div>
-        )}
-
-        {leftOut && <Notice tone="warning">{leftOut}</Notice>}
-        {stopNote && <Notice tone="warning">{stopNote}</Notice>}
-        {failure && <Notice tone="error">{failure}</Notice>}
-
-        <DialogFooter flush className="pt-1">
+        <DialogFooter flush className="mt-5 pt-1">
           {footer}
         </DialogFooter>
       </form>

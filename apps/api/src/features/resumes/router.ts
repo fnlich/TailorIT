@@ -11,6 +11,7 @@ import {
   PatchResumeBodySchema,
   readResumeImport,
   ResumeBulkDeleteBodySchema,
+  ResumeCopyBatchIdSchema,
   ResumeExportQuerySchema,
   ResumeImportJsonBodySchema,
   ResumeListQuerySchema,
@@ -33,6 +34,7 @@ import { contentDisposition, getFileStore, MIME_BY_KIND, withExtension } from '.
 import { AppError, asyncHandler, notFound, validationFailed } from '../../core/http/errors';
 import { parseInput } from '../../core/http/validate';
 import { currentResumeAnalyses, resumeAnalysisBrief, resumeAnalysisView } from './analysis/store';
+import { adoptableCopyTemplate, adoptCopyTask, requestBatchCopy } from './copies/store';
 import { getResumeEngine } from './engine';
 import { exportBuiltResume } from './export';
 import {
@@ -54,8 +56,10 @@ import { readableForImport, readUpload, UNREADABLE_TEXT } from './upload';
 
 // Resumes: CRUD, upload and import, the live preview and thumbnails, downloads, what TailorIT read from each resume
 // (GET /:id/analysis and the list's line), and the two AI tasks (an editable copy of an upload, and Write with AI).
-// Owned by work package R1 (the analysis parts: WP3). Every query is scoped to the signed-in account. An upload, once
-// stored, is kept: nothing here deletes or changes one except the person's own Delete (and Rename of its title).
+// An editable copy of one upload starts here; those of several files uploaded together wait in the copy line
+// (copies/), each one's row written with its upload. Owned by work package R1 (the analysis parts: WP3). Every query
+// is scoped to the signed-in account. An upload, once stored, is kept: nothing here deletes or changes one except the
+// person's own Delete (and Rename of its title).
 
 const UPLOAD_HAS_NO_DOCUMENT =
   'An uploaded resume has no editable content. Make an editable copy of it first, then edit the copy.';
@@ -94,15 +98,25 @@ function rememberThumbnail(key: string, value: Extract<ResumeThumbnail, { kind: 
   }
 }
 
-/** Starts the `resume_import` task for an upload whose text is readable, when the account has room for the copy. */
+/**
+ * Starts the `resume_import` task for an upload whose text is readable, when the account has room for the copy. When
+ * the upload's copy in the copy line waits, failed or was stopped, that row follows this task (no second copy), and
+ * the copy starts on the template picked for its batch unless the request names one.
+ */
 function enqueueImport(deps: AppDeps, userId: string, row: ResumeWithFile, choice: z.infer<typeof ImportChoiceSchema>) {
   if (!readableForImport(row.extracted_text)) throw validationFailed(UNREADABLE_TEXT);
   assertRoomForResumes(deps, userId, 1);
-  return requireAi(deps).enqueue({
-    kind: 'resume_import',
-    userId,
-    input: { sourceResumeId: row.id, ...(choice.templateId ? { templateId: choice.templateId } : {}), ...(choice.layout ? { layout: choice.layout } : {}) },
-    dedupeKey: `resume_import:${row.id}`,
+  const ai = requireAi(deps);
+  return transaction(deps.db, () => {
+    const templateId = choice.templateId || adoptableCopyTemplate(deps, userId, row.id);
+    const accepted = ai.enqueue({
+      kind: 'resume_import',
+      userId,
+      input: { sourceResumeId: row.id, ...(templateId ? { templateId } : {}), ...(choice.layout ? { layout: choice.layout } : {}) },
+      dedupeKey: `resume_import:${row.id}`,
+    });
+    adoptCopyTask(deps, userId, row.id, accepted.taskId);
+    return accepted;
   });
 }
 
@@ -222,6 +236,8 @@ export function createResumesRouter(deps: AppDeps): Router {
       const userId = userOf(req).id;
       const { parse } = parseInput(ResumeUploadQuerySchema, req.query, 'query');
       const choice = ImportChoiceSchema.parse({ templateId: req.query.templateId, layout: req.query.layout });
+      // One of several files of an Upload dialog: its copy waits in the copy line instead of starting now.
+      const batchId = parse ? (ResumeCopyBatchIdSchema.safeParse(req.query.batch).data ?? null) : null;
       const titleField = typeof req.body?.title === 'string' ? req.body.title.trim().slice(0, 120) : '';
       const upload = req.file!;
       const store = getFileStore(deps);
@@ -246,22 +262,32 @@ export function createResumesRouter(deps: AppDeps): Router {
         }
       }
       if (reading.pageCount) store.setPageCount(stored.id, reading.pageCount);
-      let id: string;
+      let saved: { id: string; lined: boolean };
       try {
-        id = insertResume(deps, userId, {
-          kind: 'uploaded',
-          title: titleField || null,
-          fileId: stored.id,
-          extractedText: reading.text,
+        saved = transaction(deps.db, () => {
+          const id = insertResume(deps, userId, {
+            kind: 'uploaded',
+            title: titleField || null,
+            fileId: stored.id,
+            extractedText: reading.text,
+          });
+          // Several files: the copy waits in line, written with its upload, so a stored upload always has it.
+          const lined = batchId ? requestBatchCopy(deps, userId, id, { batchId, templateId: choice.templateId || null }) : false;
+          return { id, lined };
         });
       } catch (error) {
         // Not stored as a resume (the account filled up meanwhile): its file goes too.
         store.remove(stored.id, userId);
         throw error;
       }
+      const { id } = saved;
       let taskId: string | null = null;
       let copyError: string | null = null;
-      if (parse) {
+      if (batchId) {
+        // A copy refused when asked is a failed row of GET /api/resumes/copies; only a row not written is said here.
+        if (saved.lined) deps.services.resumeCopies?.nudge();
+        else copyError = COPY_NOT_STARTED;
+      } else if (parse) {
         try {
           taskId = enqueueImport(deps, userId, requireResume(deps, userId, id), choice).taskId;
         } catch (error) {

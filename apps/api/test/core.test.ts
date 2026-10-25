@@ -109,6 +109,7 @@ describe('migrations', () => {
 const V2_MIGRATIONS = [
   '0002_ai_resume_analysis_kind',
   '0101_resume_analyses',
+  '0102_resume_copy_backlog',
   '0301_application_resume_match',
   '0401_job_analysis_facets',
   '0402_job_ai_attempts',
@@ -307,6 +308,68 @@ describe('v2 migrations', () => {
       status: 'succeeded',
       result: { read: { resumeId: 'r1' } },
     });
+  });
+
+  it('0102_resume_copy_backlog applies after 0001 and on a database already at 0403', () => {
+    const files = readMigrations();
+    const fresh = openMemoryDatabase();
+    const { applied } = migrate(fresh);
+    expect(applied.indexOf('0102_resume_copy_backlog')).toBe(applied.indexOf('0101_resume_analyses') + 1);
+    fresh.close();
+
+    // A database its server migrated to 0403 before this file existed: 0102 alone is applied.
+    const db = openMemoryDatabase();
+    migrate(db, files.filter((file) => file.version !== 102));
+    expect(schemaNames(db, 'table')).not.toContain('resume_copy_backlog');
+    expect(migrate(db, files).applied).toEqual(['0102_resume_copy_backlog']);
+    expect(columnsOf(db, 'resume_copy_backlog')).toEqual([
+      'id',
+      'user_id',
+      'source_resume_id',
+      'batch_id',
+      'label',
+      'template_id',
+      'state',
+      'task_id',
+      'resume_id',
+      'retries',
+      'next_attempt_at',
+      'error_code',
+      'error_message',
+      'created_at',
+      'started_at',
+      'finished_at',
+      'updated_at',
+    ]);
+    expect(schemaNames(db, 'index')).toEqual(
+      expect.arrayContaining(['idx_resume_copy_due', 'idx_resume_copy_user', 'idx_resume_copy_result']),
+    );
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+
+    // One row per upload: deleting the copy made only unlinks it; deleting the upload takes it.
+    addUser(db, 'u1');
+    const [upload, other, third] = [insertResume(db, 'u1', 'Go'), insertResume(db, 'u1', 'Rust'), insertResume(db, 'u1', 'SQL')];
+    db.prepare(
+      "INSERT INTO resumes(id, user_id, kind, data, source_resume_id, created_at, updated_at) VALUES ('copy', 'u1', 'built', '{}', ?, 'x', 'x')",
+    ).run(upload);
+    const row = db.prepare(
+      `INSERT INTO resume_copy_backlog(id, user_id, source_resume_id, batch_id, label, state, resume_id, next_attempt_at,
+         created_at, updated_at)
+       VALUES (?, 'u1', ?, 'batch-0001', 'My resume', ?, ?, 'x', 'x', 'x')`,
+    );
+    row.run('c1', upload, 'ready', 'copy');
+    row.run('c2', other, 'waiting', null);
+    expect(() => row.run('c3', upload, 'waiting', null)).toThrow(/UNIQUE constraint failed: resume_copy_backlog\.source_resume_id/);
+    expect(() => row.run('c4', third, 'queued', null)).toThrow(/CHECK constraint failed/);
+    db.prepare("DELETE FROM resumes WHERE id = 'copy'").run();
+    expect(db.prepare('SELECT id, resume_id FROM resume_copy_backlog ORDER BY id').all()).toEqual([
+      { id: 'c1', resume_id: null },
+      { id: 'c2', resume_id: null },
+    ]);
+    db.prepare('DELETE FROM resumes WHERE id = ?').run(upload);
+    expect(db.prepare('SELECT id FROM resume_copy_backlog').all()).toEqual([{ id: 'c2' }]);
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    db.close();
   });
 
   it('0301 marks earlier links as chosen by the person, and Saved job rows without a resume as due', () => {

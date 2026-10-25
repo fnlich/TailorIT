@@ -24,6 +24,7 @@ import {
 import { createPollClock } from '../../resume-editor/analysis';
 import { NEW_RESUME_HREF, bulkDeleteResumes, fetchResumes, fetchTemplates, resumeEditorHref, resumeKeys } from '../../resume-editor/api';
 import { dropResumesFromList, invalidateResumes, putResumeInList } from '../../resume-editor/cache';
+import { EditableCopiesNotices } from './EditableCopiesNotices';
 import { ImportTaskNotices, type ImportTask } from './ImportTaskNotices';
 import {
   RESUME_SOURCE_LABEL,
@@ -36,13 +37,12 @@ import {
   emptySourceCopy,
   fileBadge,
   filterBySource,
-  notUploadedText,
   profileLine,
   readingsPending,
   searchFieldsOf,
   sortResumes,
   templateNameOf,
-  uploadedTitle,
+  uploadsFinishedToast,
 } from './list';
 import { ResumeThumb } from './ResumeThumb';
 import { UploadResumeDialog, type RunOutcome, type UploadedResume } from './UploadResumeDialog';
@@ -93,8 +93,9 @@ export function ResumesTab() {
     onTaskStarted: ({ taskId, label }) => addTask({ key: taskId, taskId, label }),
   });
 
-  // Each stored upload shows at once; an editable copy that started (one file) is followed, one that could not start
-  // is said, and the upload stays either way.
+  // Each stored upload shows at once. One file's editable copy that started is followed here, one that could not start
+  // is said, and the upload stays either way; the copies of several files carry no task (EditableCopiesNotices
+  // follows them).
   const onUploaded = (result: UploadedResume) => {
     putResumeInList(queryClient, result.summary);
     if (result.taskId) addTask({ key: result.taskId, taskId: result.taskId, label: result.label });
@@ -103,18 +104,13 @@ export function ResumesTab() {
     }
   };
 
-  // The end of an upload run: the list is read once (with what TailorIT read from each) and one toast sums it up.
+  // The end of an upload run: the list is read once (with what TailorIT read from each), and the copies of several
+  // files with it; one toast sums it up.
   const onUploadsFinished = (outcome: RunOutcome) => {
     readingPoll.reset();
     void invalidateResumes(queryClient);
-    const [first] = outcome.uploaded;
-    if (!first) return;
-    if (outcome.mode === 'single') {
-      toast.success('Resume uploaded', first.taskId ? 'An editable copy is being made from it.' : first.label);
-      return;
-    }
-    const count = outcome.uploaded.length;
-    toast.success(uploadedTitle(count), outcome.notUploaded > 0 ? notUploadedText(outcome.notUploaded) : 'Their skills show on each resume.');
+    const summary = uploadsFinishedToast(outcome);
+    if (summary) toast.success(summary.title, summary.description);
   };
 
   const uploadButton = (
@@ -154,6 +150,7 @@ export function ResumesTab() {
 
   return (
     <>
+      <EditableCopiesNotices />
       <ImportTaskNotices tasks={tasks} onDismiss={(key) => setTasks((current) => current.filter((task) => task.key !== key))} />
       <DocumentCollection<ResumeSummary>
         kind="resume"

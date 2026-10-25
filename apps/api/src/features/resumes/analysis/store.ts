@@ -16,7 +16,7 @@ import {
   type SkillLists,
 } from '@tailorit/shared';
 import type { AppDeps } from '../../../core/context';
-import type { Db } from '../../../core/db/connection';
+import { savepoint, type Db } from '../../../core/db/connection';
 import { AppError } from '../../../core/http/errors';
 import { getSkillLibrary } from '../../../core/skills-vocabulary';
 import { storedDocumentOf } from '../evidence';
@@ -179,15 +179,6 @@ function rowValues(input: {
   };
 }
 
-/**
- * Runs `fn` in a savepoint (better-sqlite3 nests transactions that way; a fresh IMMEDIATE transaction when none is
- * open), so a write that fails here leaves the caller's transaction as it was.
- */
-function inSavepoint<T>(db: Db, fn: () => T): T {
-  const run = db.transaction(fn);
-  return db.inTransaction ? run() : run.immediate();
-}
-
 // ------------------------------------------------------------------------------------------- failed readings
 
 const FAILED = new WeakMap<Db, Map<string, number>>();
@@ -264,7 +255,7 @@ export function refreshResumeAnalysis(
     promptHash: null,
     createdAt: deps.now().toISOString(),
   });
-  inSavepoint(deps.db, () => {
+  savepoint(deps.db, () => {
     deps.db.prepare(`INSERT INTO resume_analyses(${COLUMNS}) VALUES (${VALUES}) ${ON_CONFLICT}`).run(values);
   });
   return { changed: true, contentHash };
@@ -347,7 +338,7 @@ function keepBacklogRow(
         ? (existing.last_error ?? SKIP_NOT_ASKED)
         : null;
   const now = deps.now().toISOString();
-  inSavepoint(db, () => {
+  savepoint(db, () => {
     db.prepare(
       `INSERT INTO resume_analysis_backlog(resume_id, user_id, content_hash, version, state, attempts, task_id,
          next_attempt_at, started_at, last_error, created_at, updated_at)
@@ -378,7 +369,7 @@ export interface AiReadingInput {
 export function storeAiResumeAnalysis(deps: AppDeps, input: AiReadingInput): boolean {
   const now = deps.now().toISOString();
   const values = rowValues({ ...input, source: 'ai', createdAt: now });
-  return inSavepoint(deps.db, () => {
+  return savepoint(deps.db, () => {
     const stored =
       deps.db
         .prepare(

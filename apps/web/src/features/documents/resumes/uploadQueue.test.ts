@@ -1,6 +1,7 @@
 import type { ResumeSummary } from '@tailorit/shared/resume';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, UNREACHABLE_MESSAGE } from '../../../lib/api';
+import { copyChoiceFixed } from './copies';
 import {
   MAX_BUSY_TRIES,
   NOT_A_RESUME_FILE,
@@ -330,9 +331,9 @@ describe('the runner', () => {
   it('sends two at a time and reports the end of the run once, with what was stored', async () => {
     const test = harness();
     test.runner.add(['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf'].map(pdf));
-    test.runner.start({ mode: 'multi' });
+    test.runner.start({ mode: 'multi', copy: null });
     expect(test.sends.map((item) => item.name)).toEqual(['a.pdf', 'b.pdf']);
-    expect(test.sends[0]!.options).toEqual({ mode: 'multi' });
+    expect(test.sends[0]!.options).toEqual({ mode: 'multi', copy: null });
     test.answer('b.pdf', test.stored('b.pdf', 'rb'));
     await flush();
     expect(test.sends.map((item) => item.name)).toEqual(['a.pdf', 'b.pdf', 'c.pdf']);
@@ -345,7 +346,7 @@ describe('the runner', () => {
     expect(test.mostInFlight()).toBe(2);
     expect(test.uploaded.map((item) => item.id)).toEqual(['rb', 'ra', 'rc', 'rd']);
     expect(test.ends).toHaveLength(1);
-    expect(test.ends[0]).toMatchObject({ mode: 'multi', notUploaded: 0, allDone: true });
+    expect(test.ends[0]).toMatchObject({ mode: 'multi', notUploaded: 0, allDone: true, copies: false });
     expect(test.ends[0]!.uploaded).toHaveLength(4);
     expect(test.runner.getSnapshot().queue.phase).toBe('finished');
   });
@@ -353,19 +354,43 @@ describe('the runner', () => {
   it('passes one file\'s name and copy choice, and says why a copy could not start', async () => {
     const test = harness();
     test.runner.add([pdf('Jane.pdf')]);
-    test.runner.start({ mode: 'single', title: 'Jane Finance', parse: true });
-    expect(test.sends[0]!.options).toEqual({ mode: 'single', title: 'Jane Finance', parse: true });
+    test.runner.start({ mode: 'single', title: 'Jane Finance', copy: { templateId: 'navy-rule' } });
+    expect(test.sends[0]!.options).toEqual({ mode: 'single', title: 'Jane Finance', copy: { templateId: 'navy-rule' } });
     test.answer('Jane.pdf', { resume: summary('r1', 'Jane Finance'), taskId: null, copyError: 'The AI is busy.' });
     await flush();
     expect(test.uploaded[0]).toMatchObject({ id: 'r1', label: 'Jane Finance', taskId: null, copyError: 'The AI is busy.' });
-    expect(test.ends[0]).toMatchObject({ mode: 'single', allDone: true });
+    expect(test.ends[0]).toMatchObject({ mode: 'single', allDone: true, copies: true });
+  });
+
+  it('a run of several files with copies sends the same template and batch with every file, Try again included, and says so at its end', async () => {
+    const test = harness();
+    const copy = { templateId: 'navy-rule', batchId: '0123456789abcdef0123456789abcdef' };
+    test.runner.add(['a.pdf', 'b.pdf', 'c.pdf'].map(pdf));
+    test.runner.start({ mode: 'multi', copy });
+    test.answer('a.pdf', test.stored('a.pdf', 'ra'));
+    test.answer('b.pdf', new ApiError({ status: 500, code: 'internal', message: 'Something went wrong.' }));
+    await flush();
+    test.answer('c.pdf', test.stored('c.pdf', 'rc'));
+    await flush();
+    expect(test.ends).toEqual([expect.objectContaining({ mode: 'multi', copies: true, notUploaded: 1, allDone: false })]);
+
+    // Try again in the same dialog: the file that failed goes again with the same template and batch.
+    test.runner.start({ mode: 'multi', copy });
+    await flush();
+    expect(test.sends.map((item) => item.name)).toEqual(['a.pdf', 'b.pdf', 'c.pdf', 'b.pdf']);
+    test.answer('b.pdf', test.stored('b.pdf', 'rb'));
+    await flush();
+    expect(test.sends.map((item) => item.options)).toEqual(Array.from({ length: 4 }, () => ({ mode: 'multi', copy })));
+    expect(test.ends).toHaveLength(2);
+    expect(test.ends[1]).toMatchObject({ mode: 'multi', copies: true, notUploaded: 0, allDone: true });
+    expect(test.ends[1]!.uploaded.map((item) => item.id)).toEqual(['rb']);
   });
 
   it('a busy answer holds the whole queue for the time asked, then it goes on by itself', async () => {
     vi.useFakeTimers({ now: T0 });
     const test = harness();
     test.runner.add(['a.pdf', 'b.pdf', 'c.pdf'].map(pdf));
-    test.runner.start({ mode: 'multi' });
+    test.runner.start({ mode: 'multi', copy: null });
     test.answer('a.pdf', new ApiError({ status: 429, code: 'rate_limited', message: 'Busy.', retryAfterSeconds: 3 }));
     await flush();
     test.answer('b.pdf', test.stored('b.pdf', 'rb'));
@@ -384,10 +409,12 @@ describe('the runner', () => {
     vi.useFakeTimers({ now: T0 });
     const test = harness({ list: [summary('old', 'a'), summary('kept', 'a')] });
     test.runner.add([pdf('a.pdf')]);
-    test.runner.start({ mode: 'multi' });
+    test.runner.start({ mode: 'multi', copy: null });
     test.answer('a.pdf', new ApiError({ status: 0, code: 'internal', message: UNREACHABLE_MESSAGE }));
     await flush();
     expect(test.list).not.toHaveBeenCalled();
+    // The server may hold the file now: the dialog keeps its copy choice, so a kept upload matches what was asked.
+    expect(copyChoiceFixed(test.runner.getSnapshot().queue)).toBe(true);
     await vi.advanceTimersByTimeAsync(10_100);
     // The server had kept it: found in the list (not among the resumes known before), so it is not sent again.
     expect(test.list).toHaveBeenCalledTimes(1);
@@ -400,7 +427,7 @@ describe('the runner', () => {
     vi.useFakeTimers({ now: T0 });
     const test = harness({ list: [summary('old', 'a')] });
     test.runner.add([pdf('a.pdf')]);
-    test.runner.start({ mode: 'multi' });
+    test.runner.start({ mode: 'multi', copy: null });
     test.answer('a.pdf', new ApiError({ status: 503, code: 'internal', message: UNREACHABLE_MESSAGE }));
     await flush();
     await vi.advanceTimersByTimeAsync(10_100);
@@ -414,7 +441,7 @@ describe('the runner', () => {
   it('Stop lets the files in flight finish, sends nothing new, and Try again sends the rest', async () => {
     const test = harness();
     test.runner.add(['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf'].map(pdf));
-    test.runner.start({ mode: 'multi' });
+    test.runner.start({ mode: 'multi', copy: null });
     test.runner.stop();
     test.answer('a.pdf', test.stored('a.pdf', 'ra'));
     test.answer('b.pdf', test.stored('b.pdf', 'rb'));
@@ -423,7 +450,7 @@ describe('the runner', () => {
     expect(test.ends).toEqual([expect.objectContaining({ notUploaded: 2, allDone: false })]);
     expect(test.ends[0]!.uploaded.map((item) => item.id)).toEqual(['ra', 'rb']);
 
-    test.runner.start({ mode: 'multi' });
+    test.runner.start({ mode: 'multi', copy: null });
     expect(test.sends.map((item) => item.name)).toEqual(['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf']);
     test.answer('c.pdf', test.stored('c.pdf', 'rc'));
     test.answer('d.pdf', test.stored('d.pdf', 'rd'));
@@ -437,7 +464,7 @@ describe('the runner', () => {
     const test = harness();
     test.runner.detach();
     test.runner.add([pdf('a.pdf')]);
-    test.runner.start({ mode: 'multi' });
+    test.runner.start({ mode: 'multi', copy: null });
     expect(test.sends).toHaveLength(0);
     test.runner.attach();
     expect(test.sends).toHaveLength(1);

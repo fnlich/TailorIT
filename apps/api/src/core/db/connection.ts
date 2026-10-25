@@ -35,3 +35,12 @@ export function transaction<T>(db: Db, fn: () => T): T {
   if (db.inTransaction) return fn();
   return db.transaction(fn).immediate();
 }
+
+/**
+ * Runs `fn` in a savepoint (better-sqlite3 nests transactions that way; a fresh IMMEDIATE transaction when none is
+ * open), so a write that fails here leaves the caller's transaction as it was.
+ */
+export function savepoint<T>(db: Db, fn: () => T): T {
+  const run = db.transaction(fn);
+  return db.inTransaction ? run() : run.immediate();
+}

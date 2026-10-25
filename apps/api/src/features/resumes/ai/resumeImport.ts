@@ -9,12 +9,15 @@ import {
 import type { AiTaskContext, PromptModule } from '../../../ai/index';
 import type { AppDeps } from '../../../core/context';
 import { AppError } from '../../../core/http/errors';
-import { insertResume } from '../repository';
+import { getResumeEngine } from '../engine';
+import { assertRoomForResumes, insertResume } from '../repository';
 import { MAX_EXTRACTED_TEXT, readableForImport, UNREADABLE_TEXT } from '../upload';
 
 // "Make an editable copy": an uploaded resume's text read by the AI into a new resume document. The rule is
 // free_tailor's, in TailorIT's words: copy, never infer. The new resume is a separate, built resume whose
-// `source_resume_id` is the upload; the upload itself is left as it was.
+// `source_resume_id` is the upload; the upload itself is left as it was. Two rules hold for every copy (asked for
+// alone, or from the copy line): no AI call is spent on a copy the account has no room to keep (the insert checks
+// again), and a template this server does not offer is dropped, so the copy starts on the standard one.
 
 /** A text field; a number (a phone, a year) is read as its digits. */
 const text = z.preprocess((value) => (typeof value === 'number' ? String(value) : value), z.string().nullish());
@@ -150,8 +153,20 @@ export const ImportTaskInputSchema = z.object({
   sourceResumeId: z.string().min(1).max(64),
   templateId: z.string().max(100).optional(),
   layout: z.enum(TECHNICAL_SKILLS_LAYOUTS).optional(),
+  /** A copy the copy line started (copies/backlog.ts counts its copies in flight by it); the copy is made the same. */
+  copyLine: z.literal(true).optional(),
 });
 export type ImportTaskInput = z.infer<typeof ImportTaskInputSchema>;
+
+/**
+ * A request's text quoted for one log line, in printable ASCII only: JSON escapes quotes, backslashes and C0 controls,
+ * and every other character outside printable ASCII is escaped too. Terminals and log tools read DEL, the C1 controls
+ * (NEL, the 8-bit CSI) and the line and paragraph separators as new lines or commands, and a reader that takes the
+ * log for Latin-1, or an 8-bit terminal, reads the same controls in the UTF-8 bytes of a letter (U+00C5 is C3 85).
+ */
+function quotedForLog(text: string): string {
+  return JSON.stringify(text).replace(/[^\x20-\x7e]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
 
 /** The `resume_import` task: reads the upload's stored text, asks the AI, saves a new built resume. */
 export async function runResumeImport(deps: AppDeps, raw: unknown, ctx: AiTaskContext): Promise<ResumeImportTaskResult> {
@@ -164,13 +179,22 @@ export async function runResumeImport(deps: AppDeps, raw: unknown, ctx: AiTaskCo
   if (!upload) throw new AppError('not_found', 'The uploaded resume was deleted before it could be read.');
   const text = (upload.extracted_text ?? '').slice(0, MAX_EXTRACTED_TEXT);
   if (!readableForImport(text)) throw new AppError('validation_failed', UNREADABLE_TEXT);
+  assertRoomForResumes(deps, userId, 1);
+  const templateId = input.templateId ? getResumeEngine(deps).templates.get(input.templateId)?.id : undefined;
+  if (input.templateId && !templateId) {
+    // Quoted and escaped: the id is as the request sent it, and must never start a line of its own in the log.
+    deps.log.info(
+      `[resumes] an editable copy asked for template ${quotedForLog(input.templateId)}, which this server does not ` +
+        'offer; it starts on the standard template',
+    );
+  }
 
   const answer = await ctx.runPrompt(resumeImportPrompt, { text });
   let document = importedDocument(answer);
-  if (input.templateId || input.layout) {
+  if (templateId || input.layout) {
     document = normalizeResumeDocument(
       {
-        ...(input.templateId ? { preferredTemplate: input.templateId } : {}),
+        ...(templateId ? { preferredTemplate: templateId } : {}),
         ...(input.layout ? { resumeSettings: { technicalSkillsLayout: input.layout } } : {}),
       },
       document,

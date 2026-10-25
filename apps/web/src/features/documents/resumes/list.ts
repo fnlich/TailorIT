@@ -184,3 +184,25 @@ export function uploadedTitle(count: number): string {
 export function notUploadedText(count: number): string {
   return `${count} ${count === 1 ? 'file was' : 'files were'} not uploaded.`;
 }
+
+/**
+ * The toast at the end of an upload run; null when nothing was uploaded. One file: "Resume uploaded" and its copy
+ * being made, or its label. Several: "7 resumes uploaded", what was not, and where their editable copies are followed.
+ */
+export function uploadsFinishedToast(outcome: {
+  mode: 'single' | 'multi';
+  uploaded: ReadonlyArray<{ taskId: string | null; label: string }>;
+  notUploaded: number;
+  copies: boolean;
+}): { title: string; description: string } | null {
+  const [first] = outcome.uploaded;
+  if (!first) return null;
+  if (outcome.mode === 'single') {
+    return { title: 'Resume uploaded', description: first.taskId ? 'An editable copy is being made from it.' : first.label };
+  }
+  const count = outcome.uploaded.length;
+  const notUploaded = outcome.notUploaded > 0 ? notUploadedText(outcome.notUploaded) : null;
+  if (!outcome.copies) return { title: uploadedTitle(count), description: notUploaded ?? 'Their skills show on each resume.' };
+  const follow = count === 1 ? 'Follow its editable copy at the top of this page.' : 'Follow their editable copies at the top of this page.';
+  return { title: uploadedTitle(count), description: notUploaded ? `${notUploaded} ${follow}` : follow };
+}

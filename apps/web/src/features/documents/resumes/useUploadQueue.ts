@@ -28,17 +28,32 @@ export interface UploadedResume {
   label: string;
   /** The stored upload as the list shows it. */
   summary: ResumeSummary | null;
-  /** The AI import when "Make an editable copy with AI" was ticked and it started. */
+  /**
+   * The AI import when "Make an editable copy with AI" was ticked for one file and it started. Always null for several
+   * files: their copies wait in the server's copy line, which GET /api/resumes/copies follows.
+   */
   taskId: string | null;
-  /** Why the editable copy asked for could not start; the upload is kept either way. */
+  /**
+   * Why the editable copy asked for could not start; the upload is kept either way. For several files it is set only
+   * when the copy could not be put in line: one refused when asked shows as a failed copy of the line instead.
+   */
   copyError: string | null;
 }
 
+/** The editable copy asked for with every file of a run: the template it starts on (null: the server's standard one). */
+export interface CopyChoice {
+  templateId: string | null;
+}
+
 /**
- * How a run sends its files: one file as before (its name and the editable copy as chosen), or several (each named
- * after its file by the server, never an AI copy).
+ * How a run sends its files: one file (its name, and its editable copy when one is asked for, which starts at once),
+ * or several (each named after its file by the server; their copies, when asked for, carry the dialog's batch id and
+ * wait in the server's copy line). `copy` is null when no copy is asked for. Once a file of the dialog is on the
+ * server, or may be, every later run (Try again, files added later) has the same `copy` (see copyChoiceFixed).
  */
-export type SendOptions = { mode: 'single'; title: string; parse: boolean } | { mode: 'multi' };
+export type SendOptions =
+  | { mode: 'single'; title: string; copy: CopyChoice | null }
+  | { mode: 'multi'; copy: (CopyChoice & { batchId: string }) | null };
 
 /** POST /api/resumes/upload's answer as `uploadResume` reads it. */
 export interface UploadAnswer {
@@ -56,6 +71,8 @@ export interface RunOutcome {
   notUploaded: number;
   /** Every file in the dialog is uploaded. */
   allDone: boolean;
+  /** Editable copies were asked for with the run's files. */
+  copies: boolean;
 }
 
 export interface UploadQueueHandlers {
@@ -100,7 +117,7 @@ export class UploadRunner {
   private view: QueueView = { queue: this.queue, now: 0 };
   private readonly listeners = new Set<() => void>();
   private handlers: UploadQueueHandlers | null = null;
-  private options: SendOptions = { mode: 'multi' };
+  private options: SendOptions = { mode: 'multi', copy: null };
   /** Rows with a request out: a row is never sent twice at once. */
   private readonly inFlight = new Set<string>();
   /** The list's ids when the first run started (undefined until then; null when unknown). */
@@ -248,7 +265,11 @@ export class UploadRunner {
     };
   }
 
-  /** Before sending again a file whose answer never arrived: the upload the server kept anyway, if any. */
+  /**
+   * Before sending again a file whose answer never arrived: the upload the server kept anyway, if any. It went with
+   * the copy choice this run has too (the dialog keeps it once a file may be on the server), so its copy was asked
+   * for, or not, as now.
+   */
   private async findKept(row: UploadRow<File>, handlers: UploadQueueHandlers): Promise<UploadedResume | null> {
     if (!this.known) return null;
     const kept = findKeptUpload(await handlers.list(), this.expectedLabel(row), this.known, this.claimed);
@@ -267,6 +288,7 @@ export class UploadRunner {
       uploaded: this.uploaded,
       notUploaded: counts.total - counts.done,
       allDone: counts.done === counts.total,
+      copies: this.options.copy !== null,
     };
     this.uploaded = [];
     try {

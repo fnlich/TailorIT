@@ -1,14 +1,17 @@
+import { randomUUID } from 'node:crypto';
 import { crc32 } from 'node:zlib';
 import mammoth from 'mammoth';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AiTaskAcceptedSchema,
+  MAX_RESUMES_PER_ACCOUNT,
   ResumeDetailSchema,
   ResumeImportTaskResultSchema,
   ResumeUploadResponseSchema,
 } from '@tailorit/shared';
-import { requireAi } from '../src/ai/index';
+import { requireAi, type RunPrompt } from '../src/ai/index';
 import { getPdfService } from '../src/core/pdf/index';
+import { runResumeImport } from '../src/features/resumes/ai/resumeImport';
 import { getResumeEvidence } from '../src/features/resumes/evidence';
 import { signIn, type TestAgent } from './auth-helpers';
 import { createTestContext, ORIGIN, type TestContext } from './helpers';
@@ -331,5 +334,71 @@ describe('making an editable copy (resume_import)', () => {
     expect(task.status).toBe('failed');
     expect(task.error?.code).toBe('ai_unavailable');
     expect((await agent.get('/api/resumes')).body.items).toHaveLength(1);
+  });
+
+  it('a template the server does not offer is dropped when the copy is made: it starts on Professional Two-Column', async () => {
+    const { agent } = await setup();
+    const res = await upload(agent, minimalPdf([RESUME_LINES]), 'nadia.pdf', '?parse=1&templateId=retired-template');
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const task = await requireAi(ctx!.deps).waitFor(res.body.taskId, 20_000);
+    expect(task.status, JSON.stringify(task.error)).toBe('succeeded');
+    const { resumeId } = ResumeImportTaskResultSchema.parse(task.result);
+    const built = ResumeDetailSchema.parse((await agent.get(`/api/resumes/${resumeId}`)).body);
+    expect(built).toMatchObject({ kind: 'built', templateId: 'default', templateName: 'Professional Two-Column' });
+    expect(built.document?.preferredTemplate).toBe('');
+    const logged = (ctx!.deps.log as unknown as { lines: string[] }).lines;
+    expect(logged).toContain(
+      '[resumes] an editable copy asked for template "retired-template", which this server does not offer; it starts on the standard template',
+    );
+  });
+
+  it('a template id the server does not offer is logged escaped, so it never starts a log line of its own', async () => {
+    const { agent } = await setup();
+    const res = await upload(agent, minimalPdf([RESUME_LINES]), 'nadia.pdf');
+    const forged = 'x"\n[auth] admin@example.com signed in';
+    const accepted = await agent.post(`/api/resumes/${res.body.resume.id}/parse`).set('Origin', ORIGIN).send({ templateId: forged });
+    expect(accepted.status, JSON.stringify(accepted.body)).toBe(202);
+    expect((await requireAi(ctx!.deps).waitFor(accepted.body.taskId, 20_000)).status).toBe('succeeded');
+    const logged = (ctx!.deps.log as unknown as { lines: string[] }).lines;
+    expect(logged.filter((entry) => entry.startsWith('[resumes] an editable copy asked for template '))).toEqual([
+      '[resumes] an editable copy asked for template "x\\"\\n[auth] admin@example.com signed in", which this server does not ' +
+        'offer; it starts on the standard template',
+    ]);
+
+    // What JSON leaves as it is: NEL, the 8-bit CSI, the line and paragraph separators, and every other character outside
+    // printable ASCII, such as a letter whose UTF-8 bytes read as NEL in Latin-1 (U+00C5) or a bidi override (U+202E).
+    const second = await upload(agent, minimalPdf([RESUME_LINES]), 'nadia-2.pdf');
+    const sly = 'y\u0085\u009b2K[api] [auth] signed in\u2028\u2029\u007f\u00c5\u202e';
+    const again = await agent.post(`/api/resumes/${second.body.resume.id}/parse`).set('Origin', ORIGIN).send({ templateId: sly });
+    expect(again.status, JSON.stringify(again.body)).toBe(202);
+    expect((await requireAi(ctx!.deps).waitFor(again.body.taskId, 20_000)).status).toBe('succeeded');
+    const line = logged.filter((entry) => entry.startsWith('[resumes] an editable copy asked for template "y')).at(-1) ?? '';
+    expect(line).toContain('"y\\u0085\\u009b2K[api] [auth] signed in\\u2028\\u2029\\u007f\\u00c5\\u202e"');
+    expect(line).toMatch(/^[\x20-\x7e]+$/);
+  });
+
+  it('the copy stops before the AI call when the account has no room left', async () => {
+    const { agent } = await setup();
+    const uploadId = (await upload(agent, minimalPdf([RESUME_LINES]), 'nadia.pdf')).body.resume.id as string;
+    const db = ctx!.deps.db;
+    const { user_id: userId } = db.prepare('SELECT user_id FROM resumes WHERE id = ?').get(uploadId) as { user_id: string };
+    const insert = db.prepare(
+      "INSERT INTO resumes(id, user_id, kind, title, data, created_at, updated_at) VALUES (?, ?, 'built', ?, '{}', ?, ?)",
+    );
+    const now = ctx!.deps.now().toISOString();
+    db.transaction(() => {
+      for (let index = 1; index < MAX_RESUMES_PER_ACCOUNT; index += 1) insert.run(randomUUID(), userId, `Resume ${index}`, now, now);
+    })();
+    const runPrompt = vi.fn();
+    const run = runResumeImport(
+      ctx!.deps,
+      { sourceResumeId: uploadId },
+      { signal: new AbortController().signal, runPrompt: runPrompt as unknown as RunPrompt, userId, taskId: 'direct' },
+    );
+    await expect(run).rejects.toMatchObject({
+      code: 'conflict',
+      message: `You can keep up to ${MAX_RESUMES_PER_ACCOUNT} resumes. Delete resumes you no longer need, then try again.`,
+    });
+    expect(runPrompt).not.toHaveBeenCalled();
   });
 });

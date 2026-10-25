@@ -245,7 +245,7 @@ TailorIT/
 
 | Tab | Views | Toolbar | Row/card content | Menu |
 |---|---|---|---|---|
-| **Resumes** (free_tailor's views, restyled) | **Thumbnail grid**: `repeat(auto-fill,minmax(13.75rem,1fr))`, 2-up at 640 px or narrower, a dashed "New resume" tile first. **List**: free_tailor columns **Resume (+badges) \| Name on resume \| Template \| Edited \| ⋮**, plus checkboxes for bulk delete | Search ("1 of 3 resumes match."), source filter **All / Created / Uploaded**, **Upload** (PDF/DOC/DOCX ≤5 MB each, up to 50 files at once; for a single file, an optional "Make an editable copy with AI", unticked), view toggle | First-page thumbnail; label (custom title, else free_tailor's label rule); "Edited 6 hours ago · {template}"; badges ★ **Default**, **Uploaded**, **PDF/DOCX**; the profile line TailorIT read ("8 yrs · React, TypeScript, Node.js +9") | Edit (View for uploads), Rename ("Change resume name": Keep it / Change), Duplicate, Set as default, Download PDF, Download Word, Download JSON, Skills and details and Make editable copy (uploads), Delete (styled confirm) |
+| **Resumes** (free_tailor's views, restyled) | **Thumbnail grid**: `repeat(auto-fill,minmax(13.75rem,1fr))`, 2-up at 640 px or narrower, a dashed "New resume" tile first. **List**: free_tailor columns **Resume (+badges) \| Name on resume \| Template \| Edited \| ⋮**, plus checkboxes for bulk delete | Search ("1 of 3 resumes match."), source filter **All / Created / Uploaded**, **Upload** (PDF/DOC/DOCX ≤5 MB each, up to 50 files at once; for one file or several, an optional "Make an editable copy with AI", unticked; once ticked, "Template for the copy/copies", Professional Two-Column unless another is picked), view toggle | First-page thumbnail; label (custom title, else free_tailor's label rule); "Edited 6 hours ago · {template}"; badges ★ **Default**, **Uploaded**, **PDF/DOCX**; the profile line TailorIT read ("8 yrs · React, TypeScript, Node.js +9") | Edit (View for uploads), Rename ("Change resume name": Keep it / Change), Duplicate, Set as default, Download PDF, Download Word, Download JSON, Skills and details and Make editable copy (uploads), Delete (styled confirm) |
 | **Cover Letters** (Simplify style + thumbnails) | **Table** (Simplify): checkbox, Name + badge **Generated/Uploaded**, Created, Last Edited ("-" until a content edit), Actions = ✎ Edit + More ⌄. **Thumbnail grid**: letter first-page cards | "{n} selected" (bulk Delete: "Delete Cover Letters" / "Delete Bulk"), **Upload** (.pdf/.docx → text → editor), Search | — | View (preview dialog), Rename, Download PDF, Download Word, Delete |
 | **Templates** (Simplify, list only) | Table: Name + **System Default** badge + an 80-character text preview, Created, Last Edited, Actions | "{n} selected" (system rows can't be selected), Upload, Search | — | Duplicate ("{name} (Copy)"), Delete (disabled for system templates) |
 
@@ -540,6 +540,7 @@ A filter only appears when the data has values for it.
 - Every AI endpoint returns `202 {taskId}`; the web polls `GET /ai/tasks/:id` via `useAiTask`.
 - The worker runs a priority semaphore: 4 interactive slots and 1 background slot, background only when nothing interactive is waiting.
 - Tasks are de-duplicated by key. Each user may have at most 2 queued/running tasks per kind (409 `ai_busy`). Tasks left running at startup are marked `interrupted`.
+- Editable copies of several uploads at once wait in `resume_copy_backlog`; a worker, the copy line (`features/resumes/copies/backlog.ts`), starts each one's `resume_import` task (interactive, as a copy asked for alone) only while the account has none queued or running, so a copy asked for alone always finds the second place. At most half the slots hold such copies (`AI_CLI_CONCURRENCY / 2`, at least one), the account served least recently first, and only while the background gate is open (see "As built (v2, 2026-10-24)" › Editable copies of several uploads).
 
 **`runPrompt(module, input)`**:
 - The system prompt is the module text plus a JSON-sentinel instruction.
@@ -580,7 +581,7 @@ A filter only appears when the data has values for it.
 | Tracker | `applications` (denormalized `current_status`, `favorite`, `archived_at`, `resume_id`, `cover_letter_id`, `notes_html`, `tracked_on`), `application_status_events` (one per status, `occurred_on`), `application_questions` |
 | AI and system | `ai_tasks`, `app_settings`, `schema_migrations` |
 
-v2 adds `resume_analyses`, `resume_analysis_backlog` and `job_ai_attempts`, three `applications` columns (`resume_origin`, `resume_matched_at`, `resume_match_due`) and three `job_analyses` columns (`soft_skills`, `terms`, `required_years`), and allows the `resume_analysis` task kind, plus the job AI backlog's index `idx_jobs_ai_backlog`: migrations `0002` to `0403`, listed under "As built (v2, 2026-10-24)".
+v2 adds `resume_analyses`, `resume_analysis_backlog`, `resume_copy_backlog` and `job_ai_attempts`, three `applications` columns (`resume_origin`, `resume_matched_at`, `resume_match_due`) and three `job_analyses` columns (`soft_skills`, `terms`, `required_years`), and allows the `resume_analysis` task kind, plus the job AI backlog's index `idx_jobs_ai_backlog`: migrations `0002` to `0403`, listed under "As built (v2, 2026-10-24)".
 
 ## API surface (`/api`; errors `{error:{code,message,fields?,retryAfterSeconds?,requestId}}`; lists `{items,total?,nextCursor?}`)
 
@@ -596,7 +597,7 @@ v2 adds `resume_analyses`, `resume_analysis_backlog` and `job_ai_attempts`, thre
 | AI, files | `GET/DELETE /ai/tasks/:id`<br>`GET /files/:id`, `GET /files/:id/thumbnail` |
 | Admin | `/admin/sources` CRUD + `POST /admin/sources/:id/run`, `GET /admin/runs`<br>`POST /admin/import/jobs/preview`, `POST /admin/import/jobs`<br>`POST /admin/sources/ft-lake/test`<br>`GET/PATCH /admin/reports`<br>`GET /admin/ai/health`, `POST /admin/ai/test`<br>`GET/PATCH /admin/users` |
 
-The endpoints v2 added (resume analysis, resume matches, Save all, the resume ZIP, the Google Sheet import) are listed under "As built (v2, 2026-10-24)".
+The endpoints v2 added (resume analysis, the editable copies of several uploads, resume matches, Save all, the resume ZIP, the Google Sheet import) are listed under "As built (v2, 2026-10-24)".
 
 ## Execution plan (ultracode: one workflow per phase, adversarial review per package)
 
@@ -852,10 +853,12 @@ Everything not listed here was built as planned.
   levels, job types, work arrangements, minimum salary). The preferences' `categories` and `locations` columns exist
   in the API but have no UI.
 - Vitest runs as projects in `vitest.config.ts` (shared, render, api, web) instead of a `vitest.workspace.ts`. No
-  package of the first release needed a migration of its own: its schema is `0001_init.sql` alone. v2 added six,
-  applied in this order: `0002_ai_resume_analysis_kind`, `0101_resume_analyses`, `0301_application_resume_match` (the
-  `resume_match_due` flag and the triggers that keep it current), `0401_job_analysis_facets`, `0402_job_ai_attempts`
-  and `0403_job_ai_backlog_index` (see "As built (v2, 2026-10-24)" › Data).
+  package of the first release needed a migration of its own: its schema is `0001_init.sql` alone. v2 and its
+  follow-ups added seven, which a fresh database applies in this order: `0002_ai_resume_analysis_kind`,
+  `0101_resume_analyses`, `0102_resume_copy_backlog` (the line of editable copies of several uploads),
+  `0301_application_resume_match` (the `resume_match_due` flag and the triggers that keep it current),
+  `0401_job_analysis_facets`, `0402_job_ai_attempts` and `0403_job_ai_backlog_index` (see "As built (v2, 2026-10-24)"
+  › Data).
 - Settings the plan did not list: `LOG_LEVEL`, `AI_ENABLED`, `AI_CLI_FALLBACK_MODEL`, `INGEST_TIMEZONE`,
   `INGEST_HTTP_TIMEOUT_MS`. Next's `/api` proxy timeout is 120 s (`experimental.proxyTimeout`).
 
@@ -952,10 +955,13 @@ details, every new endpoint, and what was built differently from the v2 plan.
 
 **Rules that hold across v2**
 - **Uploaded resumes are never changed.** An upload's bytes, `file_id`, `extracted_text` and `updated_at` stay as
-  stored; what TailorIT reads from it lives beside it (`resume_analyses`); the ZIP copies it byte for byte. Only the
-  person's Delete or Bulk delete removes an upload. An editable copy that cannot start (unreadable text, AI busy or
-  off, no room) keeps the upload and answers 201 with `copyError`. A file the reader refuses (damaged, too large
-  unpacked) is still not kept: no resume exists yet at that point.
+  stored; what TailorIT reads from it lives beside it (`resume_analyses`), and its row in the copy line
+  (`resume_copy_backlog`) only points at it; the ZIP copies it byte for byte. Only the person's Delete or Bulk delete
+  removes an upload. An editable copy that cannot start (unreadable text, AI busy or off, no room) keeps the upload
+  and answers 201 with `copyError`. Several files' copies (`batch`) are never refused for a busy or paused AI: each
+  waits in the copy line, and one that cannot be made when asked (unreadable text, no room, AI off) is a failed row of
+  `GET /resumes/copies`; `copyError` is then set only when the copy could not be put in line. A file the reader
+  refuses (damaged, too large unpacked) is still not kept: no resume exists yet at that point.
 - **Choosing a resume is local.** Saving a job, Save all, opening a job, the picker and the ZIP never call Claude or
   queue AI work; the choice is made from the stored readings.
 - **At most 500 resumes per account** (`MAX_RESUMES_PER_ACCOUNT`, built and uploaded together): one more is refused
@@ -963,8 +969,8 @@ details, every new endpoint, and what was built differently from the v2 plan.
 - **"Keywords"** of a resume or a job are its roles (resumes only, the headline first), certifications and industries
   (INDUSTRIES ids): the screening terms that are neither tools nor traits.
 
-**Data** (each migration depends only on lower numbers; a fresh database applies `0001`, `0002`, `0101`, `0301`,
-`0401`, `0402`, `0403`)
+**Data** (each migration depends only on lower numbers; a fresh database applies `0001`, `0002`, `0101`, `0102`,
+`0301`, `0401`, `0402`, `0403`; one already at `0403` applies `0102` on its next start)
 - `0002_ai_resume_analysis_kind`: rebuilds `ai_tasks` to allow the `resume_analysis` kind (SQLite cannot change a
   CHECK in place). Rows are copied in `rowid` order, those of accounts that no longer exist are dropped, and
   `idx_ai_queue`, `idx_ai_user` and `idx_ai_dedupe` are recreated.
@@ -975,6 +981,15 @@ details, every new endpoint, and what was built differently from the v2 plan.
   `version`, `next_attempt_at`, `last_error`). A reading is current when its version is `RESUME_ANALYSIS_VERSION`
   (which includes a stamp of `skills.json`) and its content hash is that of what it read, never the custom title: a
   rename reads nothing again.
+- `0102_resume_copy_backlog`: `resume_copy_backlog`, the copy line (editable copies asked for with several uploads at
+  once). One row per upload (`source_resume_id` is unique; the row goes when the upload is deleted, while a copy
+  already made stays a resume), written in the upload's own transaction. `batch_id` (the Upload dialog's id: one
+  notice per batch), `label` (the upload's label when the copy was asked for), `template_id`, `state` (`waiting`,
+  `making`, `ready`, `failed` or `stopped`), `task_id`, `resume_id` (the copy made; NULL once that resume is deleted),
+  `retries` (the times a restart or an outage with no AI pause put it back in line; the third fails the copy),
+  `next_attempt_at`, `error_code` (`unreadable` and `gone` cannot be tried again; `no_room`, `ai_off` and `ai` can),
+  `error_message`, and the `created_at`, `started_at`, `finished_at` and `updated_at` times. Indexed by
+  `(state, next_attempt_at)`, `(user_id, created_at)` and `(resume_id)`.
 - `0301_application_resume_match`: `applications.resume_origin` (`auto`: TailorIT's best match; `user`: the person's
   pick, or None; NULL: not chosen yet), `resume_matched_at` and `resume_match_due`. Links made before v2 become
   `user`; Saved applications of a job with no resume are marked due. Partial indexes `idx_app_saved_job`,
@@ -1040,13 +1055,92 @@ details, every new endpoint, and what was built differently from the v2 plan.
   re-upload of the same text in the same account gets the reading copied instead of asking again.
 - Upload dialog: up to 50 files (PDF or Word, 5 MB each), two at a time. The queue pauses while the server is busy
   (429, `Retry-After`) or unreachable, and reads the list again before sending again, so no resume is made twice.
-  Several files are each named after their file and never get an AI copy; one file works as before, with "Make an
-  editable copy with AI" unticked.
+  Several files are each named after their file. "Make an editable copy with AI" (unticked) is offered for one file
+  and for several; once ticked, "Template for the copy" or "Template for the copies" picks the template every copy
+  starts on (Professional Two-Column unless another is picked; the word "Default" is not used, as it means the default
+  resume here).
 - The list and grid show a profile line ("8 yrs · React, TypeScript, Node.js +9"; no new column) and search matches
   main skills. An upload's menu has **Skills and details**: the file page's "What TailorIT read from this resume"
   (experience and its basis, main and soft skills, roles, certifications, industries), with "Reading it with AI…" only
   while its task runs and "Waiting for the AI reading" while it is in line. Polling backs off and stops after 10
   minutes.
+
+**Editable copies of several uploads (the owner's request of 2026-10-24)**
+- The request: "In multiple resume upload feature, 'Make an editable copy with AI' should be available (it is check
+  mode). If it is checked, default template should be selectable." Read as: "check mode" is the existing checkbox,
+  still unticked by default, now shown for several files as well as for one; "default template should be selectable"
+  is a picker shown once the box is ticked, preselected with the default template, Professional Two-Column (id
+  `default`), whose choice applies to every copy of the run. The picker shows for one file too; the choice is not
+  remembered between openings (no per-account default template is added); the word "Default" never appears in it,
+  because on this tab it means the default resume. An upload is still never changed: each copy is a separate built
+  resume, made by `resume_import` from the upload's extracted text, with `source_resume_id` set to the upload.
+- **Two paths, chosen by the server.** A copy asked for alone keeps the direct path, its `taskId` and its notice: the
+  one-file upload, "Make editable copy" (the ⋮ menu and the file page) and "Import your existing resume". The files of
+  a run of several, with the box ticked, carry the dialog's batch id (`batch`: 32 hex characters the browser makes
+  once per opening of the dialog, shared by its runs, Try again included). With `parse` and a valid `batch`, the
+  upload writes the copy's row in its own transaction and answers `taskId` null; a row that cannot be written is
+  logged, and the upload stays, with `copyError`. A client that leaves `batch` out gets the direct path, where a third
+  copy at once is refused (`ai_busy`).
+- **The copy line** (`features/resumes/copies/backlog.ts`) starts each copy as the same `resume_import` task
+  (interactive priority, owned by the uploader, dedupe key `resume_import:<uploadId>`):
+  - One at a time per account: a copy starts only while the account has no `resume_import` task queued or running,
+    so of the account's two places a copy asked for alone always finds one.
+  - At most half the AI slots server-wide (`AI_CLI_CONCURRENCY / 2`, at least one; 2 by default), counted from the
+    tasks the line started that are still queued or running (their input carries `copyLine: true`), so a copy whose
+    upload is deleted while it is made keeps its slot until its task ends. The account served least recently goes
+    first, by its latest `resume_import` task (data Dismiss or deleting an upload cannot remove), then the oldest
+    copy; disabled accounts wait.
+  - Only while the background gate is open (§9: any AI hold, or a usage reading that is not plain "allowed"), so a
+    run of copies never spends the shared seat's last room. It is not background work otherwise: its tasks run at
+    interactive priority rather than on the background slot, no hourly cap applies, and `AI_CLI_BACKGROUND_SLOTS=0`
+    does not stop it.
+  - An AI pause holds a copy until it ends, uncounted. A restart (the task `interrupted`) puts it back in line at
+    once, an outage with no AI pause 5 minutes later. The two count together: the third fails the copy, with "The
+    server restarted while this copy was being made, on its third try. Try again." after a restart, else the AI's own
+    sentence. Any other failure fails it with the task's sentence; a cancelled task leaves it stopped.
+  - A step runs 2 s after `start()`, then every 15 s, and half a second after a copy is put in line, tried again or
+    finished. The line is off while `AI_ENABLED=false` or the server has no AI service: copies asked for while it is
+    off fail at once with the AI-off sentence, those already in line wait, and the view says why. Its timer still settles
+    the copies a previous run left being made: made, or failed with the AI-off sentence, which Try again can retry once
+    AI is on.
+- **Every copy** (`resume_import`, alone or from the line) spends no AI call when the account has no room to keep it
+  (the 500-resumes sentence; the insert checks again). A template this server does not offer is dropped and logged at
+  info level (quoted, with every character outside printable ASCII escaped, so it cannot forge a log line), and the copy starts on Professional Two-Column: an
+  unknown `templateId` never refuses an upload or a copy.
+- **Adoption.** "Make editable copy" on an upload whose copy in the line waits, failed or was stopped makes it at once,
+  as a copy asked for alone, on the template picked for its batch unless the request names one, and the row follows
+  that task (written in the same transaction), so no second copy is made and a later Try again does not repeat it; for one already being made it is the same task (the queue's dedupe
+  key). This is also the way past a usage warning, as the notice says. Such a copy can show in its own notice and in
+  its batch's.
+- **The dialog.** While the template list loads, the picker reads "Loading templates..." and Upload sends no
+  `templateId` (the copy starts on the standard template); when the list cannot be loaded, it reads "Professional
+  Two-Column", with a warning. A template that prints the classic sections only (the ATS ones) gets the editor's
+  note. Once a file of the upload is on the server (or may be, its answer lost), the box and the picker keep their
+  choice for the rest of that dialog, with "This choice applies to every file of this upload.", so Try again, files
+  added later and a kept upload found after a lost answer all match what was asked. A
+  run of several files with copies ends with the toast "{n} resumes uploaded" / "Follow their editable copies at the
+  top of this page.".
+- **The notices** (`EditableCopiesNotices`, at the top of the Resumes tab, above the per-file ones): one per batch,
+  from `GET /resumes/copies`, read when the tab opens, when an upload run ends, and every 3 s while a copy waits or is
+  being made (only while the page is visible), so a notice outlives a reload and stays until Dismiss. While copies
+  wait or are made it is a status box: "Making editable copies with AI: 1 of 4 ready." (then how many could not be
+  made or were stopped), why they wait and until when ("They go on at about 3:40 PM.", "tomorrow at about ...",
+  "Thursday at about ..." within the week, else the date), Stop the rest (the copy being
+  made finishes) and Show details. Then it says how the batch ended ("4 editable copies are ready", "3 of 4 editable
+  copies are ready", "No editable copies were made"), with Try again (n) for the stopped copies and those that failed
+  for a reason that can pass (all but unreadable text and a deleted upload), Show details (each copy's state, with
+  Open for each copy made that still exists) and Dismiss, which removes the batch's rows; the resumes made stay. When
+  a copy is made (a ready copy not seen before, told by id), the resume list is read again, so it is listed at once.
+  Only the sentences are a live region; the buttons and the details list sit outside it, so a poll never reads the
+  whole list again.
+- The view's `paused` is null while nothing holds the line, `off` while the line is off, else `limit` (a usage-limit
+  hold, or a reading of a reached limit or paid overage still in force after its hold), `hold` (another AI hold) or
+  `warning` (an "allowed_warning" reading with no hold), with `until`, when the gate opens again. Try again answers 503 `ai_unavailable` while the line is off ("AI features are turned off on this
+  server.", or "AI is not set up on this server."); an invalid batch id is 400, and another account's batch id changes
+  nothing. Admin › AI does not count these copies; the API log says when they wait and why (`[resume-copies]`).
+- Known limits: an account's copies are made one at a time, so 50 files take about 50 copy-lengths; beside one of
+  them, only one copy asked for alone can run (a second at the same moment gets the `ai_busy` sentence); room for the
+  copies is checked, not reserved.
 
 **Jobs (WP4, WP7, WP8)**
 - Every added job gets the rules' analysis at ingest, now with soft skills, terms and the years its requirements ask
@@ -1150,7 +1244,7 @@ details, every new endpoint, and what was built differently from the v2 plan.
 
 | Group | Endpoints |
 |---|---|
-| Resumes | `GET /resumes/:id/analysis` ("What TailorIT read from this resume")<br>`GET /resumes`: each item gains `analysis`, the profile line's brief<br>`POST /resumes/upload`: answers `copyError` when an editable copy asked for cannot start |
+| Resumes | `GET /resumes/:id/analysis` ("What TailorIT read from this resume")<br>`GET /resumes`: each item gains `analysis`, the profile line's brief<br>`POST /resumes/upload`: answers `copyError` when an editable copy asked for cannot start; `?parse=1&templateId=&batch=` puts several files' copies in the copy line (`taskId` null; `copyError` only when the copy could not be put in line)<br>`GET /resumes/copies` → `{items[{id, batchId, label, state, resumeId, error, retryable}], paused{reason, until}\|null}` (`ResumeCopiesResponseSchema`)<br>`POST /resumes/copies/:batchId/{stop,retry,dismiss}` → the same view (retry answers 503 while AI is off) |
 | Jobs | `GET /jobs/save-all/preview?<list query>` → `{matched, saveable, willSave}`<br>`POST /jobs/save-all?<list query>` `{occurredOn?}` → `{items[{jobId, applicationId, resumeId, created}], alreadyTracked, remaining, pendingMatches, incomplete}`<br>`GET /jobs/:id/match` and `/insights` score a tracked job's linked resume; `/insights` names it (`resumeLabel`, `resumeBasis` `linked` or `default`)<br>The analysis view gains `softSkills`, `terms` and `requiredYears` |
 | Tracker | `GET /applications/:id/resume-matches` (every resume ranked for the application; 30 per account per minute)<br>`POST /applications/:id/resume-match` ("Let TailorIT choose"; 20 per account per minute)<br>`POST /applications/resume-zip` `{ids?, tzOffsetMinutes?}` → 202 `{buildId}`<br>`GET /applications/resume-zip/:buildId` (`building`, `ready` or `failed`; `done` of `total`; counts `{included, skipped, word, leftOut, usedDefault}`; `expiresAt`)<br>`GET /applications/resume-zip/:buildId/file`<br>`POST /applications/bulk` gains `onlySaved` (archive only); the detail gains `resumeOrigin`, `resumeMatchedAt` and `resumeMatchPending` |
 | Admin | `GET /admin/import/sheets/account` (whether a key is set up, and its `client_email`)<br>`POST /admin/import/sheets/preview`<br>`POST /admin/import/sheets/jobs` (201, or 202 for a long run)<br>`GET /admin/ai/background` → `{jobs{mode, waiting, backingOff, gaveUp, perHourCap}, resumes{mode, waiting, queued, failed, perHourCap}, matches{due}, gate{open, reason, retryAt}}` (Background work; `AiBackgroundWorkSchema`) |
