@@ -116,8 +116,8 @@ describe('aliases', () => {
   const aliases = FILE.hard.flatMap((entry) => (entry.aliases ?? []).map((alias) => ({ alias, entry })));
 
   it('there are some, so these tests mean something', () => {
-    expect(FILE.hard).toHaveLength(1453);
-    expect(aliases).toHaveLength(39);
+    expect(FILE.hard).toHaveLength(1441);
+    expect(aliases).toHaveLength(51);
   });
 
   it('are the same keyword as their entry: list them together in TERM_SYNONYMS (packages/shared/src/match/terms.ts)', () => {

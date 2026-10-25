@@ -311,7 +311,7 @@ The normalizer lives in shared, following ft rules:
 - **DOCX**: one simple layout, labelled "Word (simple layout)".
 - **Stage A** uses marker-based section finding and gives exact parity on the 19 built-ins. **Stage B** adds the loop heuristics and gives parity on all 26.
 - **Goldens:** `tools/ft-golden` requires free_tailor's compiled `backend/dist` read-only, with `DB_DIR` forced to `TailorIT\.cache` (asserted). It renders 6 fixtures × 26 templates × layout × switches × order (about 600 cases), compared by markup, pixel diff (≤0.1%) and PDF page count.
-- **Skills:** `skills.json` (1,453 hard skills, with 39 aliases / 1,245 soft; 1,492 hard spellings in all) is loaded in memory and overlaid with per-user `user_skills`. Nothing is written to a shared library.
+- **Skills:** `skills.json` (1,441 hard skills, with 51 aliases / 1,245 soft; 1,492 hard spellings in all) is loaded in memory and overlaid with per-user `user_skills`. Nothing is written to a shared library.
 
 ### 5. Cover letters and templates
 
@@ -996,9 +996,9 @@ details, every new endpoint, and what was built differently from the v2 plan.
   memory, their files under `<DATA_DIR>/resume-zips/`.
 
 **Skill library** (`apps/api/static/skills/skills.json`, tidied after the v2 work packages; its README says how to edit it)
-- **One entry per skill, sorted.** Hard skills went from 1,492 entries to 1,453, each with `skill`, `priority` (1 to 5),
+- **One entry per skill, sorted.** Hard skills went from 1,492 entries to 1,441, each with `skill`, `priority` (1 to 5),
   `category` and, where there are any, `aliases`: the other spellings people write it as (`Kafka` of `Apache Kafka`,
-  `HTML5` of `HTML`, `GCP` of `Google Cloud Platform`). The list is sorted by heading (the order of
+  `HTML5` of `HTML`, `GCP` of `Google Cloud Platform`, `Lambda` of `AWS Lambda`). The list is sorted by heading (the order of
   `HARD_SKILL_CATEGORIES`), priority and name; it was by priority and name. Soft skills went from 1,247 to 1,245:
   `Problem-solving` and `Big-picture thinking` are gone, since the soft scanner reads a hyphen and a space as one and
   `Problem Solving` and `Big Picture Thinking` already stand for both.
@@ -1006,19 +1006,25 @@ details, every new endpoint, and what was built differently from the v2 plan.
   of one skill used to count as a second keyword when a posting wrote both), it is filed under its entry's heading by
   the render gate, and the skill picker still offers all 1,492 spellings (`GET /api/skills` lists an alias right after
   its entry; `POST /api/skills` answers one in its own spelling). Checked against the library before the change: every
-  spelling is still detected with the same label, the 144 recorded and seeded postings give identical keywords and
-  soft skills, and free_tailor's 1,161 golden renders still match.
-- **Merged on purpose** (35 skills): spellings of one name (`ArgoCD`/`Argo CD`, `Solid.js`/`SolidJS`), spellings the
-  synonym table already folded (`Postgres`, `Kafka`, `S3`, `RBAC`...), and a vendor's product with its short name where
-  that name is not an everyday word or another product's (`Amazon SQS`/`SQS`, `AWS CloudFormation`/`CloudFormation`).
-  **Kept apart:** `AWS Lambda`/`Lambda`, `Apache Beam`/`Beam`, `Amazon VPC`/`VPC`, `AWS IAM`/`IAM`, `AWS CDK`/`CDK`,
-  `AWS WAF`/`WAF`, `Amazon Aurora`/`Aurora` (the short name is an everyday word, or also means another vendor's product
-  or a generic idea) and pairs like `REST`/`REST API`, `Express`/`Express.js`.
-- **Six spellings change heading**, because the two spellings of one skill had been filed under different headings and
+  spelling is still detected with the same label, the 144 recorded and seeded postings name the same skills and soft
+  skills (two list `GraphQL` once, where they listed it as `GraphQL` and `GraphQL API`), and free_tailor's 1,161 golden
+  renders still match.
+- **Merged on purpose** (47 skills, 51 aliases): spellings of one name (`ArgoCD`/`Argo CD`, `Solid.js`/`SolidJS`),
+  spellings the synonym table already folded (`Postgres`, `Kafka`, `S3`, `RBAC`...), a vendor's product with its short
+  name (`Amazon SQS`/`SQS`, `AWS CloudFormation`/`CloudFormation`), a technology with its kind of artifact
+  (`REST`/`REST API`, `Android`/`Android SDK`), and, in a second round at the owner's request, short names that are an
+  everyday word or also name another vendor's product (`AWS Lambda`/`Lambda`, `Apache Beam`/`Beam`, `Amazon VPC`/`VPC`,
+  `AWS IAM`/`IAM`, `AWS CDK`/`CDK`, `AWS WAF`/`WAF`, `Amazon Aurora`/`Aurora`, `Express.js`/`Express`). **The cost
+  of that second kind:** a resume that writes only the short name is read as having the skill, so a posting that asks for
+  the long one can be matched too loosely (`beam search`, `express interest`, a Google IAM role).
+  **Kept apart:** a generic name and one vendor's product of that kind (`SQL`/`Azure SQL`, `DevOps`/`Azure DevOps`,
+  `Secrets Manager`/`AWS Secrets Manager`, `API gateway`/`Amazon API Gateway`, `API management`, `Blob Storage`, `Service Bus`,
+  `Secret Manager`), and `Google IAM` from `AWS IAM`.
+- **Seven spellings change heading**, because the two spellings of one skill had been filed under different headings and
   now follow their entry: `HTML5` (Frameworks and Libraries to Languages), `CSS3` (Databases and Storage to Languages),
-  `Argo CD` (to DevOps and CI/CD), `Auto-scaling` (to Cloud and Infrastructure), `GKE` (to DevOps and CI/CD) and `TDD`
-  (Engineering Practices & Methodology to Testing and Quality).
-- `RESUME_SKILLS_STAMP` is 2, so every resume is read again once (rules at once; Claude again for uploads, in the
+  `Argo CD` (to DevOps and CI/CD), `Auto-scaling` and `CDK` (to Cloud and Infrastructure), `GKE` (to DevOps and CI/CD) and
+  `TDD` (Engineering Practices & Methodology to Testing and Quality).
+- `RESUME_SKILLS_STAMP` is 3, so every resume is read again once (rules at once; Claude again for uploads, in the
   background). The file is written with LF line ends, as the repository stores it (its hash in the golden manifest was
   taken from a CRLF copy before).
 

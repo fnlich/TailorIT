@@ -173,6 +173,22 @@ export const TERM_SYNONYMS: ReadonlyArray<readonly string[]> = [
   ['Amazon SNS', 'SNS'],
   ['Apache Avro', 'Avro'],
   ['Apache Flink', 'Flink'],
+  // The same, though the short name is also an everyday word, another vendor's product or a generic idea. A resume that
+  // writes the short name is read as having the skill, so a posting that asks for it may be matched too loosely
+  // ("beam search", "express interest", a Google IAM role):
+  ['AWS Lambda', 'Lambda'],
+  ['Apache Beam', 'Beam'],
+  ['Amazon VPC', 'VPC'],
+  ['AWS IAM', 'IAM'],
+  ['AWS CDK', 'CDK'],
+  ['AWS WAF', 'WAF'],
+  ['Amazon Aurora', 'Aurora'],
+  ['Express.js', 'Express'],
+  // A technology and the same with its kind of artifact after it:
+  ['REST', 'REST API'],
+  ['GraphQL', 'GraphQL API'],
+  ['Android', 'Android SDK'],
+  ['OpenTelemetry', 'OpenTelemetry SDK'],
 ];
 
 function collapse(value: string): string {

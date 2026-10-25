@@ -27,8 +27,12 @@ per-user skills (`user_skills`); nothing is written back to it.
 - Add a skill in its place: heading, then priority, then name. If it is another spelling of a skill that is there,
   make it an alias instead of an entry.
 - **List an alias with its entry in `TERM_SYNONYMS`** (`packages/shared/src/match/terms.ts`) as well: that table is what
-  makes the two one keyword for the matcher. Leave a short name out when it is an everyday word or another product's
-  ("Lambda", "Beam", "VPC", "IAM"): it stays an entry of its own.
+  makes the two one keyword for the matcher.
+- **Make something an alias only if it is the same skill.** A generic name and one vendor's product of that kind stay
+  two entries ("SQL" and "Azure SQL", "DevOps" and "Azure DevOps", "Secrets Manager" and "AWS Secrets Manager"). Folding
+  a short name that is an everyday word or names other vendors' products too ("Beam", "Express", "Lambda", "IAM")
+  works, but a resume that writes only the short name is then read as having the long one, so a posting that asks for
+  the long one can be matched too loosely.
 - `apps/api/test/skills-library.test.ts` checks all of this: the layout, the order, no skill listed twice, and aliases
   that are found and filed under their entry's heading. It says what to fix.
 - Any change to the lists must bump `RESUME_SKILLS_STAMP` (`packages/shared/src/resume/analysis.ts`) and add the new

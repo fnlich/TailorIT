@@ -19,7 +19,7 @@ async function setup(): Promise<{ agent: TestAgent; other: TestAgent }> {
 const add = (agent: TestAgent, body: object) => agent.post('/api/skills').set('Origin', ORIGIN).send(body);
 
 describe('/api/skills', () => {
-  it('lists the library (1,492 hard spellings of 1,453 skills, 1,245 soft skills)', async () => {
+  it('lists the library (1,492 hard spellings of 1,441 skills, 1,245 soft skills)', async () => {
     const { agent } = await setup();
     const hard = SkillsResponseSchema.parse((await agent.get('/api/skills')).body);
     expect(hard.type).toBe('hard');

@@ -113,17 +113,30 @@ describe('synonyms', () => {
       ['Route53', 'Amazon Route 53'],
       ['Avro', 'Apache Avro'],
       ['Flink', 'Apache Flink'],
+      ['Lambda', 'AWS Lambda'],
+      ['Beam', 'Apache Beam'],
+      ['VPC', 'Amazon VPC'],
+      ['IAM', 'AWS IAM'],
+      ['CDK', 'AWS CDK'],
+      ['WAF', 'AWS WAF'],
+      ['Aurora', 'Amazon Aurora'],
+      ['Express', 'Express.js'],
+      ['REST API', 'REST'],
+      ['GraphQL API', 'GraphQL'],
+      ['Android SDK', 'Android'],
+      ['OpenTelemetry SDK', 'OpenTelemetry'],
     ] as const) {
       expect(synonymKey(spelling), `${spelling} and ${entry}`).toBe(synonymKey(entry));
     }
   });
 
-  it('leaves apart short names that are an everyday word or another product', () => {
-    expect(synonymKey('Lambda')).not.toBe(synonymKey('AWS Lambda'));
-    expect(synonymKey('Beam')).not.toBe(synonymKey('Apache Beam'));
-    expect(synonymKey('VPC')).not.toBe(synonymKey('Amazon VPC'));
-    expect(synonymKey('IAM')).not.toBe(synonymKey('AWS IAM'));
-    expect(synonymKey('CDK')).not.toBe(synonymKey('AWS CDK'));
+  it("leaves apart a generic name and a vendor's product that is not it, and one vendor's product from another's", () => {
+    expect(synonymKey('SQL')).not.toBe(synonymKey('Azure SQL'));
+    expect(synonymKey('DevOps')).not.toBe(synonymKey('Azure DevOps'));
+    expect(synonymKey('IAM')).not.toBe(synonymKey('Google IAM'));
+    expect(synonymKey('Secrets Manager')).not.toBe(synonymKey('AWS Secrets Manager'));
+    expect(synonymKey('API gateway')).not.toBe(synonymKey('Amazon API Gateway'));
+    expect(synonymKey('Blob Storage')).not.toBe(synonymKey('Azure Blob Storage'));
   });
 
   it('keeps unrelated terms apart and case-folds long ones', () => {

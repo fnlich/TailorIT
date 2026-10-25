@@ -13,7 +13,7 @@ export const RESUME_READING_VERSION = 1;
  * The edition of the skill library (apps/api/static/skills/skills.json) the reading matches against. Bump it whenever
  * the file's skill lists change, so every resume is read again; the API tests compare it with the file.
  */
-export const RESUME_SKILLS_STAMP = 2;
+export const RESUME_SKILLS_STAMP = 3;
 /** Stored on every reading and on the AI backlog: a row of another version is stale and is read again. */
 export const RESUME_ANALYSIS_VERSION = RESUME_READING_VERSION * 1000 + RESUME_SKILLS_STAMP;
 

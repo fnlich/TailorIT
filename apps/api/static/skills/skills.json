@@ -212,14 +212,12 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Express",
-      "priority": 2,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Express.js",
       "priority": 2,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Express"
+      ]
     },
     {
       "skill": "FastAPI",
@@ -485,7 +483,10 @@
     {
       "skill": "Apache Beam",
       "priority": 5,
-      "category": "Frameworks and Libraries"
+      "category": "Frameworks and Libraries",
+      "aliases": [
+        "Beam"
+      ]
     },
     {
       "skill": "Apache Camel",
@@ -701,11 +702,6 @@
       "category": "Frameworks and Libraries"
     },
     {
-      "skill": "Beam",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
       "skill": "Beego",
       "priority": 5,
       "category": "Frameworks and Libraries"
@@ -877,11 +873,6 @@
     },
     {
       "skill": "CDC",
-      "priority": 5,
-      "category": "Frameworks and Libraries"
-    },
-    {
-      "skill": "CDK",
       "priority": 5,
       "category": "Frameworks and Libraries"
     },
@@ -4411,7 +4402,10 @@
     {
       "skill": "AWS IAM",
       "priority": 4,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "IAM"
+      ]
     },
     {
       "skill": "AWS Inspector",
@@ -4446,7 +4440,10 @@
     {
       "skill": "AWS WAF",
       "priority": 4,
-      "category": "Security"
+      "category": "Security",
+      "aliases": [
+        "WAF"
+      ]
     },
     {
       "skill": "Azure Active Directory",
@@ -4480,11 +4477,6 @@
     },
     {
       "skill": "Google IAM",
-      "priority": 4,
-      "category": "Security"
-    },
-    {
-      "skill": "IAM",
       "priority": 4,
       "category": "Security"
     },
@@ -4740,11 +4732,6 @@
       "category": "Security"
     },
     {
-      "skill": "WAF",
-      "priority": 5,
-      "category": "Security"
-    },
-    {
       "skill": "WebAuthn Awareness",
       "priority": 5,
       "category": "Security"
@@ -4830,7 +4817,10 @@
     {
       "skill": "Amazon VPC",
       "priority": 4,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "VPC"
+      ]
     },
     {
       "skill": "Auto Scaling",
@@ -4863,7 +4853,10 @@
     {
       "skill": "AWS CDK",
       "priority": 4,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "CDK"
+      ]
     },
     {
       "skill": "AWS Cognito",
@@ -4898,7 +4891,10 @@
     {
       "skill": "AWS Lambda",
       "priority": 4,
-      "category": "Cloud and Infrastructure"
+      "category": "Cloud and Infrastructure",
+      "aliases": [
+        "Lambda"
+      ]
     },
     {
       "skill": "AWS MSK",
@@ -5106,11 +5102,6 @@
       "category": "Cloud and Infrastructure"
     },
     {
-      "skill": "Lambda",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
       "skill": "Load Balancing",
       "priority": 4,
       "category": "Cloud and Infrastructure"
@@ -5122,11 +5113,6 @@
     },
     {
       "skill": "Multi-Cloud Strategy",
-      "priority": 4,
-      "category": "Cloud and Infrastructure"
-    },
-    {
-      "skill": "VPC",
       "priority": 4,
       "category": "Cloud and Infrastructure"
     },
@@ -5547,7 +5533,10 @@
     {
       "skill": "Amazon Aurora",
       "priority": 5,
-      "category": "Databases and Storage"
+      "category": "Databases and Storage",
+      "aliases": [
+        "Aurora"
+      ]
     },
     {
       "skill": "Amazon ElastiCache",
@@ -5556,11 +5545,6 @@
       "aliases": [
         "ElastiCache"
       ]
-    },
-    {
-      "skill": "Aurora",
-      "priority": 5,
-      "category": "Databases and Storage"
     },
     {
       "skill": "Databricks SQL",
@@ -5877,12 +5861,10 @@
     {
       "skill": "OpenTelemetry",
       "priority": 5,
-      "category": "Observability and Monitoring"
-    },
-    {
-      "skill": "OpenTelemetry SDK",
-      "priority": 5,
-      "category": "Observability and Monitoring"
+      "category": "Observability and Monitoring",
+      "aliases": [
+        "OpenTelemetry SDK"
+      ]
     },
     {
       "skill": "PagerDuty",
@@ -6441,12 +6423,10 @@
     {
       "skill": "GraphQL",
       "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "GraphQL API",
-      "priority": 5,
-      "category": "APIs and Integration"
+      "category": "APIs and Integration",
+      "aliases": [
+        "GraphQL API"
+      ]
     },
     {
       "skill": "gRPC",
@@ -6476,12 +6456,10 @@
     {
       "skill": "REST",
       "priority": 5,
-      "category": "APIs and Integration"
-    },
-    {
-      "skill": "REST API",
-      "priority": 5,
-      "category": "APIs and Integration"
+      "category": "APIs and Integration",
+      "aliases": [
+        "REST API"
+      ]
     },
     {
       "skill": "REST API Development",
@@ -7302,15 +7280,13 @@
     {
       "skill": "Android",
       "priority": 5,
-      "category": "Mobile Development"
+      "category": "Mobile Development",
+      "aliases": [
+        "Android SDK"
+      ]
     },
     {
       "skill": "Android Development",
-      "priority": 5,
-      "category": "Mobile Development"
-    },
-    {
-      "skill": "Android SDK",
       "priority": 5,
       "category": "Mobile Development"
     },

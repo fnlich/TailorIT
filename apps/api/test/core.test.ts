@@ -657,6 +657,7 @@ describe('config', () => {
 const SKILLS_FINGERPRINTS: Record<number, string> = {
   1: '5dee88dc2f65b717', // free_tailor v4.2's lists as shipped
   2: '0ef72ef44f0cef94', // one entry per skill (aliases for its other spellings), sorted by heading and priority
+  3: '2455f2862ae09123', // short names and "X API"/"X SDK" spellings merged into their entries as well
 };
 
 describe('resume analysis version', () => {
