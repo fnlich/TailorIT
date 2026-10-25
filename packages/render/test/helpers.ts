@@ -30,8 +30,12 @@ export function templateStore(): TemplateStore {
 }
 
 let library: SkillIndex | null = null;
+/** The skill library as the API's render engine builds it: every spelling, an alias under its entry's heading. */
 export function skillLibrary(): SkillIndex {
-  library ??= createSkillIndex((JSON.parse(readFileSync(SKILLS_FILE, 'utf8')) as { hard: SkillRecord[] }).hard);
+  const { hard } = JSON.parse(readFileSync(SKILLS_FILE, 'utf8')) as { hard: Array<SkillRecord & { aliases?: string[] }> };
+  library ??= createSkillIndex(
+    hard.flatMap(({ aliases = [], ...entry }) => [entry, ...aliases.map((skill) => ({ ...entry, skill }))]),
+  );
   return library;
 }
 

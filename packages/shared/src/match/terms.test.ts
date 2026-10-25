@@ -4,8 +4,10 @@ import {
   containsTerm,
   countTerm,
   maskFalseFriends,
+  matchKey,
   synonymKey,
   synonymsOf,
+  TERM_SYNONYMS,
   termPattern,
 } from './terms';
 
@@ -80,6 +82,48 @@ describe('synonyms', () => {
     expect(synonymKey('Amazon Web Services')).toBe(synonymKey('AWS'));
     expect(synonymKey('ML')).toBe(synonymKey('machine learning'));
     expect(synonymKey('Golang')).toBe(synonymKey('Go'));
+  });
+
+  it('lists no spelling in two groups (the later group would silently take it)', () => {
+    const groupOf = new Map<string, number>();
+    TERM_SYNONYMS.forEach((group, index) => {
+      expect(group.length, `group ${index} has spellings to fold`).toBeGreaterThan(1);
+      for (const spelling of group) {
+        expect(groupOf.get(matchKey(spelling)), `"${spelling}" is in groups ${groupOf.get(matchKey(spelling))} and ${index}`).toBeUndefined();
+        groupOf.set(matchKey(spelling), index);
+      }
+    });
+  });
+
+  it("folds the skill library's aliases (apps/api/static/skills/skills.json) to their entries", () => {
+    for (const [spelling, entry] of [
+      ['Argo CD', 'ArgoCD'],
+      ['Auto-scaling', 'Auto Scaling'],
+      ['SolidJS', 'Solid.js'],
+      ['API Gateways', 'API gateway'],
+      ['AWS S3', 'Amazon S3'],
+      ['S3', 'AWS S3'],
+      ['AWS DynamoDB', 'DynamoDB'],
+      ['SQS', 'Amazon SQS'],
+      ['SNS', 'Amazon SNS'],
+      ['CloudFormation', 'AWS CloudFormation'],
+      ['AWS ECS', 'Amazon ECS'],
+      ['ECS', 'AWS ECS'],
+      ['RDS', 'Amazon RDS'],
+      ['Route53', 'Amazon Route 53'],
+      ['Avro', 'Apache Avro'],
+      ['Flink', 'Apache Flink'],
+    ] as const) {
+      expect(synonymKey(spelling), `${spelling} and ${entry}`).toBe(synonymKey(entry));
+    }
+  });
+
+  it('leaves apart short names that are an everyday word or another product', () => {
+    expect(synonymKey('Lambda')).not.toBe(synonymKey('AWS Lambda'));
+    expect(synonymKey('Beam')).not.toBe(synonymKey('Apache Beam'));
+    expect(synonymKey('VPC')).not.toBe(synonymKey('Amazon VPC'));
+    expect(synonymKey('IAM')).not.toBe(synonymKey('AWS IAM'));
+    expect(synonymKey('CDK')).not.toBe(synonymKey('AWS CDK'));
   });
 
   it('keeps unrelated terms apart and case-folds long ones', () => {

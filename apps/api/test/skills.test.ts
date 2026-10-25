@@ -19,14 +19,32 @@ async function setup(): Promise<{ agent: TestAgent; other: TestAgent }> {
 const add = (agent: TestAgent, body: object) => agent.post('/api/skills').set('Origin', ORIGIN).send(body);
 
 describe('/api/skills', () => {
-  it('lists the library (1,492 hard, 1,247 soft skills)', async () => {
+  it('lists the library (1,492 hard spellings of 1,453 skills, 1,245 soft skills)', async () => {
     const { agent } = await setup();
     const hard = SkillsResponseSchema.parse((await agent.get('/api/skills')).body);
     expect(hard.type).toBe('hard');
     expect(hard.skills).toHaveLength(1492);
     expect(hard.skills).toContain('PostgreSQL');
     const soft = SkillsResponseSchema.parse((await agent.get('/api/skills?type=soft')).body);
-    expect(soft.skills).toHaveLength(1247);
+    expect(soft.skills).toHaveLength(1245);
+  });
+
+  it('offers a skill by every spelling people write: an alias follows its entry, so "GCP" and "HTML5" are still found', async () => {
+    const { agent } = await setup();
+    const { skills } = SkillsResponseSchema.parse((await agent.get('/api/skills')).body);
+    for (const spelling of ['GCP', 'HTML5', 'CSS3', 'Kafka', 'S3', 'TDD', 'Postgres']) expect(skills).toContain(spelling);
+    const at = skills.indexOf('Apache Kafka');
+    expect(skills.slice(at, at + 2)).toEqual(['Apache Kafka', 'Kafka']);
+  });
+
+  it("answers an alias in its own spelling and its entry's heading, without adding it", async () => {
+    const { agent } = await setup();
+    const kafka = await add(agent, { type: 'hard', skill: ' kafka ' });
+    expect(kafka.status).toBe(200);
+    expect(AddSkillResponseSchema.parse(kafka.body)).toEqual({ added: false, skill: 'Kafka', type: 'hard', category: 'Data Engineering & Streaming' });
+    expect((await add(agent, { type: 'hard', skill: 'gcp' })).body).toEqual({ added: false, skill: 'GCP', type: 'hard', category: 'Cloud and Infrastructure' });
+    expect((await add(agent, { type: 'hard', skill: 'html5' })).body).toMatchObject({ added: false, skill: 'HTML5', category: 'Languages' });
+    expect((await agent.get('/api/skills')).body.skills).toHaveLength(1492);
   });
 
   it("answers a skill the library has in the library's spelling, without adding it", async () => {

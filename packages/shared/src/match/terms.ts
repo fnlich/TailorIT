@@ -127,7 +127,7 @@ export const TERM_SYNONYMS: ReadonlyArray<readonly string[]> = [
   ['CSS', 'CSS3'],
   ['Python', 'Python3'],
   ['MongoDB', 'Mongo'],
-  ['Amazon S3', 'S3'],
+  ['Amazon S3', 'S3', 'AWS S3'],
   ['Amazon EC2', 'EC2'],
   ['Apache Kafka', 'Kafka'],
   ['Apache Spark', 'Spark'],
@@ -147,8 +147,32 @@ export const TERM_SYNONYMS: ReadonlyArray<readonly string[]> = [
   ['Business Intelligence', 'BI'],
   ['Google Kubernetes Engine', 'GKE'],
   ['Amazon EKS', 'EKS'],
-  ['Amazon DynamoDB', 'DynamoDB'],
+  ['Amazon DynamoDB', 'DynamoDB', 'AWS DynamoDB'],
   ['Elasticsearch', 'Elastic Search'],
+  // The skill library's aliases (apps/api/static/skills/skills.json): each alias is listed with its entry here, so
+  // it is the same keyword. Spellings of one name:
+  ['ArgoCD', 'Argo CD'],
+  ['Auto Scaling', 'Auto-scaling'],
+  ['Actix Web', 'Actix-web'],
+  ['Git Flow', 'GitFlow'],
+  ['Micro Frontends', 'Micro-frontends'],
+  ['Solid.js', 'SolidJS'],
+  ['API gateway', 'API Gateways'],
+  ['API integration', 'API integrations'],
+  ['Secure API', 'Secure APIs'],
+  // A vendor's product and its short name, where the short name is not an everyday word or another product's:
+  ['AWS CloudFormation', 'CloudFormation'],
+  ['Amazon CloudFront', 'CloudFront'],
+  ['Amazon ECS', 'AWS ECS', 'ECS'],
+  ['Amazon RDS', 'AWS RDS', 'RDS'],
+  ['Amazon Route 53', 'Route53'],
+  ['AWS CloudTrail', 'CloudTrail'],
+  ['Amazon ElastiCache', 'ElastiCache'],
+  ['Amazon Kinesis', 'Kinesis'],
+  ['Amazon SQS', 'SQS'],
+  ['Amazon SNS', 'SNS'],
+  ['Apache Avro', 'Avro'],
+  ['Apache Flink', 'Flink'],
 ];
 
 function collapse(value: string): string {

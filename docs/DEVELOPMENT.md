@@ -84,8 +84,13 @@ background work (return a stop function), `commands` adds CLI commands. The cent
   preferCSSPageSize?})`, `screenshotPng(html, {width, height, clip?})`. JavaScript is off and every non-`data:` request is
   blocked: embed fonts/images as data URIs. Tests and CLI commands that render must `await getPdfService(deps).close()`.
 - **Mail/auth** (`src/core/auth`, `src/core/mail`): sessions, accounts (`getAccount`), admin promotion.
-- **Skill library** (`src/core/skills-vocabulary.ts`): `getSkillLibrary()` → `{hard, soft, vocabulary, byKey}` from
-  `static/skills/skills.json` (read once). Use `vocabulary` for keyword extraction/matching.
+- **Skill library** (`src/core/skills-vocabulary.ts`): `getSkillLibrary()` → `{hard, soft, vocabulary, spellings, byKey}`
+  from `static/skills/skills.json` (read once). `hard` has one entry per skill; its `aliases` are the other spellings
+  people write it as, and `spellings` lists every name and alias (an alias under its entry's heading and priority).
+  Use `vocabulary` (the entries' names) for keyword extraction and matching: an alias must also be listed with its
+  entry in `TERM_SYNONYMS` (`packages/shared/src/match/terms.ts`), which makes it the same keyword. Use `spellings`
+  where a name is looked up (the render gate's headings, the skill picker). The file's README says how to edit it, and
+  `test/skills-library.test.ts` checks the layout, the order and that nothing is listed twice.
 
 ### Tests
 - Vitest + supertest. `createTestContext()` (`test/helpers.ts`): in-memory migrated DB, temp DATA_DIR, frozen clock

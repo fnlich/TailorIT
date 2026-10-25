@@ -27,7 +27,7 @@ The **Login page** and the **"new resume" logic** (create and edit a resume from
 | AI | **Local Claude CLI**: the server spawns the signed-in `claude`. No API key. |
 | AI model | Default **`claude-sonnet-5-5`**, set in `.env` (`AI_CLI_MODEL`), with per-feature overrides (`AI_MODEL_<FEATURE>`) |
 | Job sources | **All four:** public ATS boards (Greenhouse, Lever, Ashby), CSV/JSON import, the free_tailor Job Data Lake (read-only), demo seed |
-| Templates and skills | Reuse free_tailor's 26 resume-template JSON files and `skills.json` **as data files only** |
+| Templates and skills | Reuse free_tailor's 26 resume-template JSON files and `skills.json` **as data files only** (the skill list has been tidied since: see "As built (v2)") |
 | Login | free_tailor's passwordless sign-in: a Google button plus a 6-digit email code. No passwords and no sign-up screen. Restyled to Simplify. |
 | "Tailor my resume" | **Hidden.** The job-analysis card shows the keyword match only, and tailoring is out of scope. |
 
@@ -311,7 +311,7 @@ The normalizer lives in shared, following ft rules:
 - **DOCX**: one simple layout, labelled "Word (simple layout)".
 - **Stage A** uses marker-based section finding and gives exact parity on the 19 built-ins. **Stage B** adds the loop heuristics and gives parity on all 26.
 - **Goldens:** `tools/ft-golden` requires free_tailor's compiled `backend/dist` read-only, with `DB_DIR` forced to `TailorIT\.cache` (asserted). It renders 6 fixtures × 26 templates × layout × switches × order (about 600 cases), compared by markup, pixel diff (≤0.1%) and PDF page count.
-- **Skills:** `skills.json` (1,492 hard / 1,247 soft) is loaded in memory and overlaid with per-user `user_skills`. Nothing is written to a shared library.
+- **Skills:** `skills.json` (1,453 hard skills, with 39 aliases / 1,245 soft; 1,492 hard spellings in all) is loaded in memory and overlaid with per-user `user_skills`. Nothing is written to a shared library.
 
 ### 5. Cover letters and templates
 
@@ -995,11 +995,38 @@ details, every new endpoint, and what was built differently from the v2 plan.
 - `job_sources` is not rebuilt: a sheet import is a `csv` source with `config.sheet`. Resume ZIP builds are kept in
   memory, their files under `<DATA_DIR>/resume-zips/`.
 
+**Skill library** (`apps/api/static/skills/skills.json`, tidied after the v2 work packages; its README says how to edit it)
+- **One entry per skill, sorted.** Hard skills went from 1,492 entries to 1,453, each with `skill`, `priority` (1 to 5),
+  `category` and, where there are any, `aliases`: the other spellings people write it as (`Kafka` of `Apache Kafka`,
+  `HTML5` of `HTML`, `GCP` of `Google Cloud Platform`). The list is sorted by heading (the order of
+  `HARD_SKILL_CATEGORIES`), priority and name; it was by priority and name. Soft skills went from 1,247 to 1,245:
+  `Problem-solving` and `Big-picture thinking` are gone, since the soft scanner reads a hyphen and a space as one and
+  `Problem Solving` and `Big Picture Thinking` already stand for both.
+- **Nothing is lost.** An alias is the same keyword as its entry (it is listed with it in `TERM_SYNONYMS`; a spelling
+  of one skill used to count as a second keyword when a posting wrote both), it is filed under its entry's heading by
+  the render gate, and the skill picker still offers all 1,492 spellings (`GET /api/skills` lists an alias right after
+  its entry; `POST /api/skills` answers one in its own spelling). Checked against the library before the change: every
+  spelling is still detected with the same label, the 144 recorded and seeded postings give identical keywords and
+  soft skills, and free_tailor's 1,161 golden renders still match.
+- **Merged on purpose** (35 skills): spellings of one name (`ArgoCD`/`Argo CD`, `Solid.js`/`SolidJS`), spellings the
+  synonym table already folded (`Postgres`, `Kafka`, `S3`, `RBAC`...), and a vendor's product with its short name where
+  that name is not an everyday word or another product's (`Amazon SQS`/`SQS`, `AWS CloudFormation`/`CloudFormation`).
+  **Kept apart:** `AWS Lambda`/`Lambda`, `Apache Beam`/`Beam`, `Amazon VPC`/`VPC`, `AWS IAM`/`IAM`, `AWS CDK`/`CDK`,
+  `AWS WAF`/`WAF`, `Amazon Aurora`/`Aurora` (the short name is an everyday word, or also means another vendor's product
+  or a generic idea) and pairs like `REST`/`REST API`, `Express`/`Express.js`.
+- **Six spellings change heading**, because the two spellings of one skill had been filed under different headings and
+  now follow their entry: `HTML5` (Frameworks and Libraries to Languages), `CSS3` (Databases and Storage to Languages),
+  `Argo CD` (to DevOps and CI/CD), `Auto-scaling` (to Cloud and Infrastructure), `GKE` (to DevOps and CI/CD) and `TDD`
+  (Engineering Practices & Methodology to Testing and Quality).
+- `RESUME_SKILLS_STAMP` is 2, so every resume is read again once (rules at once; Claude again for uploads, in the
+  background). The file is written with LF line ends, as the repository stores it (its hash in the golden manifest was
+  taken from a CRLF copy before).
+
 **Resumes (WP2, WP3, WP9)**
 - Every write path (create, upload, JSON import, edit, both duplicates, the AI editable copy, the demo seed) stores
   the rules' reading at once, best effort: a reader that fails never fails the write, and a backfill worker reads what
   is missing. Read paths compute at most 5 missing readings per request.
-- The rules' reading: hard skills (the resume's own lists, then vocabulary hits), soft skills (the 1,247-entry list,
+- The rules' reading: hard skills (the resume's own lists, then vocabulary hits), soft skills (the 1,245-entry list,
   case ignored; a skill that is also a hard one stays hard; everyday words count only as whole list items), roles (the
   headline first), certifications (a closed list; ambiguous acronyms need context), industries, and the years from the
   Experience section's date ranges (overlaps merged, education left out; a built resume's typed total wins).

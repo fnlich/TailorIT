@@ -19,7 +19,8 @@ export function createSkillsRouter(deps: AppDeps): Router {
   router.get('/', (req, res) => {
     const { type } = parseInput(SkillsQuerySchema, req.query, 'query');
     const library = getSkillLibrary();
-    const names = type === 'hard' ? library.hard.map((record) => record.skill) : [...library.soft];
+    // Every spelling, aliases included: "GCP" and "HTML5" are what people write, so the picker still offers them.
+    const names = type === 'hard' ? library.spellings.map((record) => record.skill) : [...library.soft];
     const seen = new Set(names.map((name) => skillIndexKey(name)));
     for (const row of userSkillRows(deps, userOf(req).id, type)) {
       const key = skillIndexKey(row.skill);
@@ -39,7 +40,7 @@ export function createSkillsRouter(deps: AppDeps): Router {
     const library = getSkillLibrary();
 
     if (type === 'hard') {
-      const known = library.byKey.get(name.toLowerCase()) ?? library.hard.find((record) => skillIndexKey(record.skill) === key);
+      const known = library.byKey.get(name.toLowerCase()) ?? library.spellings.find((record) => skillIndexKey(record.skill) === key);
       if (known) {
         const body: AddSkillResponse = { added: false, skill: known.skill, type, category: known.category || null };
         res.json(body);

@@ -654,7 +654,10 @@ describe('config', () => {
 });
 
 /** The skill library each RESUME_SKILLS_STAMP was cut from: sha256 of its hard and soft names, first 16 hex. */
-const SKILLS_FINGERPRINTS: Record<number, string> = { 1: '5dee88dc2f65b717' };
+const SKILLS_FINGERPRINTS: Record<number, string> = {
+  1: '5dee88dc2f65b717', // free_tailor v4.2's lists as shipped
+  2: '0ef72ef44f0cef94', // one entry per skill (aliases for its other spellings), sorted by heading and priority
+};
 
 describe('resume analysis version', () => {
   it('names the shipped skill library, so a new skills.json reads every resume again', () => {

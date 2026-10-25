@@ -58,7 +58,8 @@ export function createResumeEngine(deps: Pick<AppDeps, 'db' | 'log'>): ResumeEng
   );
   if (templates.list().length === 0) deps.log.error('[render] no resume template could be loaded');
   const sample = readSampleResume(JSON.parse(readFileSync(staticDir('sample-resume.json'), 'utf8')));
-  const library = createSkillIndex(getSkillLibrary().hard);
+  // Every spelling, aliases included: a resume that writes "Kafka" is filed under the heading of "Apache Kafka".
+  const library = createSkillIndex(getSkillLibrary().spellings);
   return {
     templates,
     sample,

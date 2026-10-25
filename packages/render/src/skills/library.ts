@@ -1,9 +1,9 @@
 import { HARD_SKILL_CATEGORIES, type HardSkillCategory } from '@tailorit/shared/resume';
 
-// The hard-skill library as the render gate reads it: the shipped list (skills.json, ~1,500 skills each under one of
-// the 17 headings) with each user's own skills laid over it. Grouped files a resume's skills under the library's
-// heading for each, in the library's heading order; Plain prints the library-known skills only. Nothing here reads
-// files: the API hands the records in.
+// The hard-skill library as the render gate reads it: the shipped list (skills.json, ~1,500 spellings each under one of
+// the 17 headings; an alias is handed in as a record of its own, under its entry's heading) with each user's own
+// skills laid over it. Grouped files a resume's skills under the library's heading for each, in the library's heading
+// order; Plain prints the library-known skills only. Nothing here reads files: the API hands the records in.
 
 export interface SkillRecord {
   /** The library's spelling. */
